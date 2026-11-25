@@ -26,6 +26,8 @@ export interface CharacterRow {
   inv: string; // JSON: bag, gear, storage, crafting skill
   zone: string;
   corruption: number;
+  /** 1 = game master (from the account; see setAdmin) */
+  admin: number;
   x: number;
   y: number;
 }
@@ -58,11 +60,13 @@ async function open(): Promise<DB> {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
+    PRAGMA busy_timeout = 3000;
     CREATE TABLE IF NOT EXISTS accounts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE COLLATE NOCASE,
       pass_hash BLOB NOT NULL,
       salt BLOB NOT NULL,
+      admin INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS characters (
@@ -93,6 +97,8 @@ async function open(): Promise<DB> {
     );
   `);
   // Files made by an older version of the game: add the columns that came later.
+  const acc = new Set((db.prepare("PRAGMA table_info(accounts)").all() as { name: string }[]).map((c) => c.name));
+  if (!acc.has("admin")) db.exec("ALTER TABLE accounts ADD COLUMN admin INTEGER NOT NULL DEFAULT 0");
   const have = new Set((db.prepare("PRAGMA table_info(characters)").all() as { name: string }[]).map((c) => c.name));
   if (!have.has("nodes")) db.exec("ALTER TABLE characters ADD COLUMN nodes TEXT NOT NULL DEFAULT '[]'");
   if (!have.has("gold")) db.exec("ALTER TABLE characters ADD COLUMN gold INTEGER NOT NULL DEFAULT 0");
@@ -137,10 +143,12 @@ export async function login(name: string, password: string): Promise<CharacterRo
 
 export async function loadCharacter(accountId: number): Promise<CharacterRow | null> {
   const d = await open();
-  return (d.prepare("SELECT * FROM characters WHERE account_id = ?").get(accountId) as unknown as CharacterRow) ?? null;
+  return (d
+    .prepare("SELECT c.*, a.admin FROM characters c JOIN accounts a ON a.id = c.account_id WHERE c.account_id = ?")
+    .get(accountId) as unknown as CharacterRow) ?? null;
 }
 
-export type CharacterSave = Omit<CharacterRow, "name" | "color">;
+export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin">;
 
 export async function saveCharacter(c: CharacterSave) {
   writeCharacter(await open(), c);
@@ -169,6 +177,17 @@ export async function saveWithBundle(c: CharacterSave, change: { put: BundleRow 
     d.exec("ROLLBACK");
     throw e;
   }
+}
+
+/** Gives or takes the game master flag. Only ever called from scripts/admin.ts. */
+export async function setAdmin(name: string, on: boolean): Promise<boolean> {
+  const d = await open();
+  return Number(d.prepare("UPDATE accounts SET admin = ? WHERE name = ?").run(on ? 1 : 0, name).changes) > 0;
+}
+
+export async function listAdmins(): Promise<string[]> {
+  const d = await open();
+  return (d.prepare("SELECT name FROM accounts WHERE admin = 1 ORDER BY name").all() as { name: string }[]).map((r) => r.name);
 }
 
 /** Bundles still lying in a map; old ones are cleared away. */

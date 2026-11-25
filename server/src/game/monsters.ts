@@ -96,6 +96,32 @@ export class MonsterSystem {
     });
   }
 
+  /** Game master: monsters that do not come back when killed. Returns how many appeared. */
+  summon(kind: string, count: number, x: number, y: number): number {
+    const before = this.ctl.size;
+    for (let i = 0; i < count; i++) this.spawnOne({ kind, x, y, radius: 3, count: 1, respawnMs: Infinity });
+    return this.ctl.size - before;
+  }
+
+  /** Game master: removes monsters nearby; normal ones come back later. */
+  clearNear(x: number, y: number, radius: number): number {
+    let n = 0;
+    for (const id of [...this.ctl.keys()]) {
+      const m = this.host.monsters.get(id);
+      if (!m || Math.hypot(m.x - x, m.y - y) > radius) continue;
+      this.remove(id);
+      n++;
+    }
+    return n;
+  }
+
+  private remove(id: string) {
+    const c = this.ctl.get(id);
+    this.host.monsters.delete(id);
+    this.ctl.delete(id);
+    if (c && Number.isFinite(c.spawn.respawnMs)) this.respawns.push({ at: this.host.now() + c.spawn.respawnMs, spawn: c.spawn });
+  }
+
   private randomTileNear(c: { x: number; y: number }, r: number): Point | null {
     for (let i = 0; i < 40; i++) {
       const x = Math.round(c.x + (Math.random() * 2 - 1) * r);
@@ -122,9 +148,7 @@ export class MonsterSystem {
       c.nextAttackAt = Math.max(c.nextAttackAt, this.host.now() + 500);
     }
     if (m.hp <= 0) {
-      this.host.monsters.delete(id);
-      this.ctl.delete(id);
-      this.respawns.push({ at: this.host.now() + c.spawn.respawnMs, spawn: c.spawn });
+      this.remove(id);
       return true;
     }
     return false;

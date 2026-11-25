@@ -42,6 +42,7 @@ import {
   moveStack,
   Resource,
   resourceAt,
+  rollAffixes,
   rollDrops,
   sellPrice,
   Slot,
@@ -81,6 +82,7 @@ import {
   SKILLS,
 } from "../../../shared/stats";
 import { CharacterRow, CharacterSave, createAccount, loadBundles, loadCharacter, login, saveCharacter, saveWithBundle } from "../db";
+import { AdminHost, runAdminCommand } from "../game/admin";
 import { MonsterSystem } from "../game/monsters";
 import { dist, faceTowards, planFrom, stepAlong } from "../game/movement";
 import { freeLock, holdsLock, Lock, makeTicket, takeLock, useTicket } from "../game/sessions";
@@ -91,6 +93,11 @@ export { facingFor } from "../game/movement";
 /** Server-only data kept per player (not sent to clients). */
 interface PlayerCtl {
   accountId: number;
+  /** game master: may use /commands */
+  admin: boolean;
+  /** cannot be hurt (game master) */
+  god: boolean;
+  speedTimes: number;
   lock: Lock;
   /** on the way to another map: nothing more may happen here */
   leaving: boolean;
@@ -307,6 +314,9 @@ export class WorldRoom extends Room<WorldState> {
     this.state.players.set(client.sessionId, p);
     this.ctl.set(client.sessionId, {
       accountId: c.account_id,
+      admin: c.admin === 1,
+      god: false,
+      speedTimes: 1,
       lock: auth.lock,
       leaving: false,
       lingerUntil: 0,
@@ -334,6 +344,7 @@ export class WorldRoom extends Room<WorldState> {
       interact: null,
       struck: new Set(),
     });
+    p.gm = c.admin === 1;
     p.shielded = this.map.pvp;
     p.corruption = this.map.pvp ? Math.floor(Math.max(0, Math.min(100, c.corruption))) : 0;
     this.broadcastSystem(this.map.pvp ? `มีใครบางคนก้าวเข้ามาใน Hollow` : `${p.name} เดินทางมาถึงหมู่บ้านบรินเดิล`);
@@ -958,6 +969,13 @@ export class WorldRoom extends Room<WorldState> {
     if (!pc) return;
     const text = cleanChat((msg as { text?: unknown })?.text, CHAT_MAX);
     if (!text) return;
+    if (text.startsWith("/")) {
+      // commands are never shown to others
+      if (!pc.c.admin) return client.send(Msg.Notice, { text: "ไม่มีคำสั่งนี้" });
+      console.log(`[admin] ${pc.p.name}: ${text}`);
+      for (const line of runAdminCommand(this.adminHost, client.sessionId, text)) client.send(Msg.Notice, { text: line });
+      return;
+    }
     const now = Date.now();
     if (now - pc.c.lastChatAt < CHAT_COOLDOWN_MS) {
       client.send(Msg.Notice, { text: "พิมพ์เร็วไปนิด รอสักครู่นะ" });
@@ -967,6 +985,132 @@ export class WorldRoom extends Room<WorldState> {
     const line: ChatLine = { from: client.sessionId, name: pc.p.name, text };
     this.broadcast(Msg.ChatLine, line);
   }
+
+  // ---- game master --------------------------------------------------------
+
+  private clientOf(id: string) {
+    return this.clients.find((cl) => cl.sessionId === id);
+  }
+
+  /** Runs `fn` for a player who is really here, then tells and saves them. */
+  private adminEdit(id: string, fn: (p: Player, c: PlayerCtl) => void) {
+    const p = this.state.players.get(id);
+    const c = this.ctl.get(id);
+    if (!p || !c || c.leaving) return;
+    fn(p, c);
+    const worn = equipTotals(c.inv.equip);
+    c.mods = passiveMods(c.nodes, worn.mods);
+    c.gear = worn.flat;
+    this.applyStats(p, c, false);
+    this.sendPrivate(this.clientOf(id));
+    this.save(p, c).catch((e) => console.error("[world] save failed", e));
+  }
+
+  private adminHost: AdminHost = {
+    playerByName: (name) => {
+      const want = name.toLowerCase();
+      for (const [id, p] of this.state.players) if (p.name.toLowerCase() === want && !this.ctl.get(id)?.leaving) return id;
+      return null;
+    },
+    nameOf: (id) => this.state.players.get(id)?.name ?? "?",
+    online: () => [...this.state.players.values()].map((p) => `${p.name} Lv ${p.level}`),
+    posOf: (id) => this.state.players.get(id) ?? this.map.spawn,
+    setLevel: (id, level) =>
+      this.adminEdit(id, (p, c) => {
+        p.level = level;
+        p.exp = 0;
+        // no more nodes or skills than the new level allows
+        c.nodes = cleanNodes([...c.nodes], level, p.job);
+        if (this.skillPointsLeft(p) < 0) p.skills.clear();
+        this.applyStats(p, c, false);
+        if (!p.dead) p.hp = p.maxHp;
+      }),
+    addExp: (id, amount) => {
+      const p = this.state.players.get(id);
+      const c = this.ctl.get(id);
+      if (p && c) this.gainExp(this.clientOf(id), p, c, amount);
+    },
+    addGold: (id, amount) => this.adminEdit(id, (_p, c) => (c.gold = Math.max(0, c.gold + amount))),
+    give: (id, item, qty, quality) => {
+      let left = qty;
+      this.adminEdit(id, (p, c) => {
+        if (ITEMS[item].kind !== "equip") left = addItem(c.inv.bag, BAG_SIZE, item, qty);
+        else
+          for (; left > 0 && c.inv.bag.length < BAG_SIZE; left--)
+            c.inv.bag.push({ uid: globalThis.crypto.randomUUID(), id: item, qty: 1, quality, affixes: rollAffixes(quality, ITEMS[item].tier) });
+      });
+      return left;
+    },
+    setSmithing: (id, skill) => this.adminEdit(id, (_p, c) => (c.inv.smithing = skill)),
+    setJob: (id, job) =>
+      this.adminEdit(id, (p, c) => {
+        p.job = job;
+        p.skills.clear();
+        c.nodes = cleanNodes([...c.nodes], p.level, job);
+      }),
+    resetTree: (id) => this.adminEdit(id, (_p, c) => c.nodes.clear()),
+    heal: (id) => {
+      const p = this.state.players.get(id);
+      if (p && !p.dead) p.hp = p.maxHp;
+    },
+    kill: (id) => {
+      const p = this.state.players.get(id);
+      const c = this.ctl.get(id);
+      if (!p || !c || p.dead || c.leaving) return false;
+      p.hp = 0;
+      this.playerDies(id, p, c, "พลังของ GM");
+      return true;
+    },
+    toggleGod: (id) => {
+      const c = this.ctl.get(id);
+      return c ? (c.god = !c.god) : false;
+    },
+    setSpeed: (id, times) => {
+      const c = this.ctl.get(id);
+      if (c) c.speedTimes = times;
+    },
+    setCorruption: (id, value) => {
+      const c = this.ctl.get(id);
+      if (!c || !this.map.pvp) return false;
+      c.corruption = value;
+      return true;
+    },
+    teleport: (id, x, y) => {
+      const p = this.state.players.get(id);
+      const c = this.ctl.get(id);
+      if (!p || !c || p.dead || !isWalkable(this.map, x, y)) return false;
+      this.stopInteract(this.clientOf(id), c);
+      c.path = [];
+      c.targetId = null;
+      c.pendingSkill = null;
+      c.charge = null;
+      p.x = x;
+      p.y = y;
+      p.moving = false;
+      return true;
+    },
+    goZone: (id, zone) => {
+      const p = this.state.players.get(id);
+      const c = this.ctl.get(id);
+      const client = this.clientOf(id);
+      if (!p || !c || !client || p.dead || c.leaving || zone === this.map.id) return false;
+      this.travel(client, p, c, zone);
+      return true;
+    },
+    spawn: (kind, count, x, y) => this.monsterSys.summon(kind, count, x, y),
+    clearMonsters: (x, y, r) => this.monsterSys.clearNear(x, y, r),
+    moveGates: () => {
+      if (!this.map.pvp) return false;
+      this.moveGates(true);
+      return true;
+    },
+    announce: (text) => this.broadcastSystem(`[ประกาศ] ${text}`),
+    kick: (id) => {
+      const client = this.clientOf(id);
+      client?.send(Msg.Notice, { text: "GM เชิญคุณออกจากเกม" });
+      client?.leave(4001);
+    },
+  };
 
   private broadcastSystem(text: string) {
     const line: ChatLine = { from: "", name: "", text, system: true };
@@ -1007,7 +1151,7 @@ export class WorldRoom extends Room<WorldState> {
     const now = this.clock.currentTime;
     if (c.shieldUntil > now) return;
     c.lastCombatAt = now;
-    if (Math.random() * 100 < c.mods.dodge) {
+    if (c.god || Math.random() * 100 < c.mods.dodge) {
       const ev: HitEvent = { from: monsterId, to: playerId, dmg: 0, miss: true };
       this.broadcast(Msg.Hit, ev);
       return;
@@ -1085,7 +1229,7 @@ export class WorldRoom extends Room<WorldState> {
     faceTowards(p, t);
     c.lastCombatAt = tc.lastCombatAt = now;
     c.shieldUntil = 0; // whoever attacks gives up the arrival shield
-    if (Math.random() * 100 < tc.mods.dodge) {
+    if (tc.god || Math.random() * 100 < tc.mods.dodge) {
       this.broadcast(Msg.Hit, { from: id, to: targetId, dmg: 0, miss: true } satisfies HitEvent);
       return;
     }
@@ -1172,7 +1316,7 @@ export class WorldRoom extends Room<WorldState> {
       }
 
       if (p.guarding && c.guardUntil <= now) p.guarding = false;
-      const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100);
+      const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100) * c.speedTimes;
       const swingMs = PLAYER_ATTACK_MS / (1 + c.mods.attackSpeedPct / 100);
 
       if (c.charge) {

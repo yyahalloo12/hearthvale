@@ -152,7 +152,7 @@ export class WorldScene extends Phaser.Scene {
       view.setHp(player.hp, player.maxHp);
       view.setDead(player.dead);
       view.setGear(player.weapon, player.helm);
-      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT);
+      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
       this.views.set(id, view);
       if (isMe) {
         this.me = player;
@@ -169,7 +169,7 @@ export class WorldScene extends Phaser.Scene {
         view.setDead(player.dead);
         view.setGuarding(player.guarding);
         view.setGear(player.weapon, player.helm);
-        view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT);
+        view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
         if (this.targetId === id && player.dead) this.setTarget(null);
         if (isMe) {
           if (!player.moving) this.marker.setVisible(false);

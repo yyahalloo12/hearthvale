@@ -9,6 +9,7 @@
     "dev": "concurrently -n server,client -c yellow,cyan \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
     "start": "npm run build && npm run start -w server",
+    "admin": "npm run --silent admin -w server --",
     "test": "npm test -w server",
     "typecheck": "npm run typecheck -w server && npm run typecheck -w client"
   },

@@ -114,9 +114,9 @@ export class PlayerView {
   }
 
   /** Faded name and body: logged out but still standing here. */
-  setStatus(offline: boolean, shielded: boolean, glowing: boolean) {
+  setStatus(offline: boolean, shielded: boolean, glowing: boolean, gm = false) {
     this.root.setAlpha(offline ? 0.55 : 1);
-    this.label.setText(offline ? `${this.name} (ออฟไลน์)` : this.name);
+    this.label.setText(`${gm ? "★ " : ""}${this.name}${offline ? " (ออฟไลน์)" : ""}`);
     this.figure.setAlpha(this.dead ? 0.7 : shielded ? 0.55 : 1);
     this.glow.setVisible(glowing);
   }

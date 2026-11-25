@@ -20,6 +20,8 @@ export class Player extends Schema {
   @type("boolean") guarding = false;
   /** Item ids of what others can see on you ("" = nothing). */
   @type("boolean") offline = false;
+  /** game master (shown as a star by the name) */
+  @type("boolean") gm = false;
   /** just arrived: cannot hurt or be hurt yet */
   @type("boolean") shielded = false;
   /** Hollow corruption 0-100; from GLOW_AT on, everyone sees you on the map */
