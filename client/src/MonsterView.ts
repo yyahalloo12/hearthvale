@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { MONSTERS } from "../../shared/stats";
 import { toScreen } from "./iso";
-import { MONSTER_SIZE } from "./monsterTextures";
+import { MONSTER_COLS, MONSTER_SHEETS } from "./sprites";
 
 /** One monster on screen, smoothly following the server position. */
 export class MonsterView {
@@ -19,17 +19,21 @@ export class MonsterView {
   hp = 1;
   maxHp = 1;
   dying = false;
-  private walkTime = 0;
+  private animTime = Math.random() * 1000;
+  private attackLeft = 0;
+  private facing = 0;
+  private frame = -1;
 
   constructor(private scene: Phaser.Scene, readonly kind: string, level: number, x: number, y: number) {
     this.x = this.targetX = x;
     this.y = this.targetY = y;
-    this.size = MONSTER_SIZE[kind] ?? { h: 40, r: 22 };
+    const sheet = MONSTER_SHEETS[kind];
+    this.size = { h: sheet?.height ?? 40, r: sheet?.r ?? 22 };
     const def = MONSTERS[kind];
     this.ring = scene.add.image(0, 0, "target-ring").setVisible(false);
     if (def?.boss) this.ring.setScale(1.5);
     const shadow = scene.add.image(0, 0, "c-shadow").setScale(this.size.r / 16, 1);
-    this.sprite = scene.add.image(0, 2, `mon-${kind}`).setOrigin(0.5, 1);
+    this.sprite = scene.add.image(0, 0, `mon-${kind}`, 0).setOrigin(0.5, sheet?.originY ?? 1).setScale(sheet?.scale ?? 1);
     const label = scene.add
       .text(0, -this.size.h - 6, `${def?.name ?? kind} Lv${level}`, {
         fontFamily: "Tahoma, sans-serif",
@@ -49,8 +53,7 @@ export class MonsterView {
   }
 
   setFacing(f: number) {
-    // texture faces screen-left; mirror for right-ish facings
-    this.sprite.setFlipX(f >= 5 && f <= 7);
+    this.facing = f;
   }
 
   setHp(hp: number, max: number) {
@@ -72,6 +75,11 @@ export class MonsterView {
 
   setStunned(on: boolean) {
     this.stunStars.setVisible(on);
+  }
+
+  /** Show the attack frames for a moment. */
+  attack() {
+    this.attackLeft = 320;
   }
 
   flash() {
@@ -101,9 +109,17 @@ export class MonsterView {
       this.x += dx * k;
       this.y += dy * k;
     }
-    if (this.moving) this.walkTime += dtMs;
-    else this.walkTime = 0;
-    this.sprite.y = 2 - (this.moving ? Math.abs(Math.sin(this.walkTime / 80)) * 3 : 0);
+    this.animTime += dtMs;
+    this.attackLeft = Math.max(0, this.attackLeft - dtMs);
+    // columns: idle, walk x4, attack x2
+    let col = 0;
+    if (this.attackLeft > 0) col = this.attackLeft > 190 ? 5 : 6;
+    else if (this.moving) col = 1 + (Math.floor(this.animTime / 110) % 4);
+    const frame = this.facing * MONSTER_COLS + col;
+    if (frame !== this.frame) {
+      this.frame = frame;
+      this.sprite.setFrame(frame);
+    }
     this.place();
   }
 

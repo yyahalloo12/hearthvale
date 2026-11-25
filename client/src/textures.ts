@@ -285,50 +285,6 @@ export function makeTextures(scene: Phaser.Scene) {
     g.fillStyle(0x000000, 0.25);
     g.fillEllipse(16, 6, 30, 10);
   });
-  make(scene, "c-body", 24, 22, (g) => {
-    g.fillStyle(0xffffff);
-    g.fillRoundedRect(2, 0, 20, 18, 7);
-    g.fillStyle(0x5a3b22); // boots
-    g.fillRoundedRect(4, 16, 7, 6, 2);
-    g.fillRoundedRect(13, 16, 7, 6, 2);
-  });
-  make(scene, "c-head", 34, 34, (g) => {
-    g.fillStyle(0xffd9b3);
-    g.fillCircle(17, 17, 15);
-  });
-  make(scene, "c-hair", 36, 24, (g) => {
-    g.fillStyle(0x6b3f22);
-    g.fillEllipse(18, 10, 36, 20);
-  });
-  make(scene, "c-hair-back", 36, 34, (g) => {
-    g.fillStyle(0x6b3f22);
-    g.fillCircle(18, 17, 16);
-  });
-
-  // Gear seen on characters (white parts get tinted by tier).
-  make(scene, "g-sword", 14, 34, (g) => {
-    g.fillStyle(0xffffff);
-    g.fillTriangle(7, 0, 10, 6, 4, 6);
-    g.fillRect(4, 6, 6, 17);
-    g.fillRect(0, 22, 14, 4);
-    g.fillRect(5, 26, 4, 8);
-  });
-  make(scene, "g-axe", 20, 34, (g) => {
-    g.fillStyle(0x7a4a26);
-    g.fillRect(8, 2, 4, 32);
-    g.fillStyle(0xffffff);
-    g.fillEllipse(14, 9, 12, 16);
-    g.fillEllipse(5, 9, 8, 10);
-  });
-  make(scene, "g-helm", 38, 22, (g) => {
-    g.fillStyle(0xffffff);
-    g.fillEllipse(19, 13, 36, 24);
-    g.fillRect(1, 12, 36, 5);
-    g.fillStyle(0x000000, 0.18);
-    g.fillRect(1, 15, 36, 3);
-    g.fillRect(17, 2, 4, 12);
-  });
-
   // The blacksmith's anvil and the storage chest.
   make(scene, "p-anvil", 64, 56, (g) => {
     g.fillStyle(0x000000, 0.18);

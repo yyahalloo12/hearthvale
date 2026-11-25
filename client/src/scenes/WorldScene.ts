@@ -15,6 +15,7 @@ import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
 import { PlayerView } from "../PlayerView";
+import { loadSprites } from "../sprites";
 import { groundKey, makeTextures } from "../textures";
 
 const PROP_TEXTURE: Partial<Record<Prop, string>> = {
@@ -58,6 +59,10 @@ export class WorldScene extends Phaser.Scene {
     this.room = data.room;
     this.zone = data.zone;
     this.travel = data.travel;
+  }
+
+  preload() {
+    loadSprites(this);
   }
 
   create() {
@@ -321,6 +326,7 @@ export class WorldScene extends Phaser.Scene {
   private showHit(h: HitEvent) {
     const attackerPlayer = this.views.get(h.from);
     attackerPlayer?.lunge();
+    this.monsters.get(h.from)?.attack();
     const myId = this.room.sessionId;
     const targetMonster = this.monsters.get(h.to);
     if (targetMonster) {
