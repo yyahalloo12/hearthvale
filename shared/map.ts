@@ -13,6 +13,9 @@ export enum Tile {
   Plaza = 3,
   Water = 4,
   Sand = 5,
+  Ash = 6,
+  Pale = 7,
+  Void = 8,
 }
 
 export enum Prop {
@@ -25,10 +28,17 @@ export enum Prop {
   Bush = 6,
   Anvil = 7,
   Chest = 8,
+  Portal = 9,
+  Ruin = 10,
 }
 
+export type ZoneId = "brindle" | "hollow";
+
 export interface GameMap {
+  id: ZoneId;
   name: string;
+  /** players can fight each other, and drop everything when they die */
+  pvp: boolean;
   width: number;
   height: number;
   tiles: Tile[][]; // [y][x]
@@ -39,7 +49,7 @@ export interface GameMap {
 }
 
 /** Small deterministic random generator (mulberry32). */
-function rng(seed: number) {
+export function rng(seed: number) {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -127,9 +137,11 @@ export function buildBrindleVillage(): GameMap {
   // The blacksmith's anvil and the storage chest stand on the plaza.
   props[27][21] = Prop.Anvil;
   props[21][27] = Prop.Chest;
+  // The way into the Hollow, at the north end of the road.
+  props[5][24] = Prop.Portal;
 
   // Roads stay open to the map edge except the outermost tree ring.
-  return { name: "Brindle Village", width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 } };
+  return { id: "brindle", name: "Brindle Village", pvp: false, width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 } };
 }
 
 /** The "main" prop tile of a 2x2 house is its top-left tile. */
@@ -143,7 +155,7 @@ export function isHouseAnchor(map: GameMap, x: number, y: number) {
 
 export function isWalkable(map: GameMap, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= map.width || y >= map.height) return false;
-  if (map.tiles[y][x] === Tile.Water) return false;
+  if (map.tiles[y][x] === Tile.Water || map.tiles[y][x] === Tile.Void) return false;
   return map.props[y][x] === Prop.None;
 }
 

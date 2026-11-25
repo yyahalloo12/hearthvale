@@ -45,7 +45,9 @@ let selected: string | null = null;
 let built = false;
 
 export function initPassiveTree(a: TreeActions) {
+  const first = !actions;
   actions = a;
+  if (!first) return;
   $("tree-open").hidden = false;
   $("tree-open").onclick = () => toggleTree();
   $("tree-close").onclick = () => toggleTree(false);

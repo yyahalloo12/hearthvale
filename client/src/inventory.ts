@@ -44,7 +44,10 @@ let station: StationKind | null = null;
 let selected: { where: "bag" | "storage" | "equip"; uid: string } | null = null;
 
 export function initInventory(a: ItemActions) {
+  const first = !actions;
   actions = a;
+  closeStation();
+  if (!first) return;
   $("bag-open").hidden = false;
   $("bag-open").onclick = () => toggleBag();
   $("bag-close").onclick = () => toggleBag(false);

@@ -15,7 +15,8 @@ let gameServer: Server;
 before(async () => {
   const httpServer = http.createServer();
   gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) });
-  gameServer.define("world", WorldRoom);
+  gameServer.define("world", WorldRoom, { zone: "brindle" });
+  gameServer.define("hollow", WorldRoom, { zone: "hollow" });
   await gameServer.listen(PORT);
 });
 after(async () => {
@@ -191,16 +192,16 @@ test("first strike always crits the first hit, life steal heals, kills drop coin
     hits.push(h);
   });
   a.onMessage(Msg.Private, (d: any) => (priv = d));
-  const id = [...room.state.monsters.entries()].find(([, m]) => m.kind === "rat")![0];
+  const id = [...room.state.monsters.entries()].find(([, m]) => m.kind === "rat" && m.x > 37 && m.y < 28)![0]; // far from the village and the scarecrows
   const m = room.state.monsters.get(id)!;
   p.x = Math.round(m.x);
   p.y = Math.round(m.y);
-  p.hp = 20;
+  p.hp = 50; // enough to survive a high-level rat
   m.hp = 25;
   a.send(Msg.Attack, { id });
   await until(() => hits.length >= 1, 5000);
   assert.equal(hits[0].crit, true);
-  assert.ok(hpAfterFirst > 20, "life steal healed (nothing else could: bloodthirst stops regeneration)");
+  assert.ok(hpAfterFirst > 50, "life steal healed (nothing else could: bloodthirst stops regeneration)");
   await until(() => hits.some((h) => h.killed), 12000);
   await until(() => priv?.gold >= 5);
   await a.leave();
@@ -252,7 +253,7 @@ test("gather, buy, craft, wear and store items, and keep them after logging in a
   // mine the rock: takes a moment, gives ore, and the rock is used up for a while
   a.send(Msg.Interact, rock);
   await until(() => priv.inv.bag.some((s: any) => s.id === "ore_1"), 12000);
-  assert.equal(a.state.depleted.get("17,21"), true);
+  await until(() => a.state.depleted.get("17,21") === true);
   a.send(Msg.Interact, rock);
   await until(() => notices.length === 4);
 

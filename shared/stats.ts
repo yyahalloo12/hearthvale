@@ -36,6 +36,8 @@ export interface MonsterDef {
   aggroRange: number;
   leash: number;
   boss?: boolean;
+  /** walks around this far from where it was born (Hollow hunters) */
+  patrol?: number;
 }
 export const MONSTERS = monstersJson as unknown as Record<string, MonsterDef>;
 

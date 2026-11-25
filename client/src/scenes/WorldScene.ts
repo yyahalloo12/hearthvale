@@ -1,14 +1,16 @@
 import { getStateCallbacks, Room } from "colyseus.js";
 import Phaser from "phaser";
 import { TILE_H } from "../../../shared/constants";
+import { buildHollow, GLOW_AT } from "../../../shared/hollow";
 import { findStation, ITEMS, resourceAt, STATION_RANGE, stationAt } from "../../../shared/items";
-import { buildBrindleVillage, GameMap, isHouseAnchor, isWalkable, Prop } from "../../../shared/map";
-import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData } from "../../../shared/protocol";
+import { buildBrindleVillage, GameMap, isHouseAnchor, isWalkable, Prop, ZoneId } from "../../../shared/map";
+import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
 import { SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
-import { initHud, setOnline, skillForKey, startCooldown, updateMe } from "../hud";
+import { askEnterHollow, initHud, setCorruption, setOnline, setZone, skillForKey, startCooldown, updateMe } from "../hud";
 import { closeStation, initInventory, openStation, openStationKind, setInventory, setItemLevel, showGathering } from "../inventory";
 import { toScreen, toTile } from "../iso";
+import { drawMinimap, setMinimap } from "../minimap";
 import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
@@ -23,10 +25,20 @@ const PROP_TEXTURE: Partial<Record<Prop, string>> = {
   [Prop.Bush]: "p-bush",
   [Prop.Anvil]: "p-anvil",
   [Prop.Chest]: "p-chest",
+  [Prop.Portal]: "p-portal",
+  [Prop.Ruin]: "p-ruin",
 };
+const STATION_LABEL = { smith: "ช่างตีเหล็ก", storage: "คลังเก็บของ", portal: "ทางเข้า Hollow" } as const;
 
 export class WorldScene extends Phaser.Scene {
   private room!: Room;
+  private zone: ZoneId = "brindle";
+  private travel!: (e: TravelEvent) => void;
+  private bundles = new Map<string, Phaser.GameObjects.Container>();
+  private gates: Phaser.GameObjects.GameObject[] = [];
+  private mapTimer = 0;
+  private travelling = false;
+  private onKey?: (e: KeyboardEvent) => void;
   private map!: GameMap;
   private views = new Map<string, PlayerView>();
   private monsters = new Map<string, MonsterView>();
@@ -39,21 +51,24 @@ export class WorldScene extends Phaser.Scene {
   private usable = new Map<string, { x: number; y: number; img: Phaser.GameObjects.Image }>();
 
   constructor() {
-    super("world");
+    super(""); // the key comes from scene.add(), so each map visit can have its own
   }
 
-  init(data: { room: Room }) {
+  init(data: { room: Room; zone: ZoneId; travel: (e: TravelEvent) => void }) {
     this.room = data.room;
+    this.zone = data.zone;
+    this.travel = data.travel;
   }
 
   create() {
     makeTextures(this);
     makeMonsterTextures(this);
-    this.map = buildBrindleVillage();
+    this.map = this.zone === "hollow" ? buildHollow() : buildBrindleVillage();
     this.drawMap();
 
     this.marker = this.add.image(0, 0, "click-marker").setVisible(false).setDepth(-1);
-    this.cameras.main.setBackgroundColor("#2c5a34");
+    this.cameras.main.setBackgroundColor(this.map.pvp ? "#211d2a" : "#2c5a34");
+    setMinimap(this.map);
     this.cameras.main.setRoundPixels(true);
 
     initHud({
@@ -62,6 +77,7 @@ export class WorldScene extends Phaser.Scene {
       changeJob: () => this.room.send(Msg.ChangeJob),
       respawn: () => this.room.send(Msg.Respawn),
     });
+    setZone(this.map.pvp ? "Hollow" : "หมู่บ้านบรินเดิล", this.map.pvp);
     initPassiveTree({
       learn: (id) => this.room.send(Msg.LearnPassive, { id }),
       refund: (id) => this.room.send(Msg.RefundPassive, { id }),
@@ -97,7 +113,7 @@ export class WorldScene extends Phaser.Scene {
           }
           continue;
         }
-        const key = PROP_TEXTURE[prop];
+        const key = this.map.pvp && prop === Prop.Tree ? "p-deadtree" : PROP_TEXTURE[prop];
         if (key) {
           const img = this.add
             .image(p.x, p.y + TILE_H / 2 - 4, key)
@@ -108,9 +124,10 @@ export class WorldScene extends Phaser.Scene {
           if (res || station) this.usable.set(`${x},${y}`, { x, y, img });
           if (res?.item === "ore_1") img.setTint(0xe8a878);
           if (res?.item === "ore_2") img.setTint(0x9fb4d0);
+          if (res?.item === "ore_3") img.setTint(0xc9b8ff);
           if (station)
             this.add
-              .text(p.x, p.y - 34, station === "smith" ? "ช่างตีเหล็ก" : "คลังเก็บของ", {
+              .text(p.x, p.y - (station === "portal" ? 78 : 34), STATION_LABEL[station], {
                 fontFamily: "Tahoma, sans-serif",
                 fontSize: "12px",
                 color: "#ffe9a8",
@@ -135,6 +152,7 @@ export class WorldScene extends Phaser.Scene {
       view.setHp(player.hp, player.maxHp);
       view.setDead(player.dead);
       view.setGear(player.weapon, player.helm);
+      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT);
       this.views.set(id, view);
       if (isMe) {
         this.me = player;
@@ -151,6 +169,8 @@ export class WorldScene extends Phaser.Scene {
         view.setDead(player.dead);
         view.setGuarding(player.guarding);
         view.setGear(player.weapon, player.helm);
+        view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT);
+        if (this.targetId === id && player.dead) this.setTarget(null);
         if (isMe) {
           if (!player.moving) this.marker.setVisible(false);
           this.refreshMe();
@@ -161,6 +181,7 @@ export class WorldScene extends Phaser.Scene {
     });
 
     $(state).players.onRemove((_player: any, id: string) => {
+      if (this.targetId === id) this.targetId = null;
       this.views.get(id)?.destroy();
       this.views.delete(id);
       setOnline(this.views.size);
@@ -193,7 +214,29 @@ export class WorldScene extends Phaser.Scene {
     $(state).depleted.onAdd((_v: boolean, key: string) => this.usable.get(key)?.img.setAlpha(0.35));
     $(state).depleted.onRemove((_v: boolean, key: string) => this.usable.get(key)?.img.setAlpha(1));
 
-    this.room.onMessage(Msg.OpenStation, (e: OpenStationEvent) => openStation(e.kind));
+    $(state).gates.onAdd((gate: any) => this.addGate(gate.x, gate.y));
+    $(state).gates.onRemove(() => this.redrawGates());
+    $(state).bundles.onAdd((b: any, id: string) => {
+      const p = toScreen(b.x, b.y);
+      const img = this.add.image(0, 6, "p-bundle").setOrigin(0.5, 1);
+      const label = this.add
+        .text(0, -30, `ห่อของ ${b.owner}`, { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: "#ffe9a8", stroke: "#000", strokeThickness: 3 })
+        .setOrigin(0.5, 1);
+      this.bundles.set(id, this.add.container(p.x, p.y, [img, label]).setDepth(p.y));
+    });
+    $(state).bundles.onRemove((_b: any, id: string) => {
+      this.bundles.get(id)?.destroy();
+      this.bundles.delete(id);
+    });
+
+    this.room.onMessage(Msg.Travel, (e: TravelEvent) => {
+      this.travelling = true;
+      this.travel(e);
+    });
+    this.room.onMessage(Msg.OpenStation, (e: OpenStationEvent) => {
+      if (e.kind === "portal") askEnterHollow(() => this.room.send(Msg.EnterHollow));
+      else openStation(e.kind);
+    });
     this.room.onMessage(Msg.Gathering, (e: GatheringEvent) => showGathering(e.ms, e.name));
     this.room.onMessage(Msg.Loot, (e: LootEvent) => {
       const v = this.views.get(this.room.sessionId);
@@ -230,8 +273,25 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.room.onLeave((code) => {
-      if (code !== 1000) addChatLine({ from: "", name: "", text: "หลุดการเชื่อมต่อกับเซิร์ฟเวอร์ ลองรีเฟรชหน้านี้" }, "notice");
+      if (code !== 1000 && !this.travelling) addChatLine({ from: "", name: "", text: "หลุดการเชื่อมต่อกับเซิร์ฟเวอร์ ลองรีเฟรชหน้านี้" }, "notice");
     });
+  }
+
+  private addGate(x: number, y: number) {
+    const p = toScreen(x, y);
+    const img = this.add.image(p.x, p.y + 12, "p-gate").setOrigin(0.5, 1).setDepth(p.y - 1);
+    const label = this.add
+      .text(p.x, p.y - 80, "ประตูทางออก", { fontFamily: "Tahoma, sans-serif", fontSize: "13px", color: "#ffd23a", stroke: "#000", strokeThickness: 3 })
+      .setOrigin(0.5, 1)
+      .setDepth(p.y);
+    this.tweens.add({ targets: img, alpha: 0.65, duration: 900, yoyo: true, repeat: -1 });
+    this.gates.push(img, label);
+  }
+
+  private redrawGates() {
+    this.gates.forEach((g) => g.destroy());
+    this.gates = [];
+    (this.room.state as any).gates.forEach((g: any) => this.addGate(g.x, g.y));
   }
 
   private refreshMe() {
@@ -329,9 +389,9 @@ export class WorldScene extends Phaser.Scene {
   // ---- input ----------------------------------------------------------------
 
   private setTarget(id: string | null) {
-    if (this.targetId) this.monsters.get(this.targetId)?.setTargeted(false);
+    if (this.targetId) (this.monsters.get(this.targetId) ?? this.views.get(this.targetId))?.setTargeted(false);
     this.targetId = id;
-    if (id) this.monsters.get(id)?.setTargeted(true);
+    if (id) (this.monsters.get(id) ?? this.views.get(id))?.setTargeted(true);
   }
 
   /** Screen position of a monster (for tests / debugging). */
@@ -353,6 +413,22 @@ export class WorldScene extends Phaser.Scene {
       if (!best || img.depth > best.img.depth) best = u;
     }
     return best;
+  }
+
+  /** Another player under the pointer (only where players can fight). */
+  private pickPlayer(wx: number, wy: number): string | null {
+    if (!this.map.pvp) return null;
+    for (const [id, v] of this.views) {
+      if (id === this.room.sessionId || (this.room.state as any).players.get(id)?.dead) continue;
+      const c = v.center();
+      if (Math.hypot((wx - c.x) / 18, (wy - c.y) / 30) < 1) return id;
+    }
+    return null;
+  }
+
+  private pickBundle(wx: number, wy: number): string | null {
+    for (const [id, b] of this.bundles) if (Math.abs(wx - b.x) < 20 && wy < b.y + 10 && wy > b.y - 32) return id;
+    return null;
   }
 
   private pickMonster(wx: number, wy: number): string | null {
@@ -395,7 +471,13 @@ export class WorldScene extends Phaser.Scene {
       const me = this.views.get(this.room.sessionId);
       if (me) this.cameras.main.startFollow(me.root, true, 0.15, 0.15);
 
-      const monsterId = this.pickMonster(pointer.worldX, pointer.worldY);
+      const bundle = this.pickBundle(pointer.worldX, pointer.worldY);
+      if (bundle) {
+        this.setTarget(null);
+        this.room.send(Msg.LootBundle, { id: bundle });
+        return;
+      }
+      const monsterId = this.pickMonster(pointer.worldX, pointer.worldY) ?? this.pickPlayer(pointer.worldX, pointer.worldY);
       if (monsterId) {
         this.setTarget(monsterId);
         this.room.send(Msg.Attack, { id: monsterId });
@@ -425,16 +507,25 @@ export class WorldScene extends Phaser.Scene {
     });
     this.input.on("pointerup", () => (this.dragStart = undefined));
 
-    window.addEventListener("keydown", (e) => {
+    this.onKey = (e) => {
       if (document.activeElement?.tagName === "INPUT") return;
       const skill = skillForKey(e.key);
       if (skill) this.useSkill(skill);
-    });
+    };
+    window.addEventListener("keydown", this.onKey);
+    const off = () => this.onKey && window.removeEventListener("keydown", this.onKey);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+    this.events.once(Phaser.Scenes.Events.DESTROY, off);
   }
 
   update(time: number, delta: number) {
     for (const v of this.views.values()) v.update(delta);
     for (const m of this.monsters.values()) m.update(delta);
+    if (time - this.mapTimer > 200) {
+      this.mapTimer = time;
+      drawMinimap(this.room.state, this.room.sessionId);
+      if (this.map.pvp && this.me) setCorruption(this.me.corruption, (this.room.state as any).gatesUntil);
+    }
     if (this.marker.visible) this.marker.setAlpha(0.6 + Math.sin(time / 120) * 0.4);
   }
 }

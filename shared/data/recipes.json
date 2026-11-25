@@ -8,5 +8,10 @@
   {"item": "axe_2", "minSkill": 15, "maxSkill": 70, "needs": {"ore_2": 7, "wood_1": 6}},
   {"item": "helm_2", "minSkill": 15, "maxSkill": 70, "needs": {"ore_2": 6, "hide_1": 3}},
   {"item": "armor_2", "minSkill": 15, "maxSkill": 70, "needs": {"ore_2": 12, "hide_1": 6}},
-  {"item": "boots_2", "minSkill": 15, "maxSkill": 70, "needs": {"ore_2": 5, "hide_1": 4}}
+  {"item": "boots_2", "minSkill": 15, "maxSkill": 70, "needs": {"ore_2": 5, "hide_1": 4}},
+  {"item": "sword_3", "minSkill": 35, "maxSkill": 100, "needs": {"ore_3": 8, "wood_3": 4, "thread_3": 2}},
+  {"item": "axe_3", "minSkill": 35, "maxSkill": 100, "needs": {"ore_3": 7, "wood_3": 6, "thread_3": 2}},
+  {"item": "helm_3", "minSkill": 35, "maxSkill": 100, "needs": {"ore_3": 6, "thread_3": 2}},
+  {"item": "armor_3", "minSkill": 35, "maxSkill": 100, "needs": {"ore_3": 12, "thread_3": 4}},
+  {"item": "boots_3", "minSkill": 35, "maxSkill": 100, "needs": {"ore_3": 5, "thread_3": 2}}
 ]

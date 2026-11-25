@@ -1,7 +1,8 @@
-import { GameMap, isSafe, isWalkable } from "../../../shared/map";
+import { GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
 import { findPath, Point } from "../../../shared/pathfinding";
 import { ATTACK_RANGE, MonsterDef, MONSTERS, monsterStats } from "../../../shared/stats";
 import spawnsJson from "../../../shared/data/spawns.json";
+import hollowSpawnsJson from "../../../shared/data/spawns_hollow.json";
 import { Monster } from "../rooms/schema";
 import { dist, faceTowards, planFrom, stepAlong } from "./movement";
 
@@ -13,7 +14,7 @@ export interface SpawnDef {
   count: number;
   respawnMs: number;
 }
-export const SPAWNS = spawnsJson as SpawnDef[];
+export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, hollow: hollowSpawnsJson };
 
 type AIState = "idle" | "chase" | "return";
 
@@ -57,7 +58,7 @@ export class MonsterSystem {
   constructor(private host: MonsterHost) {}
 
   spawnAll() {
-    for (const s of SPAWNS) for (let i = 0; i < s.count; i++) this.spawnOne(s);
+    for (const s of SPAWNS[this.host.map.id]) for (let i = 0; i < s.count; i++) this.spawnOne(s);
   }
 
   private spawnOne(spawn: SpawnDef) {
@@ -177,9 +178,12 @@ export class MonsterSystem {
         }
         if (c.state === "idle") {
           if (!c.path.length && now >= c.nextThinkAt) {
-            const to = this.randomTileNear(c.home, 3);
-            if (to) c.path = findPath(this.host.map, planFrom(m, c.path), to, 10) ?? [];
-            c.nextThinkAt = now + 3000 + Math.random() * 5000;
+            const far = c.def.patrol;
+            const to = this.randomTileNear(far ? c.spawn : c.home, far ?? 3);
+            if (to) c.path = findPath(this.host.map, planFrom(m, c.path), to, far ? 70 : 10) ?? [];
+            // a hunter keeps walking, and its "home" moves along with it
+            if (far && to && c.path.length) c.home = to;
+            c.nextThinkAt = now + (far ? 1500 : 3000) + Math.random() * 5000;
           }
           stepAlong(m, c.path, c.def.speed * 0.5, dt);
           // slow regen while calm

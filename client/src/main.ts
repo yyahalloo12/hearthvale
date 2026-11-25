@@ -2,7 +2,9 @@ import type { Room } from "colyseus.js";
 import Phaser from "phaser";
 import { CHAT_MAX, PASSWORD_MIN, TUNIC_COLORS } from "../../shared/constants";
 import { cleanName } from "../../shared/names";
-import { JoinOptions, Msg } from "../../shared/protocol";
+import { JoinOptions, Msg, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../shared/protocol";
+import type { ZoneId } from "../../shared/map";
+import { addChatLine } from "./chat";
 import { client } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
 
@@ -56,13 +58,23 @@ async function enterWorld(create: boolean) {
   busy.textContent = "กำลังเข้าสู่โลก...";
   try {
     const opts: JoinOptions = { name, password, create, color: chosenColor };
-    const room = await client.joinOrCreate("world", opts);
+    let zone: ZoneId = "brindle";
+    let room: Room;
+    try {
+      room = await client.joinOrCreate(ROOM_OF[zone], opts);
+    } catch (ex: any) {
+      // the character is in another map: go there
+      const at = String(ex?.message ?? "").split(ZONE_ERROR)[1];
+      if (at !== "hollow") throw ex;
+      zone = at;
+      room = await client.joinOrCreate(ROOM_OF[zone], opts);
+    }
     try {
       localStorage.setItem("hv-name", name);
     } catch {
       /* ignore */
     }
-    startGame(room);
+    startGame(room, zone);
   } catch (ex: any) {
     const msg = ex?.message && /[\u0E00-\u0E7F]/.test(ex.message) ? ex.message : "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ เปิดเซิร์ฟเวอร์อยู่หรือเปล่า?";
     err.textContent = msg;
@@ -78,17 +90,35 @@ $("login-form").addEventListener("submit", (e) => {
 $("create").addEventListener("click", () => enterWorld(true));
 
 // ---- In game ------------------------------------------------------------
-function startGame(room: Room) {
+function startGame(first: Room, zone: ZoneId) {
   $("login").remove();
+  let room = first;
+  let n = 0;
 
-  new Phaser.Game({
+  /** The server sent us to another map: join that room and start a fresh scene. */
+  const travel = async (e: TravelEvent) => {
+    const old = room;
+    const opts: TicketOptions = { ticket: e.ticket };
+    try {
+      room = await client.joinOrCreate(ROOM_OF[e.zone], opts);
+    } catch {
+      addChatLine({ from: "", name: "", text: "เดินทางไม่สำเร็จ รีเฟรชหน้านี้แล้วเข้าใหม่" }, "notice");
+      return;
+    }
+    old.leave().catch(() => {});
+    game.scene.remove(`world${n}`);
+    n++;
+    game.scene.add(`world${n}`, WorldScene, true, { room, zone: e.zone, travel });
+  };
+
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: "game",
     backgroundColor: "#2c5a34",
     scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
     scene: [],
     callbacks: {
-      postBoot: (game) => game.scene.add("world", WorldScene, true, { room }),
+      postBoot: (g) => g.scene.add("world0", WorldScene, true, { room, zone, travel }),
     },
   });
 

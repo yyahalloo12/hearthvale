@@ -28,6 +28,7 @@ export class PlayerView {
   private shield: Phaser.GameObjects.Image;
   private weapon: Phaser.GameObjects.Image;
   private helm: Phaser.GameObjects.Image;
+  private glow: Phaser.GameObjects.Image;
   private figure: Phaser.GameObjects.Container;
   private dead = false;
 
@@ -40,11 +41,12 @@ export class PlayerView {
   private facing = -1;
   private walkTime = 0;
 
-  constructor(private scene: Phaser.Scene, name: string, color: number, x: number, y: number, isMe: boolean) {
+  constructor(private scene: Phaser.Scene, readonly name: string, color: number, x: number, y: number, private isMe: boolean) {
     this.x = this.targetX = x;
     this.y = this.targetY = y;
 
     const shadow = scene.add.image(0, 0, "c-shadow");
+    this.glow = scene.add.image(0, -22, "target-ring").setTint(0xff5ad2).setScale(1.1, 2.2).setAlpha(0.8).setVisible(false);
     this.body = scene.add.image(0, -10, "c-body").setTint(color);
     this.hairBack = scene.add.image(0, 0, "c-hair-back").setVisible(false);
     const face = scene.add.image(0, 0, "c-head");
@@ -66,7 +68,7 @@ export class PlayerView {
     this.hpBar = scene.add.graphics();
     this.shield = scene.add.image(12, -14, "shield").setVisible(false);
     this.figure = scene.add.container(0, 0, [this.body, this.head, this.weapon, this.shield]);
-    this.root = scene.add.container(0, 0, [shadow, this.figure, this.label, this.hpBar]);
+    this.root = scene.add.container(0, 0, [shadow, this.glow, this.figure, this.label, this.hpBar]);
     this.setFacing(0);
     this.place();
   }
@@ -109,6 +111,24 @@ export class PlayerView {
     const h = ITEMS[helm];
     this.helm.setVisible(!!h);
     if (h) this.helm.setTint(TIER_TINT[h.tier] ?? 0xffffff);
+  }
+
+  /** Faded name and body: logged out but still standing here. */
+  setStatus(offline: boolean, shielded: boolean, glowing: boolean) {
+    this.root.setAlpha(offline ? 0.55 : 1);
+    this.label.setText(offline ? `${this.name} (ออฟไลน์)` : this.name);
+    this.figure.setAlpha(this.dead ? 0.7 : shielded ? 0.55 : 1);
+    this.glow.setVisible(glowing);
+  }
+
+  /** Red name while we are attacking this player. */
+  setTargeted(on: boolean) {
+    this.label.setColor(on ? "#ff6a6a" : this.isMe ? "#fff3a0" : "#ffffff");
+  }
+
+  /** Body centre in world pixels, for click picking. */
+  center() {
+    return { x: this.root.x, y: this.root.y - 28 };
   }
 
   setGuarding(on: boolean) {

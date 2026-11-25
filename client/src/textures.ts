@@ -54,6 +54,7 @@ function tile(scene: Phaser.Scene, key: string, base: number, edge: number, extr
 }
 
 export function makeTextures(scene: Phaser.Scene) {
+  if (scene.textures.exists("t-ash")) return; // already made for an earlier map
   // Ground tiles (two grass variants to break up repetition).
   tile(scene, "t-grass-0", 0x7cc95a, 0x5ea845, (g) => speckle(g, 0x9be07a, 14, 7));
   tile(scene, "t-grass-1", 0x74c255, 0x5ea845, (g) => speckle(g, 0x5ea845, 12, 19));
@@ -74,6 +75,74 @@ export function makeTextures(scene: Phaser.Scene) {
     g.lineBetween(HW + 4, HH + 5, HW + 14, HH + 5);
   });
   tile(scene, "t-sand", 0xf0dc9c, 0xd4bf7e, (g) => speckle(g, 0xe0c97f, 10, 13));
+
+  // The Hollow: grey, washed-out ground and torn holes.
+  tile(scene, "t-ash", 0x75707e, 0x5f5a68, (g) => speckle(g, 0x8a8494, 12, 17));
+  tile(scene, "t-pale", 0x858090, 0x6a6575, (g) => speckle(g, 0x6f6a7a, 12, 23));
+  tile(scene, "t-void", 0x1a1722, 0x2b2438, (g) => speckle(g, 0x6a4a9a, 5, 31, 0.8));
+
+  make(scene, "p-deadtree", 64, 96, (g) => {
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(32, 88, 36, 12);
+    g.fillStyle(0x57525f);
+    g.fillRect(28, 34, 8, 54);
+    g.lineStyle(5, 0x57525f);
+    g.lineBetween(32, 52, 14, 30);
+    g.lineBetween(32, 44, 50, 22);
+    g.lineBetween(32, 36, 28, 10);
+    g.lineStyle(3, 0x6a6472);
+    g.lineBetween(20, 37, 8, 36);
+    g.lineBetween(43, 30, 56, 32);
+    g.lineBetween(30, 22, 40, 8);
+  });
+  make(scene, "p-ruin", 64, 72, (g) => {
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(32, 62, 54, 16);
+    g.fillStyle(0x4c4755);
+    g.fillRect(12, 22, 40, 40);
+    g.fillStyle(0x5d5767);
+    g.fillRect(12, 16, 12, 46);
+    g.fillRect(30, 24, 10, 38);
+    g.fillRect(42, 10, 10, 52);
+    g.lineStyle(1, 0x3a3542);
+    for (let y = 26; y < 62; y += 9) g.lineBetween(12, y, 52, y);
+  });
+  make(scene, "p-portal", 72, 96, (g) => {
+    g.fillStyle(0x000000, 0.2);
+    g.fillEllipse(36, 86, 60, 18);
+    g.fillStyle(0x6b6572);
+    g.fillRect(6, 20, 12, 66);
+    g.fillRect(54, 20, 12, 66);
+    g.fillEllipse(36, 22, 60, 28);
+    g.fillStyle(0x2a1a3a);
+    g.fillEllipse(36, 54, 38, 62);
+    g.lineStyle(3, 0xb04fe0, 0.9);
+    g.strokeEllipse(36, 54, 34, 56);
+    g.lineStyle(2, 0xe0a8ff, 0.8);
+    g.strokeEllipse(36, 54, 18, 34);
+  });
+  make(scene, "p-gate", 64, 96, (g) => {
+    g.fillStyle(0xffd23a, 0.25);
+    g.fillEllipse(32, 84, 60, 22);
+    g.fillStyle(0xfff3b0, 0.55);
+    g.fillEllipse(32, 50, 34, 70);
+    g.lineStyle(4, 0xffd23a);
+    g.strokeEllipse(32, 50, 36, 74);
+    g.lineStyle(2, 0xffffff, 0.9);
+    g.strokeEllipse(32, 50, 22, 52);
+  });
+  make(scene, "p-bundle", 36, 32, (g) => {
+    g.fillStyle(0x000000, 0.25);
+    g.fillEllipse(18, 28, 30, 8);
+    g.fillStyle(0x9a6a3a);
+    g.fillCircle(18, 19, 11);
+    g.fillStyle(0xb98350);
+    g.fillCircle(15, 17, 6);
+    g.fillStyle(0xc8453a);
+    g.fillRect(13, 7, 10, 4);
+    g.fillTriangle(18, 8, 8, 1, 14, 9);
+    g.fillTriangle(18, 8, 28, 1, 22, 9);
+  });
 
   // Tree: trunk + three round leaf blobs.
   make(scene, "p-tree", 64, 96, (g) => {
@@ -308,6 +377,9 @@ export function groundKey(tile: number, x: number, y: number) {
     case 3: return "t-plaza";
     case 4: return "t-water";
     case 5: return "t-sand";
+    case 6: return "t-ash";
+    case 7: return "t-pale";
+    case 8: return "t-void";
     default: return (x * 7 + y * 13) % 5 === 0 ? "t-grass-1" : "t-grass-0";
   }
 }

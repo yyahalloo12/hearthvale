@@ -1,4 +1,4 @@
-import { MapSchema, Schema, type } from "@colyseus/schema";
+import { ArraySchema, MapSchema, Schema, type } from "@colyseus/schema";
 
 /** What every client can see about one player. */
 export class Player extends Schema {
@@ -19,6 +19,11 @@ export class Player extends Schema {
   @type("boolean") dead = false;
   @type("boolean") guarding = false;
   /** Item ids of what others can see on you ("" = nothing). */
+  @type("boolean") offline = false;
+  /** just arrived: cannot hurt or be hurt yet */
+  @type("boolean") shielded = false;
+  /** Hollow corruption 0-100; from GLOW_AT on, everyone sees you on the map */
+  @type("uint8") corruption = 0;
   @type("string") weapon = "";
   @type("string") helm = "";
   /** Learned skill levels, e.g. { heavy_strike: 2 }. */
@@ -37,8 +42,24 @@ export class Monster extends Schema {
   @type("boolean") stunned = false;
 }
 
+export class Gate extends Schema {
+  @type("uint8") x = 0;
+  @type("uint8") y = 0;
+}
+
+/** Things a dead player left behind. */
+export class Bundle extends Schema {
+  @type("uint8") x = 0;
+  @type("uint8") y = 0;
+  @type("string") owner = "";
+}
+
 export class WorldState extends Schema {
   @type("string") mapName = "";
+  @type([Gate]) gates = new ArraySchema<Gate>();
+  /** when the gates move next (epoch ms) */
+  @type("float64") gatesUntil = 0;
+  @type({ map: Bundle }) bundles = new MapSchema<Bundle>();
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Monster }) monsters = new MapSchema<Monster>();
   /** Rocks and trees that are used up for now, by "x,y". */

@@ -277,12 +277,15 @@ export interface DropDef {
   tool?: string;
 }
 
-export function rollDrops(drops: DropDef[] | undefined, bag: ItemStack[], rnd = Math.random): { id: string; qty: number }[] {
+/** `luck` multiplies the chances (corruption in the Hollow); above 100% it gives more pieces. */
+export function rollDrops(drops: DropDef[] | undefined, bag: ItemStack[], rnd = Math.random, luck = 1): { id: string; qty: number }[] {
   const out: { id: string; qty: number }[] = [];
   for (const d of drops ?? []) {
     if (d.tool && !countItem(bag, d.tool)) continue;
-    if (rnd() >= d.chance) continue;
-    out.push({ id: d.item, qty: d.qty[0] + Math.floor(rnd() * (d.qty[1] - d.qty[0] + 1)) });
+    const chance = d.chance * luck;
+    if (rnd() >= chance) continue;
+    const qty = d.qty[0] + Math.floor(rnd() * (d.qty[1] - d.qty[0] + 1));
+    out.push({ id: d.item, qty: Math.max(1, Math.round(qty * Math.max(1, chance))) });
   }
   return out;
 }
@@ -298,20 +301,23 @@ export interface Resource {
 }
 const COPPER: Resource = { name: "หินแร่ทองแดง", item: "ore_1", tool: "pickaxe", qty: [1, 3], respawnMs: 45_000 };
 const IRON: Resource = { name: "หินแร่เหล็ก", item: "ore_2", tool: "pickaxe", qty: [1, 2], respawnMs: 60_000 };
+const MIST: Resource = { name: "หินแร่หมอก", item: "ore_3", tool: "pickaxe", qty: [1, 3], respawnMs: 90_000 };
+const PALEWOOD: Resource = { name: "ต้นไม้ไร้สี", item: "wood_3", tool: "hatchet", qty: [1, 2], respawnMs: 90_000 };
 const OAK: Resource = { name: "ต้นโอ๊ก", item: "wood_1", tool: "hatchet", qty: [1, 3], respawnMs: 45_000 };
 
 /** What can be gathered on this tile, if anything. Iron lies in the south, with the scarecrows. */
 export function resourceAt(map: GameMap, x: number, y: number): Resource | null {
   const prop = map.props[y]?.[x];
+  if (map.id === "hollow") return prop === Prop.Tree ? PALEWOOD : prop === Prop.Rock ? MIST : null;
   if (prop === Prop.Tree) return OAK;
   if (prop === Prop.Rock) return y >= 30 ? IRON : COPPER;
   return null;
 }
 
-export type StationKind = "smith" | "storage";
+export type StationKind = "smith" | "storage" | "portal";
 export function stationAt(map: GameMap, x: number, y: number): StationKind | null {
   const prop = map.props[y]?.[x];
-  return prop === Prop.Anvil ? "smith" : prop === Prop.Chest ? "storage" : null;
+  return prop === Prop.Anvil ? "smith" : prop === Prop.Chest ? "storage" : prop === Prop.Portal ? "portal" : null;
 }
 
 /** Where a station is, so both sides can check the distance. */

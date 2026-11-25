@@ -1,0 +1,10 @@
+[
+  {"kind": "shadow", "x": 47, "y": 57, "radius": 5, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 24, "y": 57, "radius": 5, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 12, "y": 35, "radius": 5, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 24, "y": 15, "radius": 5, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 48, "y": 15, "radius": 5, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 60, "y": 37, "radius": 5, "count": 4, "respawnMs": 30000},
+  {"kind": "hunter", "x": 36, "y": 36, "radius": 20, "count": 3, "respawnMs": 120000},
+  {"kind": "threadknight", "x": 36, "y": 36, "radius": 9, "count": 7, "respawnMs": 60000}
+]

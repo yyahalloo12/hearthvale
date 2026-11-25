@@ -1,5 +1,7 @@
 import { expToNext, Job, JOB_CHANGE_LEVEL, JOB_NAMES, MAX_LEVEL, RESPAWN_DELAY_MS, skillPointsEarned, SKILLS } from "../../shared/stats";
 
+import { GLOW_AT } from "../../shared/hollow";
+
 /** The DOM parts of the game screen: status panel, skill bar, death box. */
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -32,10 +34,38 @@ export function initHud(a: HudActions) {
   $("hud").hidden = false;
   $("skillbar").hidden = false;
   $("chat").hidden = false;
-  $("map-name").textContent = "หมู่บ้านบรินเดิล";
   $("job-change").onclick = () => actions.changeJob();
   $("respawn").onclick = () => actions.respawn();
-  requestAnimationFrame(drawCooldowns);
+  if (!started) requestAnimationFrame(drawCooldowns);
+  started = true;
+}
+
+let started = false;
+
+/** Name of the map, and whether the Hollow bars show. */
+export function setZone(name: string, hollow: boolean) {
+  $("map-name").textContent = name;
+  $("corruption-row").hidden = !hollow;
+  $("death-text").textContent = hollow ? "ของที่พกมาตกอยู่ที่นี่ คุณจะฟื้นที่หมู่บ้าน" : "ฟื้นขึ้นที่ลานกลางหมู่บ้าน";
+  cooldownEnds.clear();
+  document.querySelectorAll<HTMLElement>(".skill .cd").forEach((el) => (el.style.height = "0"));
+}
+
+export function setCorruption(value: number, gatesUntil: number) {
+  $("corruption-fill").style.width = `${value}%`;
+  $("corruption-text").textContent = `การกัดกร่อน ${value}%${value >= GLOW_AT ? " ทุกคนเห็นคุณ!" : ""}`;
+  const s = Math.max(0, Math.round((gatesUntil - Date.now()) / 1000));
+  $("gate-timer").textContent = `ประตูย้ายใน ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+export function askEnterHollow(yes: () => void) {
+  const box = $("enter-hollow");
+  box.hidden = false;
+  $("hollow-no").onclick = () => (box.hidden = true);
+  $("hollow-yes").onclick = () => {
+    box.hidden = true;
+    yes();
+  };
 }
 
 export function setOnline(n: number) {

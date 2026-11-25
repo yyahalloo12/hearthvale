@@ -24,8 +24,21 @@ export interface CharacterRow {
   nodes: string; // JSON: learned passive nodes
   gold: number;
   inv: string; // JSON: bag, gear, storage, crafting skill
+  zone: string;
+  corruption: number;
   x: number;
   y: number;
+}
+
+/** Things a dead player left on the ground, kept in the database so a restart loses nothing. */
+export interface BundleRow {
+  id: string;
+  zone: string;
+  x: number;
+  y: number;
+  owner: string;
+  items: string; // JSON
+  expires: number; // epoch ms
 }
 
 let db: DB | undefined;
@@ -63,9 +76,20 @@ async function open(): Promise<DB> {
       nodes TEXT NOT NULL DEFAULT '[]',
       gold INTEGER NOT NULL DEFAULT 0,
       inv TEXT NOT NULL DEFAULT '{}',
+      zone TEXT NOT NULL DEFAULT 'brindle',
+      corruption REAL NOT NULL DEFAULT 0,
       x REAL NOT NULL DEFAULT -1,
       y REAL NOT NULL DEFAULT -1,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS bundles (
+      id TEXT PRIMARY KEY,
+      zone TEXT NOT NULL,
+      x INTEGER NOT NULL,
+      y INTEGER NOT NULL,
+      owner TEXT NOT NULL,
+      items TEXT NOT NULL,
+      expires INTEGER NOT NULL
     );
   `);
   // Files made by an older version of the game: add the columns that came later.
@@ -73,6 +97,8 @@ async function open(): Promise<DB> {
   if (!have.has("nodes")) db.exec("ALTER TABLE characters ADD COLUMN nodes TEXT NOT NULL DEFAULT '[]'");
   if (!have.has("gold")) db.exec("ALTER TABLE characters ADD COLUMN gold INTEGER NOT NULL DEFAULT 0");
   if (!have.has("inv")) db.exec("ALTER TABLE characters ADD COLUMN inv TEXT NOT NULL DEFAULT '{}'");
+  if (!have.has("zone")) db.exec("ALTER TABLE characters ADD COLUMN zone TEXT NOT NULL DEFAULT 'brindle'");
+  if (!have.has("corruption")) db.exec("ALTER TABLE characters ADD COLUMN corruption REAL NOT NULL DEFAULT 0");
   return db;
 }
 
@@ -114,10 +140,47 @@ export async function loadCharacter(accountId: number): Promise<CharacterRow | n
   return (d.prepare("SELECT * FROM characters WHERE account_id = ?").get(accountId) as unknown as CharacterRow) ?? null;
 }
 
-export async function saveCharacter(c: Omit<CharacterRow, "name" | "color">) {
+export type CharacterSave = Omit<CharacterRow, "name" | "color">;
+
+export async function saveCharacter(c: CharacterSave) {
+  writeCharacter(await open(), c);
+}
+
+/** Saves a character and changes a bundle together: both happen, or neither. */
+export async function saveWithBundle(c: CharacterSave, change: { put: BundleRow } | { remove: string }) {
   const d = await open();
+  d.exec("BEGIN");
+  try {
+    writeCharacter(d, c);
+    if ("put" in change) {
+      const b = change.put;
+      d.prepare("INSERT OR REPLACE INTO bundles (id, zone, x, y, owner, items, expires) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+        b.id,
+        b.zone,
+        b.x,
+        b.y,
+        b.owner,
+        b.items,
+        b.expires,
+      );
+    } else d.prepare("DELETE FROM bundles WHERE id = ?").run(change.remove);
+    d.exec("COMMIT");
+  } catch (e) {
+    d.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/** Bundles still lying in a map; old ones are cleared away. */
+export async function loadBundles(zone: string, now = Date.now()): Promise<BundleRow[]> {
+  const d = await open();
+  d.prepare("DELETE FROM bundles WHERE expires <= ?").run(now);
+  return d.prepare("SELECT * FROM bundles WHERE zone = ?").all(zone) as unknown as BundleRow[];
+}
+
+function writeCharacter(d: DB, c: CharacterSave) {
   d.prepare(
-    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, x = ?, y = ?, updated_at = datetime('now')
+    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, updated_at = datetime('now')
      WHERE account_id = ?`,
-  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.x, c.y, c.account_id);
+  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.zone, c.corruption, c.x, c.y, c.account_id);
 }

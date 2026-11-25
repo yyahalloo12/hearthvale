@@ -1,5 +1,6 @@
 /** Message names and payloads exchanged between client and server. */
 import type { Inventory, StationKind } from "./items";
+import type { ZoneId } from "./map";
 
 export const Msg = {
   /** client -> server: walk to a tile */
@@ -16,6 +17,10 @@ export const Msg = {
   LearnPassive: "learn_passive",
   /** client -> server: give a passive node back for coins {id} */
   RefundPassive: "refund_passive",
+  /** client -> server: walk to a treasure bundle and take what fits {id} */
+  LootBundle: "loot_bundle",
+  /** client -> server (at the portal): go into the Hollow */
+  EnterHollow: "enter_hollow",
   /** client -> server: walk to a rock, tree, anvil or chest and use it {x, y} */
   Interact: "interact",
   /** client -> server: wear an item {uid} */
@@ -49,6 +54,8 @@ export const Msg = {
   LevelUp: "level_up",
   /** server -> client: EXP you gained */
   ExpGain: "exp_gain",
+  /** server -> client: go to another map; join that room with the ticket */
+  Travel: "travel",
   /** server -> client: you reached the anvil or the chest {kind} */
   OpenStation: "open_station",
   /** server -> client: gathering started {ms, name}, or stopped {ms: 0} */
@@ -67,6 +74,21 @@ export interface JoinOptions {
   /** true = make a new character, false = log in */
   create: boolean;
   color: number;
+}
+
+/** Instead of name and password, when travelling between maps. */
+export interface TicketOptions {
+  ticket: string;
+}
+
+/** Room name of each map. */
+export const ROOM_OF: Record<ZoneId, string> = { brindle: "world", hollow: "hollow" };
+/** Join error text when the character is in another map: this plus the zone id. */
+export const ZONE_ERROR = "ZONE:";
+
+export interface TravelEvent {
+  zone: ZoneId;
+  ticket: string;
 }
 
 export interface MoveRequest {

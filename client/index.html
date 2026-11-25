@@ -34,7 +34,23 @@
       <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
       <div class="bar exp"><div id="exp-fill"></div><span id="exp-text"></span></div>
       <div id="hud-gold"></div>
+      <div id="corruption-row" hidden>
+        <div class="bar corrupt"><div id="corruption-fill"></div><span id="corruption-text"></span></div>
+        <div id="gate-timer"></div>
+      </div>
       <div id="hud-meta"><span id="map-name"></span> · <span id="online"></span></div>
+    </div>
+
+    <canvas id="minimap" width="170" height="170" hidden aria-label="แผนที่ย่อ"></canvas>
+
+    <div id="enter-hollow" hidden>
+      <div class="panel death-box">
+        <h2>ทางเข้า Hollow</h2>
+        <p>ข้างในผู้เล่นโจมตีกันได้ <b>ตายแล้วของที่สวมและของในกระเป๋าตกทั้งหมด</b> และ 30% ถูกทำลาย</p>
+        <p>ของในคลังและเหรียญปลอดภัย ออกได้ทางประตูสีทองเท่านั้น (ย้ายที่ทุก 15 นาที) ล็อกเอาต์แล้วตัวละครยังค้างอยู่ 30 วินาที</p>
+        <button id="hollow-yes">เข้าไป</button>
+        <button id="hollow-no" class="secondary">ไว้ก่อน</button>
+      </div>
     </div>
 
     <button id="tree-open" hidden>ต้นไม้พาสซีฟ (P)<span id="tree-badge" hidden></span></button>
@@ -100,7 +116,7 @@
     <div id="death" hidden>
       <div class="panel death-box">
         <h2>คุณหมดสติ</h2>
-        <p>ฟื้นขึ้นที่ลานกลางหมู่บ้าน</p>
+        <p id="death-text">ฟื้นขึ้นที่ลานกลางหมู่บ้าน</p>
         <button id="respawn" disabled>ฟื้นคืนชีพ</button>
       </div>
     </div>

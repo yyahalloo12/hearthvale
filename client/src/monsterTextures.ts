@@ -33,6 +33,54 @@ function hen(g: Phaser.GameObjects.Graphics, s: number, body: number, comb: numb
 }
 
 export function makeMonsterTextures(scene: Phaser.Scene) {
+  if (scene.textures.exists("mon-hen")) return;
+  make(scene, "mon-shadow", 44, 56, (g) => {
+    g.fillStyle(0x3d3947, 0.85);
+    g.fillEllipse(22, 34, 30, 40);
+    g.fillCircle(22, 16, 13);
+    g.fillTriangle(8, 44, 4, 56, 18, 52);
+    g.fillTriangle(18, 50, 22, 56, 28, 50);
+    g.fillTriangle(36, 44, 40, 56, 26, 52);
+    g.fillStyle(0xe8e4f0);
+    g.fillEllipse(16, 15, 5, 7);
+    g.fillEllipse(26, 15, 5, 7);
+  });
+  make(scene, "mon-hunter", 56, 80, (g) => {
+    g.fillStyle(0xb9b3c4);
+    g.fillTriangle(28, 14, 8, 80, 48, 80); // long cloak
+    g.fillStyle(0x8f889c);
+    g.fillTriangle(28, 24, 20, 80, 40, 80);
+    g.fillStyle(0xd6d1de);
+    g.fillCircle(28, 18, 13); // hood
+    g.fillStyle(0x221d2b);
+    g.fillEllipse(26, 20, 16, 16);
+    g.fillStyle(0xff5a5a);
+    g.fillCircle(22, 19, 2.5);
+    g.fillCircle(29, 19, 2.5);
+    g.lineStyle(4, 0x57525f);
+    g.lineBetween(8, 30, 4, 78); // spear
+    g.fillStyle(0xe8e4f0);
+    g.fillTriangle(8, 30, 4, 16, 13, 28);
+  });
+  make(scene, "mon-threadknight", 60, 78, (g) => {
+    g.fillStyle(0x5d5767);
+    g.fillRect(20, 56, 8, 20);
+    g.fillRect(33, 56, 8, 20);
+    g.fillStyle(0x6f6878);
+    g.fillRoundedRect(14, 28, 32, 32, 8);
+    g.fillStyle(0x857e90);
+    g.fillRoundedRect(16, 6, 28, 24, 9);
+    g.fillStyle(0x221d2b);
+    g.fillRect(17, 15, 22, 5);
+    g.lineStyle(2, 0xc14a6a); // broken threads
+    g.lineBetween(16, 34, 4, 50);
+    g.lineBetween(44, 34, 56, 46);
+    g.lineBetween(30, 60, 26, 74);
+    g.lineBetween(22, 8, 14, 0);
+    g.fillStyle(0xc3ccd6);
+    g.fillRect(6, 24, 4, 40); // sword
+    g.fillRect(2, 54, 12, 4);
+  });
   make(scene, "mon-hen", 48, 48, (g) => hen(g, 1, 0xfffaf0, 0xff6a1a));
   make(scene, "mon-henqueen", 86, 86, (g) => {
     hen(g, 86 / 48, 0xffe7c2, 0xff2a00);
@@ -125,4 +173,7 @@ export const MONSTER_SIZE: Record<string, { h: number; r: number }> = {
   rat: { h: 34, r: 22 },
   scarecrow: { h: 70, r: 26 },
   henqueen: { h: 82, r: 36 },
+  shadow: { h: 54, r: 22 },
+  hunter: { h: 78, r: 26 },
+  threadknight: { h: 76, r: 28 },
 };

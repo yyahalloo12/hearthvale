@@ -2,6 +2,9 @@
   "ore_1": {"name": "แร่ทองแดง", "kind": "material", "tier": 1, "icon": "🪨", "price": 1},
   "ore_2": {"name": "แร่เหล็ก", "kind": "material", "tier": 2, "icon": "⛰️", "price": 2},
   "wood_1": {"name": "ไม้โอ๊ก", "kind": "material", "tier": 1, "icon": "🪵", "price": 1},
+  "ore_3": {"name": "แร่หมอก", "kind": "material", "tier": 3, "icon": "🌫️", "price": 8, "desc": "มีเฉพาะใน Hollow"},
+  "wood_3": {"name": "ไม้ไร้สี", "kind": "material", "tier": 3, "icon": "🦴", "price": 8, "desc": "มีเฉพาะใน Hollow"},
+  "thread_3": {"name": "ด้ายชะตาขาด", "kind": "material", "tier": 3, "icon": "🧵", "price": 15, "desc": "ดรอปจากมอนสเตอร์ใน Hollow"},
   "hide_1": {"name": "หนังหนูนา", "kind": "material", "tier": 1, "icon": "🟫", "price": 2},
   "crystal_1": {"name": "ผลึกแสงเช้า", "kind": "material", "tier": 1, "icon": "💎", "price": 10, "desc": "ใส่ตอนคราฟต์เพื่อเพิ่มโอกาสได้ของคุณภาพสูง"},
 
@@ -19,5 +22,11 @@
   "axe_2": {"name": "ขวานศึกเหล็ก", "kind": "equip", "slot": "weapon", "look": "axe", "tier": 2, "level": 8, "icon": "🪓", "price": 30, "atk": 15, "mods": {"attackSpeedPct": -8}},
   "helm_2": {"name": "หมวกเหล็ก", "kind": "equip", "slot": "head", "look": "helm", "tier": 2, "level": 8, "icon": "🪖", "price": 20, "def": 2, "hp": 20},
   "armor_2": {"name": "เกราะเหล็ก", "kind": "equip", "slot": "body", "tier": 2, "level": 8, "icon": "🛡️", "price": 40, "def": 6, "hp": 30},
-  "boots_2": {"name": "รองเท้าเกราะเหล็ก", "kind": "equip", "slot": "feet", "tier": 2, "level": 8, "icon": "🥾", "price": 20, "def": 2, "hp": 16}
+  "boots_2": {"name": "รองเท้าเกราะเหล็ก", "kind": "equip", "slot": "feet", "tier": 2, "level": 8, "icon": "🥾", "price": 20, "def": 2, "hp": 16},
+
+  "sword_3": {"name": "ดาบหมอก", "kind": "equip", "slot": "weapon", "look": "sword", "tier": 3, "level": 14, "icon": "🗡️", "price": 90, "atk": 20, "mods": {"critChance": 4}},
+  "axe_3": {"name": "ขวานศึกหมอก", "kind": "equip", "slot": "weapon", "look": "axe", "tier": 3, "level": 14, "icon": "🪓", "price": 90, "atk": 24, "mods": {"attackSpeedPct": -8}},
+  "helm_3": {"name": "หมวกหมอก", "kind": "equip", "slot": "head", "look": "helm", "tier": 3, "level": 14, "icon": "🪖", "price": 60, "def": 4, "hp": 34},
+  "armor_3": {"name": "เกราะหมอก", "kind": "equip", "slot": "body", "tier": 3, "level": 14, "icon": "🛡️", "price": 120, "def": 10, "hp": 50},
+  "boots_3": {"name": "รองเท้าเกราะหมอก", "kind": "equip", "slot": "feet", "tier": 3, "level": 14, "icon": "🥾", "price": 60, "def": 4, "hp": 28}
 }

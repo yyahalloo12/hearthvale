@@ -12,6 +12,21 @@ import {
   WALK_SPEED,
 } from "../../../shared/constants";
 import {
+  buildHollow,
+  BUNDLE_MS,
+  CORRUPTION_PER_MIN,
+  corruptionBonus,
+  destroyPart,
+  GATE_MOVE_MS,
+  GLOW_AT,
+  HOLLOW_MIN_LEVEL,
+  HollowMap,
+  LINGER_MS,
+  pickGates,
+  PROTECT_MS,
+  PVP_DAMAGE,
+} from "../../../shared/hollow";
+import {
   addItem,
   BAG_SIZE,
   cleanInventory,
@@ -23,6 +38,7 @@ import {
   GATHER_MS,
   Inventory,
   ITEMS,
+  ItemStack,
   moveStack,
   Resource,
   resourceAt,
@@ -38,11 +54,11 @@ import {
   countItem,
   unequipItem,
 } from "../../../shared/items";
-import { buildBrindleVillage, GameMap, isSafe, isWalkable } from "../../../shared/map";
+import { buildBrindleVillage, GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
-import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PrivateData } from "../../../shared/protocol";
+import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PrivateData, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../../shared/protocol";
 import {
   ATTACK_RANGE,
   CRIT_CHANCE,
@@ -64,16 +80,27 @@ import {
   skillPointsEarned,
   SKILLS,
 } from "../../../shared/stats";
-import { CharacterRow, createAccount, login, saveCharacter } from "../db";
+import { CharacterRow, CharacterSave, createAccount, loadBundles, loadCharacter, login, saveCharacter, saveWithBundle } from "../db";
 import { MonsterSystem } from "../game/monsters";
 import { dist, faceTowards, planFrom, stepAlong } from "../game/movement";
-import { Player, WorldState } from "./schema";
+import { freeLock, holdsLock, Lock, makeTicket, takeLock, useTicket } from "../game/sessions";
+import { Bundle, Gate, Player, WorldState } from "./schema";
 
 export { facingFor } from "../game/movement";
 
 /** Server-only data kept per player (not sent to clients). */
 interface PlayerCtl {
   accountId: number;
+  lock: Lock;
+  /** on the way to another map: nothing more may happen here */
+  leaving: boolean;
+  /** logged out in the Hollow, still standing there until this time (0 = online) */
+  lingerUntil: number;
+  /** 0-100, exact (the state only shows whole numbers) */
+  corruption: number;
+  /** no harm given or taken until this time */
+  shieldUntil: number;
+  stunUntil: number;
   path: Point[];
   lastChatAt: number;
   targetId: string | null;
@@ -96,13 +123,24 @@ interface PlayerCtl {
   /** plain numbers from gear */
   gear: FlatStats;
   /** the rock, tree or station being walked to or used */
-  interact: { x: number; y: number; res: Resource | null; station: StationKind | null; doneAt: number } | null;
+  interact: { x: number; y: number; res: Resource | null; station: StationKind | null; bundle: string | null; doneAt: number } | null;
   /** monsters already hit once (for the "first strike" keystone) */
   struck: Set<string>;
 }
 
 interface AuthData {
   character: CharacterRow;
+  lock: Lock;
+  /** session id of our own body, still standing in the Hollow after a logout */
+  takeOver?: string;
+}
+
+interface BundleCtl {
+  items: ItemStack[];
+  owner: string;
+  x: number;
+  y: number;
+  expires: number;
 }
 
 export class WorldRoom extends Room<WorldState> {
@@ -110,13 +148,12 @@ export class WorldRoom extends Room<WorldState> {
   map!: GameMap;
   ctl = new Map<string, PlayerCtl>();
   monsterSys!: MonsterSystem;
-  /** accounts that are logged in (or logging in), to stop double logins */
-  private onlineAccounts = new Set<number>();
+  private bundles = new Map<string, BundleCtl>();
   /** used-up rocks and trees: "x,y" -> when they come back */
   private depletedUntil = new Map<string, number>();
 
-  onCreate() {
-    this.map = buildBrindleVillage();
+  async onCreate(options: { zone?: ZoneId }) {
+    this.map = options?.zone === "hollow" ? buildHollow() : buildBrindleVillage();
     this.setState(new WorldState());
     this.state.mapName = this.map.name;
     this.autoDispose = false; // the world stays alive (monsters keep living) with nobody online
@@ -130,6 +167,7 @@ export class WorldRoom extends Room<WorldState> {
       now: () => this.clock.currentTime,
     });
     this.monsterSys.spawnAll();
+    if (this.map.pvp) this.moveGates(false);
 
     this.setSimulationInterval((dt) => this.tick(dt), 1000 / TICK_RATE);
     this.setPatchRate(1000 / TICK_RATE);
@@ -142,6 +180,8 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(Msg.ChangeJob, (client) => this.handleChangeJob(client));
     this.onMessage(Msg.LearnPassive, (client, msg) => this.handleLearnPassive(client, msg));
     this.onMessage(Msg.RefundPassive, (client, msg) => this.handleRefundPassive(client, msg));
+    this.onMessage(Msg.LootBundle, (client, msg) => this.handleLootBundle(client, msg));
+    this.onMessage(Msg.EnterHollow, (client) => this.handleEnterHollow(client));
     this.onMessage(Msg.Interact, (client, msg) => this.handleInteract(client, msg));
     this.onMessage(Msg.Equip, (client, msg) => this.handleEquip(client, msg));
     this.onMessage(Msg.Unequip, (client, msg) => this.handleUnequip(client, msg));
@@ -153,11 +193,27 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(Msg.Sync, (client) => this.sendPrivate(client));
     this.onMessage(Msg.Respawn, (client) => this.handleRespawn(client));
     this.onMessage(Msg.Chat, (client, msg) => this.handleChat(client, msg));
+
+    for (const b of await loadBundles(this.map.id)) {
+      let items: ItemStack[] = [];
+      try {
+        items = cleanInventory({ bag: JSON.parse(b.items) }).bag;
+      } catch {
+        /* bad JSON: nothing in it */
+      }
+      if (items.length) this.addBundle(b.id, { items, owner: b.owner, x: b.x, y: b.y, expires: b.expires });
+    }
   }
 
   // ---- joining and leaving ------------------------------------------------
 
-  async onAuth(_client: Client, options: Partial<JoinOptions>): Promise<AuthData> {
+  async onAuth(_client: Client, options: Partial<JoinOptions & TicketOptions>): Promise<AuthData> {
+    if (typeof options?.ticket === "string") {
+      const t = useTicket(options.ticket, this.map.id);
+      const character = t && (await loadCharacter(t.accountId));
+      if (!t || !character) throw new ServerError(401, "การเดินทางหมดเวลา เข้าสู่ระบบใหม่อีกครั้ง");
+      return { character, lock: t.lock };
+    }
     const name = cleanName(options?.name);
     if (!name) throw new ServerError(400, "ชื่อต้องยาว 2–16 ตัว ใช้ตัวอักษร ตัวเลข ช่องว่าง _ หรือ - ได้");
     const password = typeof options?.password === "string" ? options.password : "";
@@ -179,17 +235,39 @@ export class WorldRoom extends Room<WorldState> {
       character = await login(name, password);
       if (!character) throw new ServerError(401, "ชื่อหรือรหัสผ่านไม่ถูกต้อง (ยังไม่มีตัวละคร? กด \"สร้างตัวละครใหม่\")");
     }
-    if (this.onlineAccounts.has(character.account_id)) throw new ServerError(409, "ตัวละครนี้ออนไลน์อยู่แล้ว");
-    this.onlineAccounts.add(character.account_id);
-    // if the join never completes, free the name again
-    this.clock.setTimeout(() => {
-      if (![...this.ctl.values()].some((c) => c.accountId === character!.account_id))
-        this.onlineAccounts.delete(character!.account_id);
-    }, 15000);
-    return { character };
+    const zone = character.zone === "hollow" ? "hollow" : "brindle";
+    if (zone !== this.map.id) throw new ServerError(421, ZONE_ERROR + zone);
+    // Logged out in the Hollow a moment ago? Then step back into the body that is still there.
+    for (const [sid, c] of this.ctl)
+      if (c.accountId === character.account_id && c.lingerUntil && !c.leaving) {
+        if (this.claimed.has(sid)) break;
+        this.claimed.add(sid);
+        c.lingerUntil = Math.max(c.lingerUntil, this.clock.currentTime + 15_000);
+        this.clock.setTimeout(() => this.claimed.delete(sid), 15_000);
+        return { character, lock: c.lock, takeOver: sid };
+      }
+    const lock = takeLock(character.account_id);
+    if (!lock) throw new ServerError(409, "ตัวละครนี้ออนไลน์อยู่แล้ว");
+    // read again now that nobody else can change it
+    const fresh = await loadCharacter(character.account_id);
+    if (!fresh || (fresh.zone === "hollow" ? "hollow" : "brindle") !== this.map.id) {
+      freeLock(character.account_id, lock);
+      throw new ServerError(421, ZONE_ERROR + (fresh?.zone ?? "brindle"));
+    }
+    return { character: fresh, lock };
   }
 
+  /** bodies somebody is about to step back into */
+  private claimed = new Set<string>();
+
   onJoin(client: Client, _options: unknown, auth: AuthData) {
+    // Never go on with data read before the lock was lost: that could bring back spent items.
+    if (!holdsLock(auth.character.account_id, auth.lock)) throw new ServerError(409, "เข้าโลกไม่ทันเวลา ลองใหม่อีกครั้ง");
+    auth.lock.pending = false;
+    if (auth.takeOver) {
+      if (!this.resumeBody(client, auth.takeOver)) throw new ServerError(409, "เข้าโลกไม่ทันเวลา ลองใหม่อีกครั้ง");
+      return;
+    }
     const c = auth.character;
     const p = new Player();
     p.name = c.name;
@@ -229,6 +307,12 @@ export class WorldRoom extends Room<WorldState> {
     this.state.players.set(client.sessionId, p);
     this.ctl.set(client.sessionId, {
       accountId: c.account_id,
+      lock: auth.lock,
+      leaving: false,
+      lingerUntil: 0,
+      corruption: this.map.pvp ? Math.max(0, Math.min(100, c.corruption)) : 0,
+      shieldUntil: this.map.pvp ? this.clock.currentTime + PROTECT_MS : 0,
+      stunUntil: 0,
       path: [],
       lastChatAt: 0,
       targetId: null,
@@ -250,22 +334,183 @@ export class WorldRoom extends Room<WorldState> {
       interact: null,
       struck: new Set(),
     });
-    this.broadcastSystem(`${p.name} เดินทางมาถึงหมู่บ้านบรินเดิล`);
+    p.shielded = this.map.pvp;
+    p.corruption = this.map.pvp ? Math.floor(Math.max(0, Math.min(100, c.corruption))) : 0;
+    this.broadcastSystem(this.map.pvp ? `มีใครบางคนก้าวเข้ามาใน Hollow` : `${p.name} เดินทางมาถึงหมู่บ้านบรินเดิล`);
     console.log(`[world] join ${p.name} (${client.sessionId}), online ${this.clients.length}`);
   }
 
   async onLeave(client: Client) {
     const p = this.state.players.get(client.sessionId);
     const c = this.ctl.get(client.sessionId);
-    if (p && c) await this.save(p, c).catch((e) => console.error("[world] save failed", e));
-    this.state.players.delete(client.sessionId);
-    this.ctl.delete(client.sessionId);
-    this.monsterSys.forget(client.sessionId);
-    if (c) this.onlineAccounts.delete(c.accountId);
-    if (p) {
-      this.broadcastSystem(`${p.name} ออกจากเกมแล้ว`);
-      console.log(`[world] leave ${p.name}, online ${this.clients.length}`);
+    if (!p || !c || c.leaving) return; // already gone (travelled)
+    if (this.map.pvp && !p.dead) {
+      // no logging out to escape: the body stays a while (GDD 3.3)
+      c.lingerUntil = this.clock.currentTime + LINGER_MS;
+      p.offline = true;
+      c.path = [];
+      p.moving = false;
+      c.targetId = null;
+      c.pendingSkill = null;
+      c.charge = null;
+      c.interact = null;
+      await this.save(p, c).catch((e) => console.error("[world] save failed", e));
+      return;
     }
+    await this.logOut(client.sessionId, p, c);
+  }
+
+  /** The character really leaves the world. */
+  private async logOut(id: string, p: Player, c: PlayerCtl) {
+    c.leaving = true;
+    await this.save(p, c).catch((e) => console.error("[world] save failed", e));
+    this.state.players.delete(id);
+    this.ctl.delete(id);
+    this.monsterSys.forget(id);
+    freeLock(c.accountId, c.lock);
+    if (!this.map.pvp) this.broadcastSystem(`${p.name} ออกจากเกมแล้ว`);
+    console.log(`[${this.map.id}] leave ${p.name}, online ${this.clients.length}`);
+  }
+
+  /** Back in the game before the body was gone: same body, new connection. */
+  private resumeBody(client: Client, oldId: string): boolean {
+    this.claimed.delete(oldId);
+    const p = this.state.players.get(oldId);
+    const c = this.ctl.get(oldId);
+    if (!p || !c || c.leaving) return false;
+    this.state.players.delete(oldId);
+    this.ctl.delete(oldId);
+    const fresh = p.clone();
+    fresh.offline = false;
+    c.lingerUntil = 0;
+    this.state.players.set(client.sessionId, fresh);
+    this.ctl.set(client.sessionId, c);
+    this.monsterSys.forget(oldId);
+    return true;
+  }
+
+  // ---- travelling between maps ----------------------------------------------
+
+  /** Saves the character as being in another map and sends the player there. */
+  private async travel(client: Client, p: Player, c: PlayerCtl, zone: ZoneId, at: Point = { x: -1, y: -1 }) {
+    if (c.leaving) return;
+    c.leaving = true;
+    const id = client.sessionId;
+    c.corruption = 0;
+    try {
+      await saveCharacter({ ...this.rowOf(p, c), zone, x: at.x, y: at.y });
+    } catch (e) {
+      console.error("[world] travel save failed", e);
+      c.leaving = false;
+      return;
+    }
+    this.state.players.delete(id);
+    this.ctl.delete(id);
+    this.monsterSys.forget(id);
+    client.send(Msg.Travel, { zone, ticket: makeTicket(c.accountId, zone) } satisfies TravelEvent);
+  }
+
+  private handleEnterHollow(client: Client) {
+    const pc = this.nearStation(client, "portal");
+    if (!pc) return;
+    if (pc.p.level < HOLLOW_MIN_LEVEL) return client.send(Msg.Notice, { text: `ต้องถึงเลเวล ${HOLLOW_MIN_LEVEL} ก่อนจึงเข้า Hollow ได้` });
+    if (pc.c.lastCombatAt > 0 && this.clock.currentTime - pc.c.lastCombatAt < OUT_OF_COMBAT_MS)
+      return client.send(Msg.Notice, { text: "เข้าระหว่างต่อสู้ไม่ได้" });
+    this.travel(client, pc.p, pc.c, "hollow");
+  }
+
+  private moveGates(announce: boolean) {
+    const { gateSpots } = this.map as HollowMap;
+    const before = this.state.gates.map((g) => ({ x: g.x, y: g.y }));
+    this.state.gates.clear();
+    for (const spot of pickGates(gateSpots, before)) {
+      const g = new Gate();
+      g.x = spot.x;
+      g.y = spot.y;
+      this.state.gates.push(g);
+    }
+    this.state.gatesUntil = Date.now() + GATE_MOVE_MS;
+    if (announce) this.broadcastSystem("ประตูทางออกย้ายที่แล้ว!");
+  }
+
+  // ---- treasure bundles -------------------------------------------------------
+
+  private addBundle(id: string, b: BundleCtl) {
+    this.bundles.set(id, b);
+    const s = new Bundle();
+    s.x = b.x;
+    s.y = b.y;
+    s.owner = b.owner;
+    this.state.bundles.set(id, s);
+  }
+
+  private removeBundle(id: string) {
+    this.bundles.delete(id);
+    this.state.bundles.delete(id);
+  }
+
+  /** Dead in the Hollow: everything worn and carried falls down, and 30% of it is destroyed. */
+  private dropEverything(p: Player, c: PlayerCtl) {
+    const all = [...Object.values(c.inv.equip), ...c.inv.bag].filter((s): s is ItemStack => !!s);
+    c.inv.equip = {};
+    c.inv.bag = [];
+    const worn = equipTotals(c.inv.equip);
+    c.mods = passiveMods(c.nodes, worn.mods);
+    c.gear = worn.flat;
+    this.showGear(p, c.inv);
+    this.applyStats(p, c, false);
+    const items = destroyPart(all);
+    if (!items.length) {
+      this.save(p, c).catch((e) => console.error("[world] save failed", e));
+      return all.length;
+    }
+    const id = globalThis.crypto.randomUUID();
+    const b: BundleCtl = { items, owner: p.name, x: Math.round(p.x), y: Math.round(p.y), expires: Date.now() + BUNDLE_MS };
+    this.addBundle(id, b);
+    saveWithBundle(this.rowOf(p, c), { put: this.bundleRow(id, b) }).catch((e) => console.error("[world] bundle save failed", e));
+    return all.length;
+  }
+
+  private bundleRow(id: string, b: BundleCtl) {
+    return { id, zone: this.map.id, x: b.x, y: b.y, owner: b.owner, items: JSON.stringify(b.items), expires: b.expires };
+  }
+
+  private handleLootBundle(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const id = (msg as { id?: unknown } | null)?.id;
+    const b = typeof id === "string" ? this.bundles.get(id) : undefined;
+    if (!pc || !b || pc.p.dead || pc.c.charge) return;
+    const { p, c } = pc;
+    c.shieldUntil = 0;
+    const rest = findPath(this.map, planFrom(p, c.path), { x: b.x, y: b.y }, MAX_PATH_STEPS);
+    if (!rest) return;
+    this.stopInteract(client, c);
+    c.targetId = null;
+    c.pendingSkill = null;
+    c.path = c.path.length ? [c.path[0], ...rest] : rest;
+    c.interact = { x: b.x, y: b.y, res: null, station: null, bundle: id as string, doneAt: 0 };
+  }
+
+  /** Takes what fits; the bundle and the character are saved together. */
+  private takeBundle(client: Client, p: Player, c: PlayerCtl, id: string) {
+    const b = this.bundles.get(id);
+    if (!b) return;
+    const got: { id: string; qty: number }[] = [];
+    for (const s of [...b.items]) {
+      const before = s.qty;
+      if (!moveStack(b.items, c.inv.bag, BAG_SIZE, s.uid)) continue;
+      const left = b.items.find((x) => x.uid === s.uid)?.qty ?? 0;
+      got.push({ id: s.id, qty: before - left });
+    }
+    if (!got.length) return client.send(Msg.Notice, { text: "กระเป๋าเต็ม" });
+    if (b.items.length) client.send(Msg.Notice, { text: "กระเป๋าเต็ม เก็บของในห่อได้ไม่หมด" });
+    else this.removeBundle(id);
+    client.send(Msg.Loot, { items: got.slice(0, 6) } satisfies LootEvent);
+    client.send(Msg.Notice, { text: `เก็บห่อสมบัติของ ${b.owner} ได้ ${got.length} อย่าง` });
+    this.sendPrivate(client);
+    saveWithBundle(this.rowOf(p, c), b.items.length ? { put: this.bundleRow(id, b) } : { remove: id }).catch((e) =>
+      console.error("[world] bundle save failed", e),
+    );
   }
 
   async onDispose() {
@@ -273,9 +518,13 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   private async save(p: Player, c: PlayerCtl) {
+    await saveCharacter(this.rowOf(p, c));
+  }
+
+  private rowOf(p: Player, c: PlayerCtl): CharacterSave {
     const tile = { x: Math.round(p.x), y: Math.round(p.y) };
     const ok = !p.dead && isWalkable(this.map, tile.x, tile.y);
-    await saveCharacter({
+    return {
       account_id: c.accountId,
       level: p.level,
       exp: p.exp,
@@ -284,20 +533,24 @@ export class WorldRoom extends Room<WorldState> {
       nodes: JSON.stringify([...c.nodes]),
       gold: c.gold,
       inv: JSON.stringify(c.inv),
+      // the dead wake up in the village
+      zone: p.dead ? "brindle" : this.map.id,
+      corruption: p.dead ? 0 : c.corruption,
       x: ok ? tile.x : -1,
       y: ok ? tile.y : -1,
-    });
+    };
   }
 
   private async saveAll() {
     for (const [id, p] of this.state.players) {
       const c = this.ctl.get(id);
-      if (c) await this.save(p, c).catch((e) => console.error("[world] autosave failed", e));
+      if (c && !c.leaving) await this.save(p, c).catch((e) => console.error("[world] autosave failed", e));
     }
   }
 
   private findSpawn(): Point {
-    const { spawn } = this.map;
+    const { entries } = this.map as Partial<HollowMap>;
+    const spawn = entries?.length ? entries[Math.floor(Math.random() * entries.length)] : this.map.spawn;
     for (let tries = 0; tries < 50; tries++) {
       const x = spawn.x + Math.floor(Math.random() * 5) - 2;
       const y = spawn.y + Math.floor(Math.random() * 5) - 2;
@@ -378,7 +631,7 @@ export class WorldRoom extends Room<WorldState> {
   private get = (client: Client) => {
     const p = this.state.players.get(client.sessionId);
     const c = this.ctl.get(client.sessionId);
-    return p && c ? { p, c } : null;
+    return p && c && !c.leaving ? { p, c } : null;
   };
 
   private handleMove(client: Client, msg: unknown) {
@@ -400,7 +653,7 @@ export class WorldRoom extends Room<WorldState> {
   private handleAttack(client: Client, msg: unknown) {
     const pc = this.get(client);
     const id = (msg as { id?: unknown })?.id;
-    if (!pc || pc.p.dead || pc.c.charge || typeof id !== "string" || !this.state.monsters.has(id)) return;
+    if (!pc || pc.p.dead || pc.c.charge || typeof id !== "string" || !this.targetOf(client.sessionId, id)) return;
     this.stopInteract(client, pc.c);
     pc.c.targetId = id;
     pc.c.pendingSkill = null;
@@ -428,8 +681,8 @@ export class WorldRoom extends Room<WorldState> {
     }
 
     const targetId = typeof (msg as any)?.target === "string" ? (msg as any).target : c.targetId;
-    const m = targetId ? this.state.monsters.get(targetId) : undefined;
-    if (!m) return client.send(Msg.Notice, { text: "เลือกเป้าหมายก่อน (คลิกที่มอนสเตอร์)" });
+    const m = targetId ? this.targetOf(client.sessionId, targetId) : undefined;
+    if (!m || !targetId) return client.send(Msg.Notice, { text: "เลือกเป้าหมายก่อน (คลิกที่มอนสเตอร์)" });
     this.stopInteract(client, c);
 
     if (skill === "charge") {
@@ -515,7 +768,7 @@ export class WorldRoom extends Room<WorldState> {
       c.targetId = null;
       c.pendingSkill = null;
       c.path = c.path.length ? [c.path[0], ...rest] : rest;
-      c.interact = { x, y, res, station, doneAt: 0 };
+      c.interact = { x, y, res, station, bundle: null, doneAt: 0 };
       return;
     }
   }
@@ -529,6 +782,18 @@ export class WorldRoom extends Room<WorldState> {
     if (it.station) {
       client.send(Msg.OpenStation, { kind: it.station } satisfies OpenStationEvent);
       c.interact = null;
+      return;
+    }
+    if (it.bundle) {
+      if (!this.bundles.has(it.bundle)) return this.stopInteract(client, c);
+      if (!it.doneAt) {
+        it.doneAt = now + 1500;
+        client.send(Msg.Gathering, { ms: 1500, name: "ห่อสมบัติ" } satisfies GatheringEvent);
+      } else if (now >= it.doneAt) {
+        const id = it.bundle;
+        this.stopInteract(client, c);
+        this.takeBundle(client, p, c, id);
+      }
       return;
     }
     const res = it.res!;
@@ -675,6 +940,11 @@ export class WorldRoom extends Room<WorldState> {
     const pc = this.get(client);
     if (!pc || !pc.p.dead) return;
     if (this.clock.currentTime - pc.c.deadAt < RESPAWN_DELAY_MS) return;
+    if (this.map.id !== "brindle") {
+      pc.p.hp = pc.p.maxHp;
+      this.travel(client, pc.p, pc.c, "brindle");
+      return;
+    }
     const spot = this.findSpawn();
     pc.p.x = spot.x;
     pc.p.y = spot.y;
@@ -705,11 +975,22 @@ export class WorldRoom extends Room<WorldState> {
 
   // ---- combat -------------------------------------------------------------
 
+  /** A monster, or (in the Hollow) another player that may be attacked. */
+  private targetOf(me: string, id: string): { x: number; y: number } | undefined {
+    const m = this.state.monsters.get(id);
+    if (m) return m;
+    if (!this.map.pvp || id === me) return undefined;
+    const p = this.state.players.get(id);
+    const c = this.ctl.get(id);
+    return p && c && !p.dead && !c.leaving && c.shieldUntil <= this.clock.currentTime ? p : undefined;
+  }
+
   private nearestPlayer(x: number, y: number, range: number): string | null {
     let best: string | null = null;
     let bestD = range;
     this.state.players.forEach((p, id) => {
-      if (p.dead || isSafe(this.map, p.x, p.y)) return;
+      const ct = this.ctl.get(id);
+      if (p.dead || !ct || ct.leaving || ct.shieldUntil > this.clock.currentTime || isSafe(this.map, p.x, p.y)) return;
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= bestD) {
         bestD = d;
@@ -722,8 +1003,9 @@ export class WorldRoom extends Room<WorldState> {
   private monsterHitsPlayer(monsterId: string, playerId: string, atk: number) {
     const p = this.state.players.get(playerId);
     const c = this.ctl.get(playerId);
-    if (!p || !c || p.dead) return;
+    if (!p || !c || p.dead || c.leaving) return;
     const now = this.clock.currentTime;
+    if (c.shieldUntil > now) return;
     c.lastCombatAt = now;
     if (Math.random() * 100 < c.mods.dodge) {
       const ev: HitEvent = { from: monsterId, to: playerId, dmg: 0, miss: true };
@@ -738,10 +1020,10 @@ export class WorldRoom extends Room<WorldState> {
     const killed = p.hp <= 0;
     const ev: HitEvent = { from: monsterId, to: playerId, dmg, crit, killed };
     this.broadcast(Msg.Hit, ev);
-    if (killed) this.playerDies(playerId, p, c);
+    if (killed) this.playerDies(playerId, p, c, MONSTERS[this.state.monsters.get(monsterId)?.kind ?? ""]?.name ?? "มอนสเตอร์");
   }
 
-  private playerDies(id: string, p: Player, c: PlayerCtl) {
+  private playerDies(id: string, p: Player, c: PlayerCtl, killer: string) {
     p.dead = true;
     p.moving = false;
     p.guarding = false;
@@ -751,11 +1033,78 @@ export class WorldRoom extends Room<WorldState> {
     c.charge = null;
     this.stopInteract(this.clients.find((cl) => cl.sessionId === id), c);
     c.deadAt = this.clock.currentTime;
-    const loss = Math.floor(expToNext(p.level) * DEATH_EXP_LOSS);
-    p.exp = Math.max(0, p.exp - loss);
     this.monsterSys.forget(id);
     const client = this.clients.find((cl) => cl.sessionId === id);
+    if (this.map.pvp) {
+      // full loot instead of EXP loss (GDD 3.1)
+      const n = this.dropEverything(p, c);
+      this.sendPrivate(client);
+      client?.send(Msg.Notice, { text: `คุณถูก${killer}ล้ม ของ ${n} ช่องตกอยู่ใน Hollow` });
+      this.broadcastSystem(`${p.name} ถูก${killer}ล้มใน Hollow`);
+      if (!client) this.logOut(id, p, c).catch((e) => console.error("[world] save failed", e));
+      return;
+    }
+    const loss = Math.floor(expToNext(p.level) * DEATH_EXP_LOSS);
+    p.exp = Math.max(0, p.exp - loss);
     client?.send(Msg.Notice, { text: `คุณหมดสติ เสีย EXP ${loss}` });
+  }
+
+  /** Crit chance against this target, counting the "first strike" keystone. */
+  private critChance(c: PlayerCtl, targetId: string) {
+    let chance = CRIT_CHANCE + c.mods.critChance / 100;
+    if (c.mods.firststrike) chance = c.struck.has(targetId) ? chance * 0.5 : 1;
+    if (c.struck.size > 100)
+      for (const s of c.struck) if (!this.state.monsters.has(s) && !this.state.players.has(s)) c.struck.delete(s);
+    c.struck.add(targetId);
+    return chance;
+  }
+
+  /** Attack power of this swing after skill and low-health bonuses. */
+  private boosted(p: Player, c: PlayerCtl, power: number, skill?: string) {
+    let boost = power;
+    if (skill) boost *= 1 + c.mods.skillDmgPct / 100;
+    if (p.hp < p.maxHp / 2) boost *= 1 + c.mods.lowHpDmgPct / 100;
+    return boost;
+  }
+
+  private lifesteal(p: Player, c: PlayerCtl, dealt: number) {
+    if (c.mods.lifesteal > 0) p.hp = Math.min(p.maxHp, p.hp + Math.round((dealt * c.mods.lifesteal) / 100));
+  }
+
+  /** A player lands a hit on whatever it is. */
+  private playerHits(id: string, p: Player, c: PlayerCtl, targetId: string, power: number, skill?: string, stunMs = 0) {
+    if (this.state.monsters.has(targetId)) this.playerHitsMonster(id, p, c, targetId, power, skill, stunMs);
+    else this.playerHitsPlayer(id, p, c, targetId, power, skill, stunMs);
+  }
+
+  private playerHitsPlayer(id: string, p: Player, c: PlayerCtl, targetId: string, power: number, skill?: string, stunMs = 0) {
+    if (!this.targetOf(id, targetId)) return;
+    const t = this.state.players.get(targetId)!;
+    const tc = this.ctl.get(targetId)!;
+    const now = this.clock.currentTime;
+    faceTowards(p, t);
+    c.lastCombatAt = tc.lastCombatAt = now;
+    c.shieldUntil = 0; // whoever attacks gives up the arrival shield
+    if (Math.random() * 100 < tc.mods.dodge) {
+      this.broadcast(Msg.Hit, { from: id, to: targetId, dmg: 0, miss: true } satisfies HitEvent);
+      return;
+    }
+    const crit = Math.random() < this.critChance(c, targetId);
+    let dmg = hitDamage(this.statsOf(p, c).atk, this.statsOf(t, tc).def, this.boosted(p, c, power, skill), Math.random(), crit);
+    dmg *= PVP_DAMAGE * (1 - tc.mods.dmgReduce / 100);
+    if (tc.guardUntil > now) dmg *= 1 - tc.guardReduce;
+    dmg = Math.max(1, Math.round(dmg));
+    this.lifesteal(p, c, Math.min(dmg, t.hp));
+    t.hp = Math.max(0, t.hp - dmg);
+    if (stunMs > 0) tc.stunUntil = Math.max(tc.stunUntil, now + stunMs / 2);
+    const killed = t.hp <= 0;
+    this.broadcast(Msg.Hit, { from: id, to: targetId, dmg, crit, skill, killed } satisfies HitEvent);
+    if (killed) {
+      c.targetId = null;
+      c.pendingSkill = null;
+      c.struck.delete(targetId);
+      this.playerDies(targetId, t, tc, p.name);
+    }
   }
 
   /** A player lands a hit on a monster. */
@@ -764,19 +1113,12 @@ export class WorldRoom extends Room<WorldState> {
     const mc = this.monsterSys.ctl.get(monsterId);
     if (!m || !mc) return;
     faceTowards(p, m);
-    const { mods } = c;
-    let chance = CRIT_CHANCE + mods.critChance / 100;
-    if (mods.firststrike) chance = c.struck.has(monsterId) ? chance * 0.5 : 1;
-    if (c.struck.size > 100) for (const s of c.struck) if (!this.state.monsters.has(s)) c.struck.delete(s);
-    c.struck.add(monsterId);
-    const crit = Math.random() < chance;
-    let boost = power;
-    if (skill) boost *= 1 + mods.skillDmgPct / 100;
-    if (p.hp < p.maxHp / 2) boost *= 1 + mods.lowHpDmgPct / 100;
-    const dmg = hitDamage(this.statsOf(p, c).atk, mc.def_, boost, Math.random(), crit);
+    const crit = Math.random() < this.critChance(c, monsterId);
+    const dmg = hitDamage(this.statsOf(p, c).atk, mc.def_, this.boosted(p, c, power, skill), Math.random(), crit);
     c.lastCombatAt = this.clock.currentTime;
+    c.shieldUntil = 0;
     // life steal counts only damage the monster could still take
-    if (mods.lifesteal > 0) p.hp = Math.min(p.maxHp, p.hp + Math.round((Math.min(dmg, m.hp) * mods.lifesteal) / 100));
+    this.lifesteal(p, c, Math.min(dmg, m.hp));
     const level = m.level;
     const killed = this.monsterSys.takeDamage(monsterId, id, dmg, stunMs);
     const ev: HitEvent = { from: id, to: monsterId, dmg, crit, skill, killed };
@@ -787,11 +1129,32 @@ export class WorldRoom extends Room<WorldState> {
       const client = this.clients.find((cl) => cl.sessionId === id);
       c.struck.delete(monsterId);
       c.gold += killGold(mc.def);
-      this.giveLoot(client, p, c, rollDrops(mc.def.drops, c.inv.bag));
+      this.giveLoot(client, p, c, rollDrops(mc.def.drops, c.inv.bag, Math.random, corruptionBonus(c.corruption)));
       this.sendPrivate(client);
       this.gainExp(client, p, c, killExp(mc.exp, level, p.level));
       if (mc.def.boss) this.broadcastSystem(`${p.name} ปราบ${MONSTERS[m.kind]?.name ?? "บอส"}ได้แล้ว!`);
     }
+  }
+
+  /** Hollow rules for one player. True when the player has just left the map. */
+  private tickHollow(id: string, p: Player, c: PlayerCtl, dt: number, now: number): boolean {
+    const shielded = c.shieldUntil > now;
+    if (p.shielded !== shielded) p.shielded = shielded;
+    if (c.lingerUntil && c.lingerUntil <= now) {
+      this.logOut(id, p, c).catch((e) => console.error("[world] save failed", e));
+      return true;
+    }
+    const before = c.corruption;
+    c.corruption = Math.min(100, c.corruption + (CORRUPTION_PER_MIN / 60) * dt);
+    if (Math.floor(c.corruption) !== p.corruption) p.corruption = Math.floor(c.corruption);
+    const client = this.clients.find((cl) => cl.sessionId === id);
+    if (before < GLOW_AT && c.corruption >= GLOW_AT) client?.send(Msg.Notice, { text: "การกัดกร่อนเกินครึ่งแล้ว ทุกคนเห็นคุณบนแผนที่!" });
+    if (client && this.state.gates.some((g) => dist(g, p) < 0.7)) {
+      this.broadcastSystem(`${p.name} หนีออกจาก Hollow ได้แล้ว`);
+      this.travel(client, p, c, "brindle", { x: 25, y: 7 });
+      return true;
+    }
+    return false;
   }
 
   tick(dtMs: number) {
@@ -800,14 +1163,20 @@ export class WorldRoom extends Room<WorldState> {
 
     this.state.players.forEach((p, id) => {
       const c = this.ctl.get(id);
-      if (!c || p.dead) return;
+      if (!c || p.dead || c.leaving) return;
+
+      if (this.map.pvp && this.tickHollow(id, p, c, dt, now)) return;
+      if (c.stunUntil > now) {
+        if (p.moving) p.moving = false;
+        return;
+      }
 
       if (p.guarding && c.guardUntil <= now) p.guarding = false;
       const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100);
       const swingMs = PLAYER_ATTACK_MS / (1 + c.mods.attackSpeedPct / 100);
 
       if (c.charge) {
-        const m = this.state.monsters.get(c.charge.targetId);
+        const m = this.targetOf(id, c.charge.targetId);
         if (!m) {
           c.charge = null;
           c.path = c.path.slice(0, 1);
@@ -818,11 +1187,11 @@ export class WorldRoom extends Room<WorldState> {
             p.moving = false;
             const { power, stunMs, targetId } = c.charge;
             c.charge = null;
-            if (dist(p, m) <= ATTACK_RANGE + 0.5) this.playerHitsMonster(id, p, c, targetId, power, "charge", stunMs);
+            if (dist(p, m) <= ATTACK_RANGE + 0.5) this.playerHits(id, p, c, targetId, power, "charge", stunMs);
           }
         }
       } else if (c.targetId) {
-        const m = this.state.monsters.get(c.targetId);
+        const m = this.targetOf(id, c.targetId);
         if (!m) {
           c.targetId = null;
           c.pendingSkill = null;
@@ -839,10 +1208,10 @@ export class WorldRoom extends Room<WorldState> {
               const client = this.clients.find((cl) => cl.sessionId === id);
               if (client) this.startCooldown(client, c, skill, def.cooldownMs);
               c.nextAttackAt = now + swingMs;
-              this.playerHitsMonster(id, p, c, c.targetId, (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1), skill);
+              this.playerHits(id, p, c, c.targetId, (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1), skill);
             } else if (now >= c.nextAttackAt) {
               c.nextAttackAt = now + swingMs;
-              this.playerHitsMonster(id, p, c, c.targetId, 1);
+              this.playerHits(id, p, c, c.targetId, 1);
             }
           }
         } else {
@@ -870,6 +1239,9 @@ export class WorldRoom extends Room<WorldState> {
         }
       }
     });
+
+    if (this.map.pvp && Date.now() >= this.state.gatesUntil) this.moveGates(true);
+    for (const [id, b] of this.bundles) if (b.expires <= Date.now()) this.removeBundle(id);
 
     for (const [key, at] of this.depletedUntil)
       if (at <= now) {
