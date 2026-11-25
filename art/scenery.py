@@ -317,6 +317,37 @@ def bundle():
         cone("coin", (x, y, 0.03), 0.075, 0.075, 0.035, toon("gold", 0xF2B82E, dark=0.7), outline=0.014, bevel=0.01)
 
 
+def board():
+    g = tile_space()
+    WOOD = toon("wood", 0x8A5A32)
+    DARKW = toon("woodd", 0x6B4226)
+    for s in (-1, 1):
+        cone("post", (0.46 * s, 0, 0.6), 0.07, 0.06, 1.2, DARKW, g, outline=0.022)
+    box("panel", (0, 0, 0.76), (1.0, 0.09, 0.74), WOOD, g)
+    for side in (-1, 1):
+        box("roof", (0, 0.14 * side, 1.28), (1.22, 0.36, 0.06), toon("roofw", 0xC8453A, dark=0.7), g, rot=(rad(-34) * side, 0, 0))
+    for i, (x, z, c, r) in enumerate(((-0.3, 0.9, 0xFFF6E0, 6), (0.02, 0.86, 0xFFE9A8, -4), (0.31, 0.92, 0xFFF6E0, 3), (-0.2, 0.58, 0xD6ECFF, -6), (0.18, 0.56, 0xFFF6E0, 5))):
+        box("paper", (x, -0.06, z), (0.24, 0.02, 0.26), toon(f"paper{c}", c, dark=0.9), g, outline=0.012, rot=(0, rad(r), 0), bevel=0)
+        ball("pin", (x, -0.085, z + 0.1), 0.026, toon("pin", 0xE8483C), g, outline=0, seg=10)
+    cone("sacks", (0.62, -0.2, 0.12), 0.14, 0.1, 0.24, toon("cloth", 0xB98350), g, outline=0.02)
+
+
+def stall(color):
+    WOOD = toon("wood", 0x8A5A32)
+    CLOTH = toon("awning", color, dark=0.72)
+    PALE = toon("awning2", 0xFFF3DC, dark=0.8)
+    box("table", (0, -0.5, 0.42), (1.24, 0.44, 0.09), WOOD)
+    box("skirt", (0, -0.7, 0.22), (1.2, 0.04, 0.36), CLOTH, outline=0.022)
+    for s in (-1, 1):
+        cone("post", (0.62 * s, -0.66, 0.95), 0.04, 0.035, 1.9, WOOD, outline=0.02)
+        cone("back", (0.62 * s, 0.24, 1.0), 0.04, 0.035, 2.0, WOOD, outline=0.02)
+    for i in range(6):
+        box("strip", (-0.575 + 0.23 * i, -0.22, 1.98), (0.23, 1.06, 0.05), CLOTH if i % 2 else PALE, outline=0.02, rot=(rad(14), 0, 0), bevel=0.01)
+        ball("scallop", (-0.575 + 0.23 * i, -0.74, 1.82), (0.115, 0.02, 0.1), CLOTH if i % 2 else PALE, outline=0.016, seg=16)
+    for i, c in enumerate((0xE8483C, 0xFFC23A, 0x6CC472, 0x8FD3FF)):
+        ball("goods", (-0.42 + 0.28 * i, -0.54, 0.53), 0.1, toon(f"goods{c}", c, dark=0.78), outline=0.02, seg=16)
+
+
 # ---- ground details (flat, lie inside one tile) ------------------------------------------------
 def spots(seed, n, reach=0.4):
     rnd = random.Random(seed)
@@ -424,6 +455,10 @@ ITEMS = {
     "portal": portal,
     "gate": gate,
     "bundle": bundle,
+    "board": board,
+    "stall0": lambda: stall(0xD9484F),
+    "stall1": lambda: stall(0x3F7FB5),
+    "stall2": lambda: stall(0x4F9E54),
     "g-tuft0": lambda: tuft(1),
     "g-tuft1": lambda: tuft(2),
     "g-tuft2": lambda: tuft(3),

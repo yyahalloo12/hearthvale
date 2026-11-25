@@ -20,6 +20,7 @@ import {
   STORAGE_SIZE,
 } from "../../shared/items";
 import { describeMods } from "../../shared/passives";
+import { itemIcon } from "./icons";
 
 /** Bag and gear (key I), the blacksmith window and the storage chest. */
 
@@ -55,7 +56,7 @@ export function initInventory(a: ItemActions) {
   $("use-crystal").onchange = () => render();
   window.addEventListener("keydown", (e) => {
     const el = document.activeElement as HTMLInputElement | null;
-    if ((el?.tagName === "INPUT" && el.type !== "checkbox") || e.ctrlKey || e.altKey || e.metaKey) return;
+    if ((el?.tagName === "INPUT" && el.type !== "checkbox") || el?.tagName === "SELECT" || e.ctrlKey || e.altKey || e.metaKey) return;
     if (e.code === "KeyI") toggleBag();
     else if (e.code === "Escape") {
       closeStation();
@@ -109,7 +110,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = "") 
 }
 
 /** Lines describing an item: numbers, bonuses, who made it. */
-function lines(s: ItemStack): string[] {
+export function itemLines(s: ItemStack): string[] {
   const d = ITEMS[s.id];
   const out: string[] = [];
   if (d.slot) {
@@ -137,10 +138,10 @@ function slotButton(s: ItemStack | undefined, where: "bag" | "storage" | "equip"
   const d = ITEMS[s.id];
   b.classList.add(`q${s.quality ?? 0}`, `tier${d.tier}`);
   if (selected?.uid === s.uid) b.classList.add("sel");
-  b.append(el("span", "icon", d.icon));
+  b.append(itemIcon(s.id));
   if (s.qty > 1) b.append(el("span", "qty", String(s.qty)));
   else if (d.kind === "equip") b.append(el("span", "qty", `T${d.tier}`));
-  b.title = [stackName(s), ...lines(s)].join("\n");
+  b.title = [stackName(s), ...itemLines(s)].join("\n");
   b.setAttribute("aria-label", stackName(s));
   b.onclick = () => {
     selected = { where, uid: s.uid };
@@ -202,7 +203,7 @@ function renderDetails() {
   }
   const d = ITEMS[s.id];
   box.append(el("h3", `qt${s.quality ?? 0}`, stackName(s) + (s.qty > 1 ? ` × ${s.qty}` : "")));
-  for (const t of lines(s)) box.append(el("div", "", t));
+  for (const t of itemLines(s)) box.append(el("div", "", t));
   const row = el("div", "row");
   if (selected.where === "equip") row.append(actionButton("ถอด", () => actions.unequip(d.slot!)));
   if (selected.where === "bag" && d.slot) {
@@ -221,8 +222,8 @@ function recipeRow(r: Recipe) {
   const d: ItemDef = ITEMS[r.item];
   const row = el("div", "recipe");
   const plain: ItemStack = { uid: "", id: r.item, qty: 1 };
-  row.title = [d.name, ...lines(plain)].join("\n");
-  row.append(el("span", "icon", d.icon));
+  row.title = [d.name, ...itemLines(plain)].join("\n");
+  row.append(itemIcon(r.item));
   const mid = el("div", "mid");
   mid.append(el("div", "rname", d.name));
   const f = itemFlat(plain);
@@ -263,7 +264,7 @@ function renderSmith() {
         mid.append(el("div", "rname", d.name), el("div", "rnum", d.desc ?? ""));
         const b = actionButton(`ซื้อ ${d.buy}`, () => actions.buy(id));
         b.disabled = gold < d.buy!;
-        row.append(el("span", "icon", d.icon), mid, b);
+        row.append(itemIcon(id), mid, b);
         return row;
       }),
   );

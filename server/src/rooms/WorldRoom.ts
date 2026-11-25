@@ -28,6 +28,7 @@ import {
 } from "../../../shared/hollow";
 import {
   addItem,
+  addStack,
   BAG_SIZE,
   cleanInventory,
   craft,
@@ -53,8 +54,22 @@ import {
   StationKind,
   STORAGE_SIZE,
   countItem,
+  takeStack,
   unequipItem,
 } from "../../../shared/items";
+import {
+  afterTax,
+  MAX_LISTINGS,
+  MAX_ORDERS,
+  PRICE_MAX,
+  STALL_MS,
+  STALL_RANGE,
+  STALL_SLOTS,
+  STALL_TITLE_MAX,
+  StallData,
+  StallItem,
+  wholeNumber,
+} from "../../../shared/market";
 import { buildBrindleVillage, GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
@@ -81,12 +96,15 @@ import {
   skillPointsEarned,
   SKILLS,
 } from "../../../shared/stats";
-import { CharacterRow, CharacterSave, createAccount, loadBundles, loadCharacter, login, saveCharacter, saveWithBundle } from "../db";
+import { CharacterRow, CharacterSave, createAccount, loadBundles, loadCharacter, login, saveCharacter, saveWithBundle, transaction, writeCharacter } from "../db";
+import * as market from "../market";
+import { TradeError } from "../market";
+import type { DatabaseSync } from "node:sqlite";
 import { AdminHost, runAdminCommand } from "../game/admin";
 import { MonsterSystem } from "../game/monsters";
 import { dist, faceTowards, planFrom, stepAlong } from "../game/movement";
 import { freeLock, holdsLock, Lock, makeTicket, takeLock, useTicket } from "../game/sessions";
-import { Bundle, Gate, Player, WorldState } from "./schema";
+import { Bundle, Gate, Player, Stall, WorldState } from "./schema";
 
 export { facingFor } from "../game/movement";
 
@@ -130,7 +148,9 @@ interface PlayerCtl {
   /** plain numbers from gear */
   gear: FlatStats;
   /** the rock, tree or station being walked to or used */
-  interact: { x: number; y: number; res: Resource | null; station: StationKind | null; bundle: string | null; doneAt: number } | null;
+  interact: { x: number; y: number; res: Resource | null; station: StationKind | null; bundle: string | null; stall: string | null; doneAt: number } | null;
+  /** id of our open stall: we sit and cannot walk */
+  stall: string | null;
   /** monsters already hit once (for the "first strike" keystone) */
   struck: Set<string>;
 }
@@ -156,6 +176,7 @@ export class WorldRoom extends Room<WorldState> {
   ctl = new Map<string, PlayerCtl>();
   monsterSys!: MonsterSystem;
   private bundles = new Map<string, BundleCtl>();
+  private stalls = new Map<string, market.StallRow>();
   /** used-up rocks and trees: "x,y" -> when they come back */
   private depletedUntil = new Map<string, number>();
 
@@ -187,6 +208,17 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(Msg.ChangeJob, (client) => this.handleChangeJob(client));
     this.onMessage(Msg.LearnPassive, (client, msg) => this.handleLearnPassive(client, msg));
     this.onMessage(Msg.RefundPassive, (client, msg) => this.handleRefundPassive(client, msg));
+    this.onMessage(Msg.Board, (client) => this.atBoard(client, () => {}));
+    this.onMessage(Msg.BoardSell, (client, msg) => this.handleBoardSell(client, msg));
+    this.onMessage(Msg.BoardBuy, (client, msg) => this.handleBoardBuy(client, msg));
+    this.onMessage(Msg.BoardCancel, (client, msg) => this.handleBoardCancel(client, msg));
+    this.onMessage(Msg.OrderPlace, (client, msg) => this.handleOrderPlace(client, msg));
+    this.onMessage(Msg.OrderFill, (client, msg) => this.handleOrderFill(client, msg));
+    this.onMessage(Msg.Claim, (client, msg) => this.handleClaim(client, msg));
+    this.onMessage(Msg.StallOpen, (client, msg) => this.handleStallOpen(client, msg));
+    this.onMessage(Msg.StallClose, (client) => this.handleStallClose(client));
+    this.onMessage(Msg.StallVisit, (client, msg) => this.handleStallVisit(client, msg));
+    this.onMessage(Msg.StallBuy, (client, msg) => this.handleStallBuy(client, msg));
     this.onMessage(Msg.LootBundle, (client, msg) => this.handleLootBundle(client, msg));
     this.onMessage(Msg.EnterHollow, (client) => this.handleEnterHollow(client));
     this.onMessage(Msg.Interact, (client, msg) => this.handleInteract(client, msg));
@@ -209,6 +241,11 @@ export class WorldRoom extends Room<WorldState> {
         /* bad JSON: nothing in it */
       }
       if (items.length) this.addBundle(b.id, { items, owner: b.owner, x: b.x, y: b.y, expires: b.expires });
+    }
+    if (this.map.id === "brindle") {
+      market.expireOld();
+      for (const s of market.loadStalls()) this.showStall(s);
+      this.closeOldStalls();
     }
   }
 
@@ -342,12 +379,21 @@ export class WorldRoom extends Room<WorldState> {
       mods,
       gear: worn.flat,
       interact: null,
+      stall: null,
       struck: new Set(),
     });
     p.gm = c.admin === 1;
     p.shielded = this.map.pvp;
     p.corruption = this.map.pvp ? Math.floor(Math.max(0, Math.min(100, c.corruption))) : 0;
     this.broadcastSystem(this.map.pvp ? `มีใครบางคนก้าวเข้ามาใน Hollow` : `${p.name} เดินทางมาถึงหมู่บ้านบรินเดิล`);
+    for (const s of this.stalls.values())
+      if (s.account_id === c.account_id) {
+        // back behind our own stall
+        this.ctl.get(client.sessionId)!.stall = s.id;
+        p.x = s.x;
+        p.y = s.y;
+      }
+    this.collectGold(client.sessionId);
     console.log(`[world] join ${p.name} (${client.sessionId}), online ${this.clients.length}`);
   }
 
@@ -405,6 +451,7 @@ export class WorldRoom extends Room<WorldState> {
   /** Saves the character as being in another map and sends the player there. */
   private async travel(client: Client, p: Player, c: PlayerCtl, zone: ZoneId, at: Point = { x: -1, y: -1 }) {
     if (c.leaving) return;
+    if (c.stall) this.closeStall(c.stall);
     c.leaving = true;
     const id = client.sessionId;
     c.corruption = 0;
@@ -499,7 +546,7 @@ export class WorldRoom extends Room<WorldState> {
     c.targetId = null;
     c.pendingSkill = null;
     c.path = c.path.length ? [c.path[0], ...rest] : rest;
-    c.interact = { x: b.x, y: b.y, res: null, station: null, bundle: id as string, doneAt: 0 };
+    c.interact = { x: b.x, y: b.y, res: null, station: null, bundle: id as string, stall: null, doneAt: 0 };
   }
 
   /** Takes what fits; the bundle and the character are saved together. */
@@ -556,6 +603,11 @@ export class WorldRoom extends Room<WorldState> {
     for (const [id, p] of this.state.players) {
       const c = this.ctl.get(id);
       if (c && !c.leaving) await this.save(p, c).catch((e) => console.error("[world] autosave failed", e));
+    }
+    for (const id of [...this.ctl.keys()]) this.collectGold(id);
+    if (this.map.id === "brindle") {
+      market.expireOld();
+      this.closeOldStalls();
     }
   }
 
@@ -650,7 +702,7 @@ export class WorldRoom extends Room<WorldState> {
     if (!pc || pc.p.dead || pc.c.charge || typeof msg !== "object" || msg === null) return;
     const gx = Math.floor(Number((msg as Point).x));
     const gy = Math.floor(Number((msg as Point).y));
-    if (!Number.isFinite(gx) || !Number.isFinite(gy)) return;
+    if (!Number.isFinite(gx) || !Number.isFinite(gy) || this.sitting(client, pc.c)) return;
     pc.c.targetId = null;
     pc.c.pendingSkill = null;
     this.stopInteract(client, pc.c);
@@ -665,6 +717,7 @@ export class WorldRoom extends Room<WorldState> {
     const pc = this.get(client);
     const id = (msg as { id?: unknown })?.id;
     if (!pc || pc.p.dead || pc.c.charge || typeof id !== "string" || !this.targetOf(client.sessionId, id)) return;
+    if (this.sitting(client, pc.c)) return;
     this.stopInteract(client, pc.c);
     pc.c.targetId = id;
     pc.c.pendingSkill = null;
@@ -673,7 +726,7 @@ export class WorldRoom extends Room<WorldState> {
 
   private handleSkill(client: Client, msg: unknown) {
     const pc = this.get(client);
-    if (!pc || pc.p.dead || pc.c.charge) return;
+    if (!pc || pc.p.dead || pc.c.charge || this.sitting(client, pc.c)) return;
     const { p, c } = pc;
     const skill = (msg as { skill?: unknown })?.skill as SkillId;
     const def = typeof skill === "string" ? SKILLS[skill] : undefined;
@@ -762,11 +815,17 @@ export class WorldRoom extends Room<WorldState> {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     const res = resourceAt(this.map, x, y);
     const station = stationAt(this.map, x, y);
-    if (!res && !station) return;
+    if ((!res && !station) || this.sitting(client, c)) return;
     if (res && !countItem(c.inv.bag, res.tool))
       return client.send(Msg.Notice, { text: `ต้องมี${ITEMS[res.tool].name}ในกระเป๋า (ซื้อได้ที่ช่างตีเหล็กในหมู่บ้าน)` });
     if (res && this.state.depleted.has(`${x},${y}`)) return client.send(Msg.Notice, { text: `${res.name}หมดแล้ว รอสักครู่` });
 
+    this.walkBeside(client, p, c, { x, y, res, station, bundle: null, stall: null, doneAt: 0 });
+  }
+
+  /** Walks to the nearest free tile next to something, to use it there. */
+  private walkBeside(client: Client, p: Player, c: PlayerCtl, goal: NonNullable<PlayerCtl["interact"]>) {
+    const { x, y } = goal;
     const from = planFrom(p, c.path);
     const spots: Point[] = [];
     for (let dy = -1; dy <= 1; dy++)
@@ -779,7 +838,7 @@ export class WorldRoom extends Room<WorldState> {
       c.targetId = null;
       c.pendingSkill = null;
       c.path = c.path.length ? [c.path[0], ...rest] : rest;
-      c.interact = { x, y, res, station, bundle: null, doneAt: 0 };
+      c.interact = goal;
       return;
     }
   }
@@ -792,6 +851,11 @@ export class WorldRoom extends Room<WorldState> {
     faceTowards(p, it);
     if (it.station) {
       client.send(Msg.OpenStation, { kind: it.station } satisfies OpenStationEvent);
+      c.interact = null;
+      return;
+    }
+    if (it.stall) {
+      this.sendStall(client, it.stall);
       c.interact = null;
       return;
     }
@@ -984,6 +1048,343 @@ export class WorldRoom extends Room<WorldState> {
     pc.c.lastChatAt = now;
     const line: ChatLine = { from: client.sessionId, name: pc.p.name, text };
     this.broadcast(Msg.ChatLine, line);
+  }
+
+  // ---- market: coins and items always move in one database transaction -----
+
+  /**
+   * Runs a trade for one player on a copy of their bag and coins. The copy, the
+   * market tables and the character row are written together; only then does
+   * the copy become real. Any error leaves everything as it was.
+   */
+  private trade(client: Client | undefined, p: Player, c: PlayerCtl, fn: (d: DatabaseSync, me: { inv: Inventory; gold: number }) => void): boolean {
+    const me = { inv: structuredClone(c.inv), gold: c.gold };
+    try {
+      transaction((d) => {
+        fn(d, me);
+        if (me.gold < 0) throw new TradeError("เหรียญไม่พอ");
+        writeCharacter(d, { ...this.rowOf(p, c), gold: me.gold, inv: JSON.stringify(me.inv) });
+      });
+    } catch (e) {
+      if (!(e instanceof TradeError)) console.error("[market]", e);
+      client?.send(Msg.Notice, { text: e instanceof TradeError ? e.message : "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง" });
+      return false;
+    }
+    c.inv = me.inv;
+    c.gold = me.gold;
+    this.sendPrivate(client);
+    return true;
+  }
+
+  /** Coins from sales go straight to the seller when they are in this map. */
+  private collectGold(id: string) {
+    const p = this.state.players.get(id);
+    const c = this.ctl.get(id);
+    if (!p || !c || c.leaving || !market.hasGold(c.accountId)) return;
+    let got = 0;
+    const client = this.clientOf(id);
+    if (this.trade(client, p, c, (d, me) => (me.gold += got = market.takeGold(d, c.accountId))) && got > 0)
+      client?.send(Msg.Notice, { text: `ได้รับเงินจากตลาด ${got} เหรียญ` });
+  }
+
+  private collectFor(accountId: number) {
+    for (const [id, c] of this.ctl) if (c.accountId === accountId) this.collectGold(id);
+  }
+
+  /** Runs something at the board, then shows the board again. */
+  private atBoard(client: Client, fn: (p: Player, c: PlayerCtl) => void) {
+    const pc = this.nearStation(client, "board");
+    if (!pc) return;
+    fn(pc.p, pc.c);
+    client.send(Msg.BoardData, market.boardData(pc.c.accountId));
+  }
+
+  private handleBoardSell(client: Client, msg: unknown) {
+    const m = (msg ?? {}) as { uid?: unknown; qty?: unknown; price?: unknown };
+    const qty = wholeNumber(m.qty, 1, 999);
+    const price = wholeNumber(m.price, 1, PRICE_MAX);
+    if (typeof m.uid !== "string" || qty === null || price === null) return client.send(Msg.Notice, { text: "ใส่จำนวนและราคาเป็นเลขจำนวนเต็ม" });
+    const uid = m.uid;
+    this.atBoard(client, (p, c) =>
+      this.trade(client, p, c, (d, me) => {
+        if (market.countOf("listings", c.accountId) >= MAX_LISTINGS) throw new TradeError(`ตั้งขายได้สูงสุด ${MAX_LISTINGS} รายการ`);
+        const s = takeStack(me.inv.bag, uid, qty);
+        if (!s) throw new TradeError("ของไม่พอ");
+        market.addListing(d, c.accountId, p.name, s, price);
+      }),
+    );
+  }
+
+  private handleBoardBuy(client: Client, msg: unknown) {
+    const m = (msg ?? {}) as { id?: unknown; qty?: unknown };
+    const qty = wholeNumber(m.qty, 1, 999);
+    if (typeof m.id !== "string" || qty === null) return;
+    const l = market.getListing(m.id);
+    this.atBoard(client, (p, c) => {
+      if (!l) return client.send(Msg.Notice, { text: "รายการนี้ไม่มีแล้ว" });
+      if (l.accountId === c.accountId) return client.send(Msg.Notice, { text: "นี่ของคุณเอง" });
+      const ok = this.trade(client, p, c, (d, me) => {
+        market.takeListing(d, l.id, qty);
+        const total = l.price * qty;
+        me.gold -= total;
+        if (me.gold < 0) throw new TradeError(`เหรียญไม่พอ ต้องใช้ ${total} เหรียญ`);
+        if (!addStack(me.inv.bag, BAG_SIZE, { ...l.item, qty })) throw new TradeError("กระเป๋าเต็ม");
+        market.addClaim(d, l.accountId, afterTax(total), null, `ขาย ${stackName(l.item)} × ${qty}`);
+      });
+      if (ok) {
+        client.send(Msg.Notice, { text: `ซื้อ ${stackName(l.item)} × ${qty} แล้ว` });
+        this.collectFor(l.accountId);
+      }
+    });
+  }
+
+  private handleBoardCancel(client: Client, msg: unknown) {
+    const id = (msg as { id?: unknown } | null)?.id;
+    if (typeof id !== "string") return;
+    this.atBoard(client, (p, c) => {
+      const l = market.getListing(id);
+      const o = market.getOrder(id);
+      if (l && l.accountId === c.accountId)
+        this.trade(client, p, c, (d, me) => {
+          market.takeListing(d, l.id, l.item.qty);
+          if (!addStack(me.inv.bag, BAG_SIZE, l.item)) throw new TradeError("กระเป๋าเต็ม");
+        });
+      else if (o && o.accountId === c.accountId)
+        this.trade(client, p, c, (d, me) => {
+          market.takeOrder(d, o.id, o.qty);
+          me.gold += o.qty * o.price;
+        });
+    });
+  }
+
+  private handleOrderPlace(client: Client, msg: unknown) {
+    const m = (msg ?? {}) as { item?: unknown; qty?: unknown; price?: unknown };
+    const qty = wholeNumber(m.qty, 1, 99);
+    const price = wholeNumber(m.price, 1, PRICE_MAX);
+    if (typeof m.item !== "string" || !Object.hasOwn(ITEMS, m.item)) return;
+    if (qty === null || price === null) return client.send(Msg.Notice, { text: "ใส่จำนวน (1-99) และราคาเป็นเลขจำนวนเต็ม" });
+    const item = m.item;
+    this.atBoard(client, (p, c) =>
+      this.trade(client, p, c, (d, me) => {
+        if (market.countOf("orders", c.accountId) >= MAX_ORDERS) throw new TradeError(`ตั้งรับซื้อได้สูงสุด ${MAX_ORDERS} รายการ`);
+        me.gold -= qty * price;
+        if (me.gold < 0) throw new TradeError(`เหรียญไม่พอ ต้องวางเงินไว้ ${qty * price} เหรียญ`);
+        market.addOrder(d, c.accountId, p.name, item, qty, price);
+      }),
+    );
+  }
+
+  private handleOrderFill(client: Client, msg: unknown) {
+    const m = (msg ?? {}) as { id?: unknown; uid?: unknown; qty?: unknown };
+    const qty = wholeNumber(m.qty, 1, 99);
+    if (typeof m.id !== "string" || typeof m.uid !== "string" || qty === null) return;
+    const o = market.getOrder(m.id);
+    const uid = m.uid;
+    this.atBoard(client, (p, c) => {
+      if (!o) return client.send(Msg.Notice, { text: "รายการนี้ไม่มีแล้ว" });
+      if (o.accountId === c.accountId) return client.send(Msg.Notice, { text: "นี่ของคุณเอง" });
+      const gain = afterTax(o.price * qty);
+      const ok = this.trade(client, p, c, (d, me) => {
+        const s = takeStack(me.inv.bag, uid, qty);
+        if (!s || s.id !== o.item) throw new TradeError("ของไม่พอ");
+        market.takeOrder(d, o.id, qty);
+        market.addClaim(d, o.accountId, 0, s, `รับซื้อจาก ${p.name}`);
+        me.gold += gain;
+      });
+      if (ok) client.send(Msg.Notice, { text: `ขาย ${ITEMS[o.item].name} × ${qty} ได้ ${gain} เหรียญ (หักภาษี 5%)` });
+    });
+  }
+
+  private handleClaim(client: Client, msg: unknown) {
+    const id = (msg as { id?: unknown } | null)?.id;
+    if (typeof id !== "string") return;
+    this.atBoard(client, (p, c) =>
+      this.trade(client, p, c, (d, me) => {
+        const cl = market.takeClaim(d, c.accountId, id);
+        me.gold += cl.gold;
+        if (cl.item && !addStack(me.inv.bag, BAG_SIZE, cl.item)) throw new TradeError("กระเป๋าเต็ม");
+      }),
+    );
+  }
+
+  // ---- stalls -------------------------------------------------------------
+
+  private sitting(client: Client, c: PlayerCtl): boolean {
+    if (!c.stall) return false;
+    client.send(Msg.Notice, { text: "กำลังเปิดแผงอยู่ ปิดแผงก่อน" });
+    return true;
+  }
+
+  private showStall(s: market.StallRow) {
+    this.stalls.set(s.id, s);
+    const st = new Stall();
+    st.x = s.x;
+    st.y = s.y;
+    st.owner = s.owner;
+    st.title = s.title;
+    st.color = s.color;
+    st.weapon = s.weapon;
+    st.helm = s.helm;
+    this.state.stalls.set(s.id, st);
+  }
+
+  private hideStall(id: string) {
+    this.stalls.delete(id);
+    this.state.stalls.delete(id);
+    for (const c of this.ctl.values()) if (c.stall === id) c.stall = null;
+  }
+
+  /** Who runs this stall, when they are in this map. */
+  private ownerOf(s: market.StallRow): [string, Player, PlayerCtl] | null {
+    for (const [id, c] of this.ctl) {
+      const p = this.state.players.get(id);
+      if (c.accountId === s.account_id && p && !c.leaving) return [id, p, c];
+    }
+    return null;
+  }
+
+  /** Packs a stall up: into the owner's bag when they are here, else to the board for pick-up. */
+  private closeStall(id: string): boolean {
+    const s = this.stalls.get(id);
+    if (!s) return false;
+    const owner = this.ownerOf(s);
+    if (owner) {
+      const [oid, p, c] = owner;
+      const ok = this.trade(this.clientOf(oid), p, c, (d, me) => {
+        for (const it of s.items)
+          if (!addStack(me.inv.bag, BAG_SIZE, it.stack)) market.addClaim(d, s.account_id, 0, it.stack, "ของจากแผง (กระเป๋าเต็ม)");
+        market.removeStall(d, id);
+      });
+      if (!ok) return false;
+    } else {
+      try {
+        transaction((d) => {
+          for (const it of s.items) market.addClaim(d, s.account_id, 0, it.stack, "ของจากแผงที่หมดเวลา");
+          market.removeStall(d, id);
+        });
+      } catch (e) {
+        console.error("[market]", e);
+        return false;
+      }
+    }
+    this.hideStall(id);
+    return true;
+  }
+
+  private closeOldStalls() {
+    for (const s of [...this.stalls.values()]) if (s.expires <= Date.now()) this.closeStall(s.id);
+  }
+
+  private handleStallOpen(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    if (!pc || pc.p.dead || pc.c.charge || this.sitting(client, pc.c)) return;
+    const { p, c } = pc;
+    const m = (msg ?? {}) as { title?: unknown; items?: unknown };
+    const at = { x: Math.round(p.x), y: Math.round(p.y) };
+    const notice = (text: string) => client.send(Msg.Notice, { text });
+    if (this.map.id !== "brindle" || !isSafe(this.map, at.x, at.y)) return notice("เปิดแผงได้ในหมู่บ้านเท่านั้น");
+    if (p.moving || c.path.length) return notice("หยุดเดินก่อนเปิดแผง");
+    for (const s of this.stalls.values()) if (dist(s, at) < 2) return notice("ใกล้แผงอื่นเกินไป");
+    for (const k of ["smith", "storage", "board"] as const) if (dist(findStation(this.map, k)!, at) < 2) return notice("ตรงนี้ขวางทาง ขยับออกไปหน่อย");
+    if (!Array.isArray(m.items) || !m.items.length || m.items.length > STALL_SLOTS) return notice(`วางขายได้ 1-${STALL_SLOTS} รายการ`);
+    const want = (m.items as unknown[]).map((v) => {
+      const it = (v ?? {}) as { uid?: unknown; qty?: unknown; price?: unknown };
+      return { uid: typeof it.uid === "string" ? it.uid : null, qty: wholeNumber(it.qty, 1, 999), price: wholeNumber(it.price, 1, PRICE_MAX) };
+    });
+    if (want.some((w) => w.uid === null || w.qty === null || w.price === null)) return notice("ใส่จำนวนและราคาเป็นเลขจำนวนเต็ม");
+    const row: market.StallRow = {
+      id: globalThis.crypto.randomUUID(),
+      account_id: c.accountId,
+      owner: p.name,
+      color: p.color,
+      weapon: p.weapon,
+      helm: p.helm,
+      title: cleanChat(m.title, STALL_TITLE_MAX) ?? `แผงของ ${p.name}`,
+      x: at.x,
+      y: at.y,
+      items: [],
+      expires: Date.now() + STALL_MS,
+    };
+    const ok = this.trade(client, p, c, (d, me) => {
+      const items: StallItem[] = [];
+      for (const w of want) {
+        const s = takeStack(me.inv.bag, w.uid!, w.qty!);
+        if (!s) throw new TradeError("ของไม่พอ");
+        items.push({ stack: s, price: w.price! });
+      }
+      row.items = items;
+      market.putStall(d, row);
+    });
+    if (!ok) return;
+    this.stopInteract(client, c);
+    c.targetId = null;
+    c.stall = row.id;
+    this.showStall(row);
+    this.sendStall(client, row.id);
+  }
+
+  private handleStallClose(client: Client) {
+    const pc = this.get(client);
+    if (!pc?.c.stall) return;
+    if (this.closeStall(pc.c.stall)) client.send(Msg.StallData, null);
+  }
+
+  private handleStallVisit(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const id = (msg as { id?: unknown } | null)?.id;
+    const s = typeof id === "string" ? this.stalls.get(id) : undefined;
+    if (!pc || !s || pc.p.dead || pc.c.charge) return;
+    if (pc.c.stall === s.id) return this.sendStall(client, s.id);
+    if (this.sitting(client, pc.c)) return;
+    this.walkBeside(client, pc.p, pc.c, { x: s.x, y: s.y, res: null, station: null, bundle: null, stall: s.id, doneAt: 0 });
+  }
+
+  private sendStall(client: Client, id: string) {
+    const s = this.stalls.get(id);
+    if (!s) return client.send(Msg.StallData, null);
+    const mine = this.ctl.get(client.sessionId)?.accountId === s.account_id;
+    const data: StallData = { id, owner: s.owner, title: s.title, items: s.items, mine, expires: s.expires };
+    client.send(Msg.StallData, data);
+  }
+
+  private handleStallBuy(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const m = (msg ?? {}) as { id?: unknown; uid?: unknown; qty?: unknown };
+    const s = typeof m.id === "string" ? this.stalls.get(m.id) : undefined;
+    const qty = wholeNumber(m.qty, 1, 999);
+    if (!pc || pc.p.dead || qty === null) return;
+    if (!s) return client.send(Msg.StallData, null);
+    const { p, c } = pc;
+    if (s.account_id === c.accountId) return;
+    if (dist(p, s) > STALL_RANGE) return client.send(Msg.Notice, { text: "อยู่ไกลเกินไป เดินเข้าไปใกล้ก่อน" });
+    const it = s.items.find((x) => x.stack.uid === m.uid);
+    if (!it || it.stack.qty < qty) {
+      client.send(Msg.Notice, { text: "มีคนซื้อไปก่อนแล้ว" });
+      return this.sendStall(client, s.id);
+    }
+    const items: StallItem[] = s.items.map((x) => (x === it ? { ...x, stack: { ...x.stack, qty: x.stack.qty - qty } } : x)).filter((x) => x.stack.qty > 0);
+    const total = it.price * qty;
+    const ok = this.trade(client, p, c, (d, me) => {
+      me.gold -= total;
+      if (me.gold < 0) throw new TradeError(`เหรียญไม่พอ ต้องใช้ ${total} เหรียญ`);
+      if (!addStack(me.inv.bag, BAG_SIZE, { ...it.stack, qty })) throw new TradeError("กระเป๋าเต็ม");
+      market.addClaim(d, s.account_id, total, null, `ขาย ${stackName(it.stack)} × ${qty}`); // no tax at stalls
+      if (items.length) market.putStall(d, { ...s, items });
+      else market.removeStall(d, s.id);
+    });
+    if (!ok) return;
+    s.items = items;
+    client.send(Msg.Notice, { text: `ซื้อ ${stackName(it.stack)} × ${qty} แล้ว` });
+    this.collectFor(s.account_id);
+    const owner = this.ownerOf(s);
+    const oc = owner && this.clientOf(owner[0]);
+    oc?.send(Msg.Notice, { text: `${p.name} ซื้อ ${stackName(it.stack)} × ${qty}` });
+    if (!items.length) {
+      this.hideStall(s.id);
+      oc?.send(Msg.Notice, { text: "ของในแผงขายหมดแล้ว" });
+      oc?.send(Msg.StallData, null);
+    } else if (oc) this.sendStall(oc, s.id);
+    this.sendStall(client, s.id);
   }
 
   // ---- game master --------------------------------------------------------

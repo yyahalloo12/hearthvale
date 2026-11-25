@@ -1,0 +1,32 @@
+{
+ "cols": 8,
+ "rows": 4,
+ "index": {
+  "ore_1": 0,
+  "ore_2": 1,
+  "ore_3": 2,
+  "wood_1": 3,
+  "wood_3": 4,
+  "hide_1": 5,
+  "crystal_1": 6,
+  "thread_3": 7,
+  "pickaxe": 8,
+  "hatchet": 9,
+  "knife": 10,
+  "sword_1": 11,
+  "axe_1": 12,
+  "helm_1": 13,
+  "armor_1": 14,
+  "boots_1": 15,
+  "sword_2": 16,
+  "axe_2": 17,
+  "helm_2": 18,
+  "armor_2": 19,
+  "boots_2": 20,
+  "sword_3": 21,
+  "axe_3": 22,
+  "helm_3": 23,
+  "armor_3": 24,
+  "boots_3": 25
+ }
+}

@@ -13,6 +13,7 @@
 & "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" --background --factory-startup --python art/player.py -- client/public/art
 & "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" --background --factory-startup --python art/monsters.py -- client/public/art
 & "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" --background --factory-startup --python art/scenery.py -- client/public/art
+& "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" --background --factory-startup --python art/icons.py -- client/public/art client/src
 ```
 
 เติม `preview` ท้ายคำสั่งเพื่อดูภาพตัวอย่างใหญ่ หรือเติมชื่อมอนสเตอร์ เช่น `hen` เพื่อเรนเดอร์เฉพาะตัวนั้น

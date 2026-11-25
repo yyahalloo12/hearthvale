@@ -45,6 +45,26 @@ export interface BundleRow {
 
 let db: DB | undefined;
 
+/** The open database. Rooms open it before anyone can play. */
+export function connection(): DB {
+  if (!db) throw new Error("database is not open yet");
+  return db;
+}
+
+/** Runs `fn` so that all of its changes happen, or none. No waiting inside. */
+export function transaction<T>(fn: (d: DB) => T): T {
+  const d = connection();
+  d.exec("BEGIN");
+  try {
+    const r = fn(d);
+    d.exec("COMMIT");
+    return r;
+  } catch (e) {
+    d.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 async function open(): Promise<DB> {
   if (db) return db;
   let sqlite: typeof import("node:sqlite");
@@ -92,6 +112,47 @@ async function open(): Promise<DB> {
       x INTEGER NOT NULL,
       y INTEGER NOT NULL,
       owner TEXT NOT NULL,
+      items TEXT NOT NULL,
+      expires INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS listings (
+      id TEXT PRIMARY KEY,
+      account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      seller TEXT NOT NULL,
+      item TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      price INTEGER NOT NULL,
+      expires INTEGER NOT NULL,
+      created TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      buyer TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      qty INTEGER NOT NULL,
+      price INTEGER NOT NULL,
+      expires INTEGER NOT NULL,
+      created TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS claims (
+      id TEXT PRIMARY KEY,
+      account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      gold INTEGER NOT NULL,
+      item TEXT,
+      note TEXT NOT NULL,
+      created TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS stalls (
+      id TEXT PRIMARY KEY,
+      account_id INTEGER NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,
+      owner TEXT NOT NULL,
+      color INTEGER NOT NULL,
+      weapon TEXT NOT NULL,
+      helm TEXT NOT NULL,
+      title TEXT NOT NULL,
+      x INTEGER NOT NULL,
+      y INTEGER NOT NULL,
       items TEXT NOT NULL,
       expires INTEGER NOT NULL
     );
@@ -151,12 +212,13 @@ export async function loadCharacter(accountId: number): Promise<CharacterRow | n
 export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin">;
 
 export async function saveCharacter(c: CharacterSave) {
-  writeCharacter(await open(), c);
+  // Written at once when the database is open, so an older save can never land on top of a newer one.
+  writeCharacter(db ?? (await open()), c);
 }
 
 /** Saves a character and changes a bundle together: both happen, or neither. */
 export async function saveWithBundle(c: CharacterSave, change: { put: BundleRow } | { remove: string }) {
-  const d = await open();
+  const d = db ?? (await open());
   d.exec("BEGIN");
   try {
     writeCharacter(d, c);
@@ -197,7 +259,7 @@ export async function loadBundles(zone: string, now = Date.now()): Promise<Bundl
   return d.prepare("SELECT * FROM bundles WHERE zone = ?").all(zone) as unknown as BundleRow[];
 }
 
-function writeCharacter(d: DB, c: CharacterSave) {
+export function writeCharacter(d: DB, c: CharacterSave) {
   d.prepare(
     `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, updated_at = datetime('now')
      WHERE account_id = ?`,

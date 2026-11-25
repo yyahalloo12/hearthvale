@@ -56,12 +56,24 @@ export class Bundle extends Schema {
   @type("string") owner = "";
 }
 
+/** A player's stall; stays open while the owner is offline. */
+export class Stall extends Schema {
+  @type("uint8") x = 0;
+  @type("uint8") y = 0;
+  @type("string") owner = "";
+  @type("string") title = "";
+  @type("uint32") color = 0;
+  @type("string") weapon = "";
+  @type("string") helm = "";
+}
+
 export class WorldState extends Schema {
   @type("string") mapName = "";
   @type([Gate]) gates = new ArraySchema<Gate>();
   /** when the gates move next (epoch ms) */
   @type("float64") gatesUntil = 0;
   @type({ map: Bundle }) bundles = new MapSchema<Bundle>();
+  @type({ map: Stall }) stalls = new MapSchema<Stall>();
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Monster }) monsters = new MapSchema<Monster>();
   /** Rocks and trees that are used up for now, by "x,y". */

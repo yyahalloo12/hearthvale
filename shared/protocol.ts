@@ -21,6 +21,28 @@ export const Msg = {
   LootBundle: "loot_bundle",
   /** client -> server (at the portal): go into the Hollow */
   EnterHollow: "enter_hollow",
+  /** client -> server (at the board): show me the board */
+  Board: "board",
+  /** client -> server (at the board): offer items {uid, qty, price} */
+  BoardSell: "board_sell",
+  /** client -> server (at the board): buy from an offer {id, qty} */
+  BoardBuy: "board_buy",
+  /** client -> server (at the board): take an offer or order back {id} */
+  BoardCancel: "board_cancel",
+  /** client -> server (at the board): ask for items {item, qty, price} */
+  OrderPlace: "order_place",
+  /** client -> server (at the board): sell to somebody's order {id, uid, qty} */
+  OrderFill: "order_fill",
+  /** client -> server (at the board): pick something up {id} */
+  Claim: "claim",
+  /** client -> server: set up a stall here {title, items: [{uid, qty, price}]} */
+  StallOpen: "stall_open",
+  /** client -> server: pack the stall up */
+  StallClose: "stall_close",
+  /** client -> server: walk to a stall and look {id} */
+  StallVisit: "stall_visit",
+  /** client -> server (near a stall): buy {id, uid, qty} */
+  StallBuy: "stall_buy",
   /** client -> server: walk to a rock, tree, anvil or chest and use it {x, y} */
   Interact: "interact",
   /** client -> server: wear an item {uid} */
@@ -54,6 +76,10 @@ export const Msg = {
   LevelUp: "level_up",
   /** server -> client: EXP you gained */
   ExpGain: "exp_gain",
+  /** server -> client: everything on the board, seen by you */
+  BoardData: "board_data",
+  /** server -> client: what a stall sells, or null when it is gone */
+  StallData: "stall_data",
   /** server -> client: go to another map; join that room with the ticket */
   Travel: "travel",
   /** server -> client: you reached the anvil or the chest {kind} */

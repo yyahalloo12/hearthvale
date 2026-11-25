@@ -33,6 +33,7 @@ export function setMinimap(map: GameMap) {
       if (prop === Prop.Tree) g.fillStyle = map.id === "hollow" ? "#4b4654" : "#2f8a3e";
       else if (prop === Prop.House) g.fillStyle = "#c8453a";
       else if (prop === Prop.Ruin) g.fillStyle = "#38333f";
+      else if (prop === Prop.Anvil || prop === Prop.Chest || prop === Prop.Board) g.fillStyle = "#6b4226";
       else if (prop === Prop.Portal) g.fillStyle = "#b04fe0";
       g.fillRect(x, y, 1, 1);
     }

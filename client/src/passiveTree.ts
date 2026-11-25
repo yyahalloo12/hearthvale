@@ -52,7 +52,7 @@ export function initPassiveTree(a: TreeActions) {
   $("tree-open").onclick = () => toggleTree();
   $("tree-close").onclick = () => toggleTree(false);
   window.addEventListener("keydown", (e) => {
-    if (document.activeElement?.tagName === "INPUT" || e.ctrlKey || e.altKey || e.metaKey) return;
+    if (/^(INPUT|SELECT)$/.test(document.activeElement?.tagName ?? "") || e.ctrlKey || e.altKey || e.metaKey) return;
     // `code` is the physical key, so this works with a Thai keyboard layout too
     if (e.code === "KeyP") toggleTree();
     else if (e.code === "Escape" && !$("tree").hidden) toggleTree(false);

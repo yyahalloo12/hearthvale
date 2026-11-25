@@ -3,6 +3,7 @@ import Phaser from "phaser";
 import { TILE_H } from "../../../shared/constants";
 import { buildHollow, GLOW_AT } from "../../../shared/hollow";
 import { findStation, ITEMS, resourceAt, STATION_RANGE, stationAt } from "../../../shared/items";
+import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
 import { buildBrindleVillage, GameMap, isHouseAnchor, isWalkable, Prop, ZoneId } from "../../../shared/map";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
 import { SKILLS } from "../../../shared/stats";
@@ -10,15 +11,16 @@ import { addChatLine } from "../chat";
 import { askEnterHollow, initHud, setCorruption, setOnline, setZone, skillForKey, startCooldown, updateMe } from "../hud";
 import { closeStation, initInventory, openStation, openStationKind, setInventory, setItemLevel, showGathering } from "../inventory";
 import { toScreen, toTile } from "../iso";
+import { closeMarket, initMarket, marketMode, openBoard, setBoard, setMarketInventory, setStall, visitedStall } from "../market";
 import { drawMinimap, setMinimap } from "../minimap";
 import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
-import { PlayerView } from "../PlayerView";
-import { loadSprites, SCENERY_SCALE } from "../sprites";
+import { PlayerView, TIER_TINT } from "../PlayerView";
+import { loadSprites, PLAYER_SHEET, SCENERY_SCALE } from "../sprites";
 import { groundDetail, groundKey, houseFrame, makeTextures, PROP_SHADOW, propFrame } from "../textures";
 
-const STATION_LABEL = { smith: "ช่างตีเหล็ก", storage: "คลังเก็บของ", portal: "ทางเข้า Hollow" } as const;
+const STATION_LABEL = { smith: "ช่างตีเหล็ก", storage: "คลังเก็บของ", portal: "ทางเข้า Hollow", board: "กระดานประมูล" } as const;
 
 export class WorldScene extends Phaser.Scene {
   private room!: Room;
@@ -26,6 +28,7 @@ export class WorldScene extends Phaser.Scene {
   private travel!: (e: TravelEvent) => void;
   private bundles = new Map<string, Phaser.GameObjects.Container>();
   private gates: Phaser.GameObjects.GameObject[] = [];
+  private stalls = new Map<string, { root: Phaser.GameObjects.Container; keeper: Phaser.GameObjects.Container; owner: string; x: number; y: number }>();
   private mapTimer = 0;
   private travelling = false;
   private onKey?: (e: KeyboardEvent) => void;
@@ -84,6 +87,18 @@ export class WorldScene extends Phaser.Scene {
       sell: (uid) => this.room.send(Msg.Sell, { uid }),
       deposit: (uid) => this.room.send(Msg.Deposit, { uid }),
       withdraw: (uid) => this.room.send(Msg.Withdraw, { uid }),
+    });
+    initMarket({
+      refresh: () => this.room.send(Msg.Board),
+      sell: (uid, qty, price) => this.room.send(Msg.BoardSell, { uid, qty, price }),
+      buy: (id, qty) => this.room.send(Msg.BoardBuy, { id, qty }),
+      cancel: (id) => this.room.send(Msg.BoardCancel, { id }),
+      order: (item, qty, price) => this.room.send(Msg.OrderPlace, { item, qty, price }),
+      fill: (id, uid, qty) => this.room.send(Msg.OrderFill, { id, uid, qty }),
+      claim: (id) => this.room.send(Msg.Claim, { id }),
+      stallOpen: (title, items) => this.room.send(Msg.StallOpen, { title, items }),
+      stallClose: () => this.room.send(Msg.StallClose),
+      stallBuy: (id, uid, qty) => this.room.send(Msg.StallBuy, { id, uid, qty }),
     });
     this.bindRoom();
     this.bindInput();
@@ -175,6 +190,7 @@ export class WorldScene extends Phaser.Scene {
       });
       if (isMe) this.refreshMe();
       setOnline(this.views.size);
+      this.showKeepers();
     });
 
     $(state).players.onRemove((_player: any, id: string) => {
@@ -182,6 +198,7 @@ export class WorldScene extends Phaser.Scene {
       this.views.get(id)?.destroy();
       this.views.delete(id);
       setOnline(this.views.size);
+      this.showKeepers();
     });
 
     $(state).monsters.onAdd((m: any, id: string) => {
@@ -226,12 +243,22 @@ export class WorldScene extends Phaser.Scene {
       this.bundles.delete(id);
     });
 
+    $(state).stalls.onAdd((s: any, id: string) => this.addStall(id, s));
+    $(state).stalls.onRemove((_s: any, id: string) => {
+      this.stalls.get(id)?.root.destroy();
+      this.stalls.delete(id);
+      if (visitedStall() === id) setStall(null);
+    });
+    this.room.onMessage(Msg.BoardData, (d: BoardData) => setBoard(d));
+    this.room.onMessage(Msg.StallData, (d: StallData | null) => setStall(d));
+
     this.room.onMessage(Msg.Travel, (e: TravelEvent) => {
       this.travelling = true;
       this.travel(e);
     });
     this.room.onMessage(Msg.OpenStation, (e: OpenStationEvent) => {
       if (e.kind === "portal") askEnterHollow(() => this.room.send(Msg.EnterHollow));
+      else if (e.kind === "board") openBoard();
       else openStation(e.kind);
     });
     this.room.onMessage(Msg.Gathering, (e: GatheringEvent) => showGathering(e.ms, e.name));
@@ -258,6 +285,7 @@ export class WorldScene extends Phaser.Scene {
       this.gold = d.gold;
       setTreePrivate(d.gold, d.nodes);
       setInventory(d.inv, d.gold);
+      setMarketInventory(d.inv, d.gold);
       const v = this.views.get(this.room.sessionId);
       if (gained > 0 && v) this.floatText(v.headPoint().x, v.headPoint().y - 30, `+${gained} เหรียญ`, "#ffe08a", 13);
     });
@@ -272,6 +300,33 @@ export class WorldScene extends Phaser.Scene {
     this.room.onLeave((code) => {
       if (code !== 1000 && !this.travelling) addChatLine({ from: "", name: "", text: "หลุดการเชื่อมต่อกับเซิร์ฟเวอร์ ลองรีเฟรชหน้านี้" }, "notice");
     });
+  }
+
+  /** A stall with its keeper; the keeper is drawn here only while the owner is away. */
+  private addStall(id: string, s: any) {
+    const p = toScreen(s.x, s.y);
+    const layer = (l: string) => this.add.image(0, 0, `player-${l}`, 0).setOrigin(0.5, PLAYER_SHEET.originY).setScale(PLAYER_SHEET.scale);
+    const parts = [layer("base"), layer("tunic").setTint(s.color)];
+    const helm = ITEMS[s.helm];
+    if (helm) parts.push(layer("helm").setTint(TIER_TINT[helm.tier] ?? 0xffffff));
+    const keeper = this.add.container(0, 0, parts).setAlpha(0.85);
+    const stand = this.scenery(0, 0, `stall${(s.x + s.y) % 3}`);
+    const text = (y: number, t: string, color: string, size: number) =>
+      this.add.text(0, y, t, { fontFamily: "Tahoma, sans-serif", fontSize: `${size}px`, color, stroke: "#000", strokeThickness: 3 }).setOrigin(0.5, 1);
+    const root = this.add.container(p.x, p.y, [keeper, stand, text(-84, s.title, "#ffe9a8", 13), text(-100, s.owner, "#ffffff", 11)]);
+    root.setDepth(p.y + 2);
+    this.stalls.set(id, { root, keeper, owner: s.owner, x: s.x, y: s.y });
+    this.showKeepers();
+  }
+
+  private showKeepers() {
+    const here = new Set([...this.views.values()].map((v) => v.name));
+    for (const s of this.stalls.values()) s.keeper.setVisible(!here.has(s.owner));
+  }
+
+  private pickStall(wx: number, wy: number): string | null {
+    for (const [id, s] of this.stalls) if (Math.abs(wx - s.root.x) < 30 && wy < s.root.y + 22 && wy > s.root.y - 80) return id;
+    return null;
   }
 
   private addGate(x: number, y: number) {
@@ -296,6 +351,11 @@ export class WorldScene extends Phaser.Scene {
     if (!p) return;
     setTreeCharacter(p.level, p.job);
     setItemLevel(p.level);
+    const mode = marketMode();
+    if (mode === "board" || mode === "stall") {
+      const at = mode === "board" ? findStation(this.map, "board") : this.stalls.get(visitedStall() ?? "");
+      if (p.dead || !at || Math.hypot(p.x - at.x, p.y - at.y) > (mode === "board" ? STATION_RANGE : STALL_RANGE)) closeMarket();
+    }
     const kind = openStationKind();
     if (kind) {
       const at = findStation(this.map, kind);
@@ -469,6 +529,12 @@ export class WorldScene extends Phaser.Scene {
       const me = this.views.get(this.room.sessionId);
       if (me) this.cameras.main.startFollow(me.root, true, 0.15, 0.15);
 
+      const stall = this.pickStall(pointer.worldX, pointer.worldY);
+      if (stall) {
+        this.setTarget(null);
+        this.room.send(Msg.StallVisit, { id: stall });
+        return;
+      }
       const bundle = this.pickBundle(pointer.worldX, pointer.worldY);
       if (bundle) {
         this.setTarget(null);
@@ -506,7 +572,7 @@ export class WorldScene extends Phaser.Scene {
     this.input.on("pointerup", () => (this.dragStart = undefined));
 
     this.onKey = (e) => {
-      if (document.activeElement?.tagName === "INPUT") return;
+      if (/^(INPUT|SELECT)$/.test(document.activeElement?.tagName ?? "")) return;
       const skill = skillForKey(e.key);
       if (skill) this.useSkill(skill);
     };

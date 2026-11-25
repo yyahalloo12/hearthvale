@@ -4,7 +4,7 @@ import { toScreen } from "./iso";
 import { PLAYER_LAYERS, PLAYER_SHEET } from "./sprites";
 
 /** Metal colour by tier. */
-const TIER_TINT = [0xffffff, 0xd88a4e, 0xc3ccd6, 0x8fd3ff, 0xd9a0e0, 0xffd23a, 0xff6f6f];
+export const TIER_TINT = [0xffffff, 0xd88a4e, 0xc3ccd6, 0x8fd3ff, 0xd9a0e0, 0xffd23a, 0xff6f6f];
 
 const ATTACK_MS = 340;
 const WALK_FRAME_MS = 85;

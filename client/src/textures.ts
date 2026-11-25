@@ -151,6 +151,8 @@ export function propFrame(map: GameMap, x: number, y: number, rockItem?: string)
       return "chest";
     case Prop.Portal:
       return "portal";
+    case Prop.Board:
+      return "board";
     case Prop.Fence:
       return fenceFrame(map, x, y);
     default:
@@ -181,5 +183,6 @@ export const PROP_SHADOW: Partial<Record<Prop, number>> = {
   [Prop.Well]: 1.7,
   [Prop.Anvil]: 1.5,
   [Prop.Chest]: 1.5,
+  [Prop.Board]: 1.6,
   [Prop.Ruin]: 1.5,
 };

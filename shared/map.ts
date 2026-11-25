@@ -30,6 +30,7 @@ export enum Prop {
   Chest = 8,
   Portal = 9,
   Ruin = 10,
+  Board = 11,
 }
 
 export type ZoneId = "brindle" | "hollow";
@@ -137,6 +138,8 @@ export function buildBrindleVillage(): GameMap {
   // The blacksmith's anvil and the storage chest stand on the plaza.
   props[27][21] = Prop.Anvil;
   props[21][27] = Prop.Chest;
+  // The auction board (moves to the capital when that map exists, GDD 4.3).
+  props[22][22] = Prop.Board;
   // The way into the Hollow, at the north end of the road.
   props[5][24] = Prop.Portal;
 

@@ -132,6 +132,32 @@ export function moveStack(from: ItemStack[], to: ItemStack[], cap: number, uid: 
   return true;
 }
 
+/** Adds one stack, all of it or nothing. */
+export function addStack(list: ItemStack[], cap: number, s: ItemStack): boolean {
+  if (!isStackable(s.id)) {
+    if (list.length >= cap) return false;
+    list.push(s);
+    return true;
+  }
+  const copy = list.map((x) => ({ ...x }));
+  if (addItem(copy, cap, s.id, s.qty) > 0) return false;
+  list.splice(0, list.length, ...copy);
+  return true;
+}
+
+/** Takes `qty` pieces out of one stack; null when there are not that many. */
+export function takeStack(list: ItemStack[], uid: string, qty: number): ItemStack | null {
+  const i = list.findIndex((s) => s.uid === uid);
+  if (i < 0 || qty < 1 || list[i].qty < qty) return null;
+  const s = list[i];
+  if (s.qty === qty) {
+    list.splice(i, 1);
+    return s;
+  }
+  s.qty -= qty;
+  return { ...s, uid: newUid(), qty };
+}
+
 /** Puts gear on (swapping what was there back into the bag). Returns an error text or null. */
 export function equipItem(inv: Inventory, uid: string, level: number): string | null {
   const i = inv.bag.findIndex((s) => s.uid === uid);
@@ -314,10 +340,10 @@ export function resourceAt(map: GameMap, x: number, y: number): Resource | null 
   return null;
 }
 
-export type StationKind = "smith" | "storage" | "portal";
+export type StationKind = "smith" | "storage" | "portal" | "board";
 export function stationAt(map: GameMap, x: number, y: number): StationKind | null {
   const prop = map.props[y]?.[x];
-  return prop === Prop.Anvil ? "smith" : prop === Prop.Chest ? "storage" : prop === Prop.Portal ? "portal" : null;
+  return prop === Prop.Anvil ? "smith" : prop === Prop.Chest ? "storage" : prop === Prop.Portal ? "portal" : prop === Prop.Board ? "board" : null;
 }
 
 /** Where a station is, so both sides can check the distance. */
