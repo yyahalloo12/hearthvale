@@ -77,6 +77,7 @@ export function buildHollow(): HollowMap {
     props,
     spawn: { x: C, y: C },
     safe: { x: -100, y: -100, r: 0 },
+    exits: [],
     gateSpots: [],
     entries: [],
   };

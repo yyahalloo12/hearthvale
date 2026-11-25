@@ -3,6 +3,7 @@ import { findPath, Point } from "../../../shared/pathfinding";
 import { ATTACK_RANGE, MonsterDef, MONSTERS, monsterStats } from "../../../shared/stats";
 import spawnsJson from "../../../shared/data/spawns.json";
 import hollowSpawnsJson from "../../../shared/data/spawns_hollow.json";
+import mossfenSpawnsJson from "../../../shared/data/spawns_mossfen.json";
 import { Monster } from "../rooms/schema";
 import { dist, faceTowards, planFrom, stepAlong } from "./movement";
 
@@ -14,7 +15,7 @@ export interface SpawnDef {
   count: number;
   respawnMs: number;
 }
-export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, hollow: hollowSpawnsJson };
+export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, mossfen: mossfenSpawnsJson, hollow: hollowSpawnsJson };
 
 type AIState = "idle" | "chase" | "return";
 

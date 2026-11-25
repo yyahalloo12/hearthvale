@@ -16,7 +16,7 @@ import numpy as np  # noqa: E402
 from kit import *  # noqa: E402,F403
 
 args = sys.argv[sys.argv.index("--") + 1:]
-OUT = args[0]
+OUT = os.path.abspath(args[0])
 rad = math.radians
 METAL = {1: 0xD88A4E, 2: 0xC3CCD6, 3: 0xA9C4F0}
 DARK = {1: 0x8A4F2C, 2: 0x6B7482, 3: 0x5B6AA8}
@@ -54,8 +54,8 @@ def log(bark, heart):
         ring("r", (0, 0, 0.625), 0.13, 0.02, B, p, outline=0)
 
 
-def hide():
-    F = toon("fur", 0x9A7A5C)
+def hide(fur=0x9A7A5C):
+    F = toon("fur", fur)
     I = toon("inside", 0xE0C4A0, dark=0.8)
     box("body", (0, 0, 0), (0.95, 0.12, 1.0), F, outline=0.05, bevel=0.12, rot=(rad(-16), 0, 0))
     for s in (-1, 1):
@@ -183,6 +183,8 @@ ICONS = {
     "wood_3": lambda: log(0x6A6474, 0xC9C3D2),
     "hide_1": hide,
     "crystal_1": crystal,
+    "wood_2": lambda: log(0x5F7A48, 0xD8C890),
+    "hide_2": lambda: hide(0x7F8A7A),
     "thread_3": thread,
     "pickaxe": pickaxe,
     "hatchet": hatchet,

@@ -11,7 +11,7 @@ import bpy  # noqa: E402
 from kit import *  # noqa: E402,F403
 
 args = sys.argv[sys.argv.index("--") + 1:]
-OUT = args[0]
+OUT = os.path.abspath(args[0])
 PREVIEW = "preview" in args
 W, H = 128, 144
 

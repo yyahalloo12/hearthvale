@@ -16,6 +16,8 @@ export enum Tile {
   Ash = 6,
   Pale = 7,
   Void = 8,
+  Moss = 9,
+  Fern = 10,
 }
 
 export enum Prop {
@@ -33,7 +35,17 @@ export enum Prop {
   Board = 11,
 }
 
-export type ZoneId = "brindle" | "hollow";
+export type ZoneId = "brindle" | "mossfen" | "hollow";
+
+/** A spot that leads to another map when you walk onto it. */
+export interface MapExit {
+  x: number;
+  y: number;
+  to: ZoneId;
+  /** where you arrive there */
+  at: { x: number; y: number };
+  label: string;
+}
 
 export interface GameMap {
   id: ZoneId;
@@ -47,6 +59,7 @@ export interface GameMap {
   spawn: { x: number; y: number };
   /** Monsters never chase anyone standing inside this circle (the village). */
   safe: { x: number; y: number; r: number };
+  exits: MapExit[];
 }
 
 /** Small deterministic random generator (mulberry32). */
@@ -144,7 +157,7 @@ export function buildBrindleVillage(): GameMap {
   props[5][24] = Prop.Portal;
 
   // Roads stay open to the map edge except the outermost tree ring.
-  return { id: "brindle", name: "Brindle Village", pvp: false, width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 } };
+  return { id: "brindle", name: "Brindle Village", pvp: false, width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 }, exits: [{ x: 44, y: 24, to: "mossfen", at: { x: 5, y: 44 }, label: "ป่ามอสเฟน (Lv 10+)" }] };
 }
 
 /** The "main" prop tile of a 2x2 house is its top-left tile. */

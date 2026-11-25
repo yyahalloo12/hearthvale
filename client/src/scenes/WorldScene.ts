@@ -1,10 +1,11 @@
 import { getStateCallbacks, Room } from "colyseus.js";
 import Phaser from "phaser";
 import { TILE_H } from "../../../shared/constants";
-import { buildHollow, GLOW_AT } from "../../../shared/hollow";
+import { GLOW_AT } from "../../../shared/hollow";
 import { findStation, ITEMS, resourceAt, STATION_RANGE, stationAt } from "../../../shared/items";
 import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
-import { buildBrindleVillage, GameMap, isHouseAnchor, isWalkable, Prop, ZoneId } from "../../../shared/map";
+import { GameMap, isHouseAnchor, isWalkable, Prop, ZoneId } from "../../../shared/map";
+import { buildZone, ZONE_NAMES } from "../../../shared/zones";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
 import { SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
@@ -60,11 +61,11 @@ export class WorldScene extends Phaser.Scene {
   create() {
     makeTextures(this);
     makeMonsterTextures(this);
-    this.map = this.zone === "hollow" ? buildHollow() : buildBrindleVillage();
+    this.map = buildZone(this.zone);
     this.drawMap();
 
     this.marker = this.add.image(0, 0, "click-marker").setVisible(false).setDepth(-1);
-    this.cameras.main.setBackgroundColor(this.map.pvp ? "#211d2a" : "#2c5a34");
+    this.cameras.main.setBackgroundColor(this.map.pvp ? "#211d2a" : this.zone === "mossfen" ? "#1f4a36" : "#2c5a34");
     setMinimap(this.map);
     this.cameras.main.setRoundPixels(true);
 
@@ -74,7 +75,7 @@ export class WorldScene extends Phaser.Scene {
       changeJob: () => this.room.send(Msg.ChangeJob),
       respawn: () => this.room.send(Msg.Respawn),
     });
-    setZone(this.map.pvp ? "Hollow" : "หมู่บ้านบรินเดิล", this.map.pvp);
+    setZone(ZONE_NAMES[this.zone], this.map.pvp);
     initPassiveTree({
       learn: (id) => this.room.send(Msg.LearnPassive, { id }),
       refund: (id) => this.room.send(Msg.RefundPassive, { id }),
@@ -114,10 +115,18 @@ export class WorldScene extends Phaser.Scene {
 
   private drawMap() {
     const { map } = this;
+    for (const e of map.exits) {
+      const p = toScreen(e.x, e.y);
+      this.scenery(p.x, p.y, "exit").setDepth(p.y - 1);
+      this.add
+        .text(p.x, p.y - 66, `ไป${e.label}`, { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: "#d8ffd0", stroke: "#000", strokeThickness: 3 })
+        .setOrigin(0.5, 1)
+        .setDepth(p.y + 1);
+    }
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const p = toScreen(x, y);
-        this.add.image(p.x, p.y, groundKey(map.tiles[y][x], x, y)).setDepth(-10000);
+        this.add.image(p.x, p.y, groundKey(map.tiles[y][x], x, y, map)).setDepth(-10000);
         const detail = groundDetail(map.tiles[y][x], x, y);
         if (detail) this.scenery(p.x, p.y, detail).setDepth(-9990);
         const prop = map.props[y][x];

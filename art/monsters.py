@@ -5,6 +5,7 @@ Frames: idle, walk 1-4, attack 1-2. Facing 0 looks at the camera, then clockwise
 """
 import math
 import os
+import random
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -13,7 +14,7 @@ import kit  # noqa: E402
 from kit import *  # noqa: E402,F403
 
 args = sys.argv[sys.argv.index("--") + 1:]
-OUT = args[0]
+OUT = os.path.abspath(args[0])
 PREVIEW = "preview" in args
 rad = math.radians
 
@@ -333,6 +334,201 @@ def threadknight():
     return r, pose
 
 
+# ---- moss wolf ------------------------------------------------------------------------------
+def wolf():
+    r = Rig()
+    FUR = toon("wolffur", 0x7F8A7A, dark=0.66)
+    PALE = toon("wolfpale", 0xD6DCC8, dark=0.76)
+    MOSS = toon("moss", 0x6BA84F, dark=0.7)
+    ball("chest", (0, -0.12, 0.5), (0.27, 0.32, 0.28), FUR, r.body)
+    ball("hips", (0, 0.34, 0.48), (0.22, 0.28, 0.23), FUR, r.body)
+    ball("bib", (0, -0.34, 0.46), (0.17, 0.14, 0.2), PALE, r.body, outline=0)
+    for x, y, z, s in ((0, -0.1, 0.76, 0.17), (-0.13, 0.12, 0.7, 0.13), (0.12, 0.3, 0.68, 0.12), (0, 0.5, 0.62, 0.11)):
+        ball("moss", (x, y, z), (s, s * 1.1, s * 0.6), MOSS, r.body, outline=0.022, seg=18)
+    cone("sprig", (0.05, -0.06, 0.92), 0.06, 0.0, 0.18, MOSS, r.body, outline=0.018, rot=(rad(10), rad(14), 0), bevel=0)
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            leg = r.part(f"leg{sx}{sy}", (0.15 * sx, 0.1 + 0.28 * sy, 0.36))
+            cone("leg", (0, 0, -0.16), 0.06, 0.085, 0.34, FUR, leg, outline=0.024)
+            ball("paw", (0, -0.03, -0.32), (0.08, 0.1, 0.055), PALE, leg, outline=0.02)
+    tail = r.part("tail", (0, 0.58, 0.54))
+    ball("tail", (0, 0.16, 0.1), (0.1, 0.26, 0.11), FUR, tail, rot=(rad(28), 0, 0))
+    ball("tip", (0, 0.36, 0.22), (0.07, 0.11, 0.07), MOSS, tail, outline=0.02)
+    head = r.part("head", (0, -0.4, 0.68))
+    ball("head", (0, -0.04, 0.06), (0.24, 0.23, 0.21), FUR, head)
+    ball("snout", (0, -0.27, -0.01), (0.11, 0.17, 0.095), PALE, head, outline=0.022)
+    ball("nose", (0, -0.43, 0.03), 0.045, flat("eye", 0x2B1A10), head, outline=0)
+    for s in (-1, 1):
+        cone("ear", (0.15 * s, 0.03, 0.29), 0.09, 0.0, 0.24, FUR, head, outline=0.024, rot=(0, rad(14 * s), 0), bevel=0)
+        ball("cheek", (0.2 * s, 0.02, -0.04), (0.09, 0.09, 0.1), PALE, head, outline=0.02)
+        ball("eye", (0.1 * s, -0.21, 0.1), (0.045, 0.03, 0.05), flat("wolfeye", 0xFFE14D), head, outline=0.01)
+        ball("pupil", (0.1 * s, -0.238, 0.1), (0.018, 0.012, 0.032), flat("eye", 0x2B1A10), head, outline=0)
+
+    def pose(kind, t):
+        s = math.sin(t * 2 * math.pi)
+        if kind == "walk":
+            for a in (-1, 1):
+                for b in (-1, 1):
+                    r.parts[f"leg{a}{b}"].rotation_euler.x = rad(36) * s * a * b
+            r.body.location.z = 0.05 * abs(s)
+            r.parts["tail"].rotation_euler.z = rad(14) * s
+        elif kind == "attack":
+            r.body.rotation_euler.x = rad(-16 if t < 0.5 else 14)
+            r.body.location.y = 0.08 if t < 0.5 else -0.22
+            r.parts["head"].rotation_euler.x = rad(-14 if t < 0.5 else 20)
+            for b in (-1, 1):
+                r.parts[f"leg{b}-1"].rotation_euler.x = rad(-30 if t < 0.5 else -62)
+
+    return r, pose
+
+
+# ---- lantern wisp ------------------------------------------------------------------------------
+def wisp():
+    r = Rig()
+    IRON = toon("lanterniron", 0x6B5A48)
+    GLASS = flat("lanternglass", 0xFFE9A0)
+    LEAF = toon("wispleaf", 0x6BA84F, dark=0.7)
+    BODY = toon("wispbody", 0xCFF0D0, dark=0.75)
+    ball("glow", (0, 0, 0.6), (0.25, 0.25, 0.29), GLASS, r.body, outline=0.02)
+    for i in range(6):
+        a = i * math.pi / 3 + 0.52
+        cone("bar", (0.27 * math.cos(a), 0.27 * math.sin(a), 0.6), 0.025, 0.025, 0.58, IRON, r.body, outline=0.016, bevel=0)
+    cone("base", (0, 0, 0.3), 0.26, 0.3, 0.09, IRON, r.body, outline=0.024)
+    cone("roof", (0, 0, 0.98), 0.36, 0.08, 0.26, IRON, r.body, outline=0.026)
+    ring("loop", (0, 0, 1.18), 0.09, 0.025, IRON, r.body, outline=0.014, rot=(rad(90), 0, 0))
+    for s in (-1, 1):
+        ball("eye", (0.09 * s, -0.235, 0.64), (0.04, 0.03, 0.07), flat("eye", 0x2B1A10), r.body, outline=0)
+        ball("blush", (0.16 * s, -0.21, 0.53), (0.045, 0.02, 0.025), flat("blush", 0xFF9C8C), r.body, outline=0)
+        w = r.part(f"wing{s}", (0.24 * s, 0.12, 0.72))
+        ball("wing", (0.24 * s, 0.06, 0.1), (0.26, 0.04, 0.15), LEAF, w, outline=0.022, rot=(0, rad(-28 * s), 0))
+        arm = r.part(f"arm{s}", (0.28 * s, -0.04, 0.46))
+        ball("hand", (0.1 * s, -0.1, -0.06), 0.075, BODY, arm, outline=0.022)
+    for i in range(5):
+        ball("trail", (0.05 * math.sin(i * 1.7), 0.04 * i, 0.22 - 0.06 * i), 0.11 - 0.018 * i, BODY, r.body, outline=0.02, seg=16)
+
+    def pose(kind, t):
+        s = math.sin(t * 2 * math.pi)
+        r.body.location.z = 0.16 + 0.05 * s
+        for q in (-1, 1):
+            r.parts[f"wing{q}"].rotation_euler.y = rad(22 * q) * s
+        if kind == "walk":
+            r.body.rotation_euler.x = rad(10)
+        elif kind == "attack":
+            r.body.rotation_euler.x = rad(-18 if t < 0.5 else 26)
+            for q in (-1, 1):
+                r.parts[f"arm{q}"].rotation_euler.x = rad(-100 if t < 0.5 else -30)
+
+    return r, pose
+
+
+# ---- honey bear ----------------------------------------------------------------------------------
+def bear():
+    r = Rig()
+    FUR = toon("bearfur", 0xA8703C, dark=0.66)
+    PALE = toon("bearpale", 0xE8C48A, dark=0.76)
+    HONEY = toon("honey", 0xFFB52E, dark=0.75, light=1.2)
+    ball("body", (0, 0, 0.62), (0.5, 0.46, 0.52), FUR, r.body)
+    ball("tummy", (0, -0.2, 0.56), (0.34, 0.3, 0.38), PALE, r.body, outline=0)
+    for s in (-1, 1):
+        leg = r.part(f"leg{s}", (0.25 * s, -0.02, 0.28))
+        cone("leg", (0, 0, -0.1), 0.18, 0.2, 0.3, FUR, leg)
+        ball("foot", (0, -0.12, -0.2), (0.19, 0.22, 0.1), FUR, leg)
+        ball("pad", (0, -0.32, -0.19), (0.09, 0.03, 0.06), PALE, leg, outline=0)
+        arm = r.part(f"arm{s}", (0.44 * s, -0.04, 0.84))
+        ball("arm", (0.1 * s, -0.06, -0.2), (0.15, 0.16, 0.28), FUR, arm, rot=(rad(-14), rad(-16 * s), 0))
+        ball("paw", (0.16 * s, -0.16, -0.42), (0.15, 0.15, 0.13), FUR, arm)
+    # honey pot under the left arm and drips on the belly
+    jar = pivot("jar", (0.2, -0.26, -0.34), r.parts["arm1"])
+    ball("pot", (0, 0, 0), (0.17, 0.17, 0.17), toon("pot", 0xC97B4A), jar, outline=0.024)
+    cone("rim", (0, 0, 0.15), 0.15, 0.15, 0.06, toon("pot", 0xC97B4A), jar, outline=0.02)
+    ball("top", (0, 0, 0.17), (0.13, 0.13, 0.05), HONEY, jar, outline=0.016)
+    for x, z, h in ((-0.12, 0.6, 0.1), (0.02, 0.52, 0.13), (0.13, 0.62, 0.08)):
+        ball("drip", (x, -0.49, z), (0.05, 0.03, h), HONEY, r.body, outline=0.014, seg=16)
+    head = r.part("head", (0, -0.06, 1.06))
+    ball("head", (0, -0.02, 0.16), (0.36, 0.33, 0.31), FUR, head)
+    ball("muzzle", (0, -0.31, 0.07), (0.17, 0.13, 0.13), PALE, head, outline=0.022)
+    ball("nose", (0, -0.43, 0.12), (0.07, 0.045, 0.05), flat("eye", 0x2B1A10), head, outline=0)
+    ball("smear", (0.08, -0.42, 0.01), (0.07, 0.03, 0.04), HONEY, head, outline=0.01, seg=14)
+    for s in (-1, 1):
+        ball("ear", (0.27 * s, 0.02, 0.42), (0.12, 0.07, 0.12), FUR, head)
+        ball("earin", (0.27 * s, -0.04, 0.42), (0.07, 0.03, 0.07), PALE, head, outline=0)
+    eyes(head, 0.15, -0.29, 0.22, 0.055)
+
+    def pose(kind, t):
+        s = math.sin(t * 2 * math.pi)
+        if kind == "walk":
+            r.parts["leg1"].rotation_euler.x = rad(28) * s
+            r.parts["leg-1"].rotation_euler.x = -rad(28) * s
+            r.body.rotation_euler.y = rad(6) * s
+            r.body.location.z = 0.03 * abs(s)
+        elif kind == "attack":
+            r.parts["arm-1"].rotation_euler.x = rad(-150 if t < 0.5 else -40)
+            r.body.rotation_euler.x = rad(-8 if t < 0.5 else 18)
+            r.body.rotation_euler.z = rad(-12 if t < 0.5 else 22)
+
+    return r, pose
+
+
+# ---- the old sleeping tree (boss) ------------------------------------------------------------------
+def treant():
+    r = Rig()
+    BARK = toon("oldbark", 0x7A5638, dark=0.62)
+    LEAF = toon("oldleaf", 0x5FA04A, dark=0.68)
+    LEAF2 = toon("oldleaf2", 0x86C264, dark=0.75)
+    MOSS = toon("moss", 0x6BA84F, dark=0.7)
+    cone("trunk", (0, 0, 0.72), 0.52, 0.4, 1.3, BARK, r.body)
+    for s in (-1, 1):
+        leg = r.part(f"leg{s}", (0.28 * s, 0, 0.3))
+        cone("root", (0.05 * s, -0.03, -0.12), 0.26, 0.2, 0.42, BARK, leg)
+        for a in (-40, 0, 40):
+            ball("toe", (0.05 * s + 0.2 * math.sin(rad(a)), -0.2 * math.cos(rad(a)) - 0.03, -0.26), (0.1, 0.14, 0.07), BARK, leg, outline=0.024, rot=(0, 0, rad(a)))
+        arm = r.part(f"arm{s}", (0.42 * s, 0, 1.08))
+        cone("arm", (0.22 * s, -0.04, -0.1), 0.1, 0.15, 0.6, BARK, arm, rot=(0, rad(-56 * s), 0))
+        cone("fore", (0.46 * s, -0.14, -0.38), 0.15, 0.11, 0.5, BARK, arm, rot=(rad(-18), rad(-14 * s), 0))
+        for a in (-30, 0, 30):
+            cone("finger", (0.5 * s + 0.1 * math.sin(rad(a)), -0.24, -0.68), 0.055, 0.015, 0.26, BARK, arm, outline=0.022, rot=(rad(180 - 14), rad(a), 0), bevel=0)
+        ball("tuft", (0.4 * s, 0.02, 0.06), (0.17, 0.15, 0.11), MOSS, arm, outline=0.024)
+    dark = flat("hollowface", 0x2A1A10)
+    for s in (-1, 1):  # sleepy half-closed eyes
+        ball("socket", (0.17 * s, -0.4, 1.0), (0.12, 0.05, 0.1), dark, r.body, outline=0)
+        ball("eye", (0.17 * s, -0.435, 0.97), (0.06, 0.03, 0.05), flat("treeeye", 0xFFD76A), r.body, outline=0)
+        box("lid", (0.17 * s, -0.44, 1.05), (0.28, 0.09, 0.1), BARK, r.body, outline=0.02, rot=(0, rad(12 * s), 0), bevel=0.03)
+    cone("nose", (0, -0.5, 0.86), 0.08, 0.04, 0.26, BARK, r.body, outline=0.022, rot=(rad(64), 0, 0))
+    ball("mouth", (0, -0.45, 0.62), (0.17, 0.05, 0.07), dark, r.body, outline=0)
+    for i in range(7):
+        x = -0.27 + 0.09 * i
+        cone("beard", (x, -0.44 + abs(x) * 0.3, 0.46), 0.06, 0.0, 0.34 - abs(x) * 0.5, MOSS, r.body, outline=0.02, rot=(rad(180), 0, 0), bevel=0)
+    ball("crown", (0, 0, 1.72), (0.78, 0.74, 0.5), LEAF, r.body, outline=0.035)
+    rnd = random.Random(5)
+    for i in range(9):
+        a = i * 2 * math.pi / 9
+        sz = 0.3 + rnd.random() * 0.07
+        ball("blob", (0.6 * math.cos(a), 0.58 * math.sin(a), 1.56 + rnd.random() * 0.2), sz, LEAF, r.body, outline=0.03, seg=20)
+    for x, y, z, sz in ((-0.2, -0.3, 2.06, 0.3), (0.26, -0.2, 2.0, 0.28), (0, 0.1, 2.2, 0.28), (-0.5, -0.36, 1.76, 0.2)):
+        ball("light", (x, y, z), sz, LEAF2, r.body, outline=0.026, seg=20)
+    for x, y, z in ((0.4, -0.52, 1.6), (-0.1, -0.68, 1.62), (-0.6, -0.2, 1.5)):
+        ball("flower", (x, y, z), 0.085, toon("treeflower", 0xFFB8D8, dark=0.82), r.body, outline=0.02, seg=14)
+    # a bird's nest on top
+    ring("nest", (0.16, -0.1, 2.36), 0.15, 0.06, toon("straw", 0xE8C86A), r.body, outline=0.02)
+    for x in (0.1, 0.22):
+        ball("egg", (x, -0.12, 2.4), (0.055, 0.055, 0.07), toon("egg", 0xD6ECFF, dark=0.85), r.body, outline=0.014, seg=14)
+
+    def pose(kind, t):
+        s = math.sin(t * 2 * math.pi)
+        if kind == "walk":
+            r.parts["leg1"].rotation_euler.x = rad(20) * s
+            r.parts["leg-1"].rotation_euler.x = -rad(20) * s
+            r.body.rotation_euler.y = rad(5) * s
+            for q in (-1, 1):
+                r.parts[f"arm{q}"].rotation_euler.x = rad(12) * s * q
+        elif kind == "attack":
+            for q in (-1, 1):
+                r.parts[f"arm{q}"].rotation_euler.x = rad(-130 if t < 0.5 else -24)
+            r.body.rotation_euler.x = rad(-8 if t < 0.5 else 16)
+
+    return r, pose
+
+
 # name: (builder, frame width, frame height, world height shown, camera look height)
 MONSTERS = {
     "hen": (lambda: hen(), 120, 96, 1.75, 0.5),
@@ -341,6 +537,10 @@ MONSTERS = {
     "henqueen": (lambda: hen(0xFFE2B8, 0xFF2A00, True), 224, 192, 2.1, 0.6),
     "shadow": (lambda: shadow(), 96, 120, 2.05, 0.64),
     "hunter": (lambda: hunter(), 144, 168, 3.0, 0.92),
+    "wolf": (lambda: wolf(), 136, 112, 1.95, 0.48),
+    "wisp": (lambda: wisp(), 112, 112, 2.0, 0.66),
+    "bear": (lambda: bear(), 152, 152, 2.35, 0.74),
+    "treant": (lambda: treant(), 296, 296, 3.7, 1.2),
     "threadknight": (lambda: threadknight(), 176, 184, 2.95, 0.9),
 }
 FRAMES = [("idle", 0)] + [("walk", i / 4) for i in range(4)] + [("attack", 0.0), ("attack", 0.75)]

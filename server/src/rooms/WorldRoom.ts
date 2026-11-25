@@ -12,7 +12,6 @@ import {
   WALK_SPEED,
 } from "../../../shared/constants";
 import {
-  buildHollow,
   BUNDLE_MS,
   CORRUPTION_PER_MIN,
   corruptionBonus,
@@ -70,7 +69,8 @@ import {
   StallItem,
   wholeNumber,
 } from "../../../shared/market";
-import { buildBrindleVillage, GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
+import { GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
+import { buildZone, ZONE_NAMES, zoneId } from "../../../shared/zones";
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
@@ -181,7 +181,7 @@ export class WorldRoom extends Room<WorldState> {
   private depletedUntil = new Map<string, number>();
 
   async onCreate(options: { zone?: ZoneId }) {
-    this.map = options?.zone === "hollow" ? buildHollow() : buildBrindleVillage();
+    this.map = buildZone(zoneId(options?.zone));
     this.setState(new WorldState());
     this.state.mapName = this.map.name;
     this.autoDispose = false; // the world stays alive (monsters keep living) with nobody online
@@ -279,7 +279,7 @@ export class WorldRoom extends Room<WorldState> {
       character = await login(name, password);
       if (!character) throw new ServerError(401, "ชื่อหรือรหัสผ่านไม่ถูกต้อง (ยังไม่มีตัวละคร? กด \"สร้างตัวละครใหม่\")");
     }
-    const zone = character.zone === "hollow" ? "hollow" : "brindle";
+    const zone = zoneId(character.zone);
     if (zone !== this.map.id) throw new ServerError(421, ZONE_ERROR + zone);
     // Logged out in the Hollow a moment ago? Then step back into the body that is still there.
     for (const [sid, c] of this.ctl)
@@ -294,9 +294,9 @@ export class WorldRoom extends Room<WorldState> {
     if (!lock) throw new ServerError(409, "ตัวละครนี้ออนไลน์อยู่แล้ว");
     // read again now that nobody else can change it
     const fresh = await loadCharacter(character.account_id);
-    if (!fresh || (fresh.zone === "hollow" ? "hollow" : "brindle") !== this.map.id) {
+    if (!fresh || zoneId(fresh.zone) !== this.map.id) {
       freeLock(character.account_id, lock);
-      throw new ServerError(421, ZONE_ERROR + (fresh?.zone ?? "brindle"));
+      throw new ServerError(421, ZONE_ERROR + zoneId(fresh?.zone));
     }
     return { character: fresh, lock };
   }
@@ -385,7 +385,7 @@ export class WorldRoom extends Room<WorldState> {
     p.gm = c.admin === 1;
     p.shielded = this.map.pvp;
     p.corruption = this.map.pvp ? Math.floor(Math.max(0, Math.min(100, c.corruption))) : 0;
-    this.broadcastSystem(this.map.pvp ? `มีใครบางคนก้าวเข้ามาใน Hollow` : `${p.name} เดินทางมาถึงหมู่บ้านบรินเดิล`);
+    this.broadcastSystem(this.map.pvp ? `มีใครบางคนก้าวเข้ามาใน Hollow` : `${p.name} เดินทางมาถึง${ZONE_NAMES[this.map.id]}`);
     for (const s of this.stalls.values())
       if (s.account_id === c.account_id) {
         // back behind our own stall
@@ -1771,6 +1771,13 @@ export class WorldRoom extends Room<WorldState> {
       } else {
         stepAlong(p, c.path, speed, dt);
         if (c.interact && !c.path.length) this.tickInteract(id, p, c, now);
+      }
+
+      const exit = this.map.exits.find((e) => dist(e, p) < 0.7);
+      const walker = exit && this.clientOf(id);
+      if (exit && walker) {
+        this.travel(walker, p, c, exit.to, exit.at);
+        return;
       }
 
       // Regeneration: fast out of combat, a trickle in combat (none with the bloodthirst keystone).

@@ -4,6 +4,7 @@ import { CHAT_MAX, PASSWORD_MIN, TUNIC_COLORS } from "../../shared/constants";
 import { cleanName } from "../../shared/names";
 import { JoinOptions, Msg, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../shared/protocol";
 import type { ZoneId } from "../../shared/map";
+import { zoneId } from "../../shared/zones";
 import { addChatLine } from "./chat";
 import { client } from "./net";
 import { WorldScene } from "./scenes/WorldScene";
@@ -65,8 +66,8 @@ async function enterWorld(create: boolean) {
     } catch (ex: any) {
       // the character is in another map: go there
       const at = String(ex?.message ?? "").split(ZONE_ERROR)[1];
-      if (at !== "hollow") throw ex;
-      zone = at;
+      if (!at) throw ex;
+      zone = zoneId(at);
       room = await client.joinOrCreate(ROOM_OF[zone], opts);
     }
     try {

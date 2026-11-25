@@ -15,6 +15,8 @@ const COLORS: Record<number, string> = {
   [Tile.Ash]: "#75707e",
   [Tile.Pale]: "#858090",
   [Tile.Void]: "#1a1722",
+  [Tile.Moss]: "#5c9a4c",
+  [Tile.Fern]: "#68a855",
 };
 
 let base: HTMLCanvasElement | null = null;
@@ -30,7 +32,7 @@ export function setMinimap(map: GameMap) {
     for (let x = 0; x < map.width; x++) {
       const prop = map.props[y][x];
       g.fillStyle = COLORS[map.tiles[y][x]] ?? "#000";
-      if (prop === Prop.Tree) g.fillStyle = map.id === "hollow" ? "#4b4654" : "#2f8a3e";
+      if (prop === Prop.Tree) g.fillStyle = map.id === "hollow" ? "#4b4654" : map.id === "mossfen" ? "#2c6a46" : "#2f8a3e";
       else if (prop === Prop.House) g.fillStyle = "#c8453a";
       else if (prop === Prop.Ruin) g.fillStyle = "#38333f";
       else if (prop === Prop.Anvil || prop === Prop.Chest || prop === Prop.Board) g.fillStyle = "#6b4226";
@@ -71,6 +73,7 @@ export function drawMinimap(state: any, myId: string) {
     g.arc(p.x, p.y, r / k, 0, Math.PI * 2);
     g.fill();
   };
+  for (const e of current.exits) dot(e, "#b8f0b0", 4);
   state.gates?.forEach((p: Dot) => dot(p, "#ffd23a", 5));
   state.players?.forEach((p: any, id: string) => {
     if (id !== myId && p.corruption >= GLOW_AT && !p.dead) dot(p, "#ff5a5a", 4);

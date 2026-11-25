@@ -329,12 +329,14 @@ const COPPER: Resource = { name: "หินแร่ทองแดง", item: "
 const IRON: Resource = { name: "หินแร่เหล็ก", item: "ore_2", tool: "pickaxe", qty: [1, 2], respawnMs: 60_000 };
 const MIST: Resource = { name: "หินแร่หมอก", item: "ore_3", tool: "pickaxe", qty: [1, 3], respawnMs: 90_000 };
 const PALEWOOD: Resource = { name: "ต้นไม้ไร้สี", item: "wood_3", tool: "hatchet", qty: [1, 2], respawnMs: 90_000 };
+const MOSSWOOD: Resource = { name: "ต้นมอส", item: "wood_2", tool: "hatchet", qty: [1, 3], respawnMs: 60_000 };
 const OAK: Resource = { name: "ต้นโอ๊ก", item: "wood_1", tool: "hatchet", qty: [1, 3], respawnMs: 45_000 };
 
 /** What can be gathered on this tile, if anything. Iron lies in the south, with the scarecrows. */
 export function resourceAt(map: GameMap, x: number, y: number): Resource | null {
   const prop = map.props[y]?.[x];
   if (map.id === "hollow") return prop === Prop.Tree ? PALEWOOD : prop === Prop.Rock ? MIST : null;
+  if (map.id === "mossfen") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? IRON : null;
   if (prop === Prop.Tree) return OAK;
   if (prop === Prop.Rock) return y >= 30 ? IRON : COPPER;
   return null;

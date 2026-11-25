@@ -48,6 +48,10 @@ export const MONSTER_SHEETS: Record<string, MonsterSheet> = {
   henqueen: mon(224, 192, 2.1, 0.6, 0.75, 84, 38),
   shadow: mon(96, 120, 2.05, 0.64, 0.78, 54, 24),
   hunter: mon(144, 168, 3.0, 0.92, 0.82, 80, 28),
+  wolf: mon(136, 112, 1.95, 0.48, 0.8, 46, 26),
+  wisp: mon(112, 112, 2.0, 0.66, 0.78, 58, 24),
+  bear: mon(152, 152, 2.35, 0.74, 0.8, 66, 32),
+  treant: mon(296, 296, 3.7, 1.2, 0.82, 150, 56),
   threadknight: mon(176, 184, 2.95, 0.9, 0.76, 78, 32),
 };
 

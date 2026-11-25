@@ -17,7 +17,7 @@ import numpy as np  # noqa: E402
 from kit import *  # noqa: E402,F403
 
 args = sys.argv[sys.argv.index("--") + 1:]
-OUT = args[0]
+OUT = os.path.abspath(args[0])
 only = args[1:]
 rad = math.radians
 
@@ -159,6 +159,66 @@ def oak(variant):
         for i in range(6):
             a = rad(-150 + i * 24)
             ball("apple", (0.66 * math.cos(a), 0.66 * math.sin(a), 1.0 + 0.3 * rnd.random()), 0.07, toon("apple", 0xE8483C if variant == 0 else 0xFFC23A, dark=0.75), outline=0.018, seg=14)
+
+
+def mosstree(variant):
+    """Old forest trees: thick leaning trunks, layered crowns, hanging moss."""
+    leaf = (0x3F8A58, 0x4F9650, 0x2F7A62)[variant]
+    L1 = toon(f"mleaf{variant}", leaf, dark=0.66)
+    L2 = toon(f"mleafl{variant}", tuple(min(1, c * 1.4 + 0.02) for c in srgb(leaf)), dark=0.75)
+    BARK = toon("mbark", 0x6A4B34)
+    MOSS = toon("hangmoss", 0x8CBF5A, dark=0.75)
+    rnd = random.Random(variant + 31)
+    cone("trunk", (0, 0, 0.6), 0.27, 0.16, 1.2, BARK)
+    for i in range(6):
+        a = i * math.pi / 3 + variant
+        ball("root", (0.24 * math.cos(a), 0.24 * math.sin(a), 0.06), (0.16, 0.16, 0.1), BARK, outline=0.024, seg=16)
+    ball("mosspatch", (-0.12, -0.2, 0.34), (0.14, 0.1, 0.2), MOSS, outline=0.02, seg=16)
+    for lvl, (z, r) in enumerate(((1.15, 0.62), (1.55, 0.5), (1.9, 0.34))):
+        ball("crown", (0, 0, z), (r, r, 0.3), L1 if lvl < 2 else L2, outline=0.032)
+        n = 7 - lvl
+        for i in range(n):
+            a = i * 2 * math.pi / n + variant + lvl
+            s = (0.24 - 0.03 * lvl) + rnd.random() * 0.05
+            ball("blob", (r * 0.86 * math.cos(a), r * 0.86 * math.sin(a), z - 0.02), (s, s, s * 0.8), L1 if lvl < 2 else L2, outline=0.026, seg=18)
+    for i in range(7):
+        a = rad(-165 + i * 25)
+        ln = 0.18 + rnd.random() * 0.2
+        cone("moss", (0.66 * math.cos(a), 0.66 * math.sin(a), 0.98 - ln / 2), 0.05, 0.0, ln, MOSS, outline=0.016, rot=(rad(180), 0, 0), bevel=0)
+
+
+def shroom(variant):
+    CAP = toon(f"cap{variant}", (0xE05A4A, 0x6F8FE0)[variant], dark=0.7)
+    STEM = toon("stem", 0xF2E6CC, dark=0.78)
+    SPOT = toon("spot", 0xFFFFFF, dark=0.85)
+    for x, y, h, s in ((0, 0, 0.42, 1.0), (-0.3, -0.12, 0.24, 0.6), (0.28, -0.06, 0.3, 0.7)):
+        cone("stem", (x, y, h / 2), 0.1 * s, 0.075 * s, h, STEM, outline=0.022)
+        ball("cap", (x, y, h), (0.3 * s, 0.3 * s, 0.2 * s), CAP, outline=0.028)
+        for k in range(4):
+            a = k * math.pi / 2 + x * 9 - 0.6
+            ball("spot", (x + 0.19 * s * math.cos(a), y + 0.19 * s * math.sin(a), h + 0.14 * s), (0.055 * s, 0.055 * s, 0.03 * s), SPOT, outline=0, seg=12)
+    for x, y in ((-0.14, -0.3), (0.16, -0.3)):
+        cone("blade", (x, y, 0.08), 0.03, 0.0, 0.18, toon("grassb", 0x97DC72, dark=0.85), outline=0.012, bevel=0, seg=8)
+
+
+def exit_arch():
+    WOOD = toon("wood", 0x8A5A32)
+    VINE = toon("vine", 0x5FB35A, dark=0.72)
+    for s in (-1, 1):
+        cone("post", (0.6 * s, 0, 0.75), 0.11, 0.09, 1.5, WOOD)
+        ball("base", (0.6 * s, 0, 0.06), (0.19, 0.19, 0.12), toon("stone", 0xA8A198), outline=0.024, seg=18)
+    cone("beam", (0, 0, 1.46), 0.09, 0.09, 1.6, WOOD, rot=(0, rad(90), 0))
+    box("sign", (0, -0.08, 1.2), (0.78, 0.07, 0.3), WOOD, bevel=0.03)
+    cone("arrow", (0.46, -0.08, 1.2), 0.2, 0.0, 0.2, WOOD, rot=(0, rad(90), 0), scale=(0.35, 1, 1), seg=4, bevel=0)
+    for i in range(3):
+        box("line", (-0.04, -0.125, 1.28 - 0.08 * i), (0.5 - 0.1 * i, 0.01, 0.025), toon("woodd", 0x6B4226), outline=0, bevel=0)
+    for i in range(9):
+        a = rad(i * 22.5)
+        ball("vine", (0.66 * math.cos(a) * (1 if i % 2 else 0.97), -0.02, 1.46 + 0.1 * math.sin(a * 2)), 0.085, VINE, outline=0.02, seg=14)
+    for x, z in ((-0.6, 1.0), (0.6, 0.7), (-0.6, 0.5), (0.6, 1.15)):
+        ball("leafy", (x, -0.1, z), 0.09, VINE, outline=0.02, seg=14)
+    for x, z, c in ((-0.3, 1.6, 0xFF6FA8), (0.1, 1.62, 0xFFE14D), (0.42, 1.56, 0xFFFFFF)):
+        ball("bloom", (x, -0.08, z), 0.06, toon(f"bloom{c}", c, dark=0.82), outline=0.016, seg=12)
 
 
 def deadtree(variant):
@@ -373,6 +433,22 @@ def flowers(seed):
         ball("heart", (x, y, 0.145), (0.03, 0.03, 0.022), toon("heart", 0xF2B82E), g, outline=0, seg=10)
 
 
+def fern(seed):
+    g = tile_space()
+    for i, (x, y, rnd) in enumerate(spots(seed, 3, 0.32)):
+        for k in range(6):
+            a = k * math.pi / 3 + rnd.random()
+            cone("frond", (x + 0.07 * math.cos(a), y + 0.07 * math.sin(a), 0.07), 0.035, 0.0, 0.22, toon("fern", 0x4E9A50, dark=0.78), g, outline=0.008, rot=(rad(-52) * math.sin(a), rad(52) * math.cos(a), 0), scale=(1, 0.4, 1), bevel=0, seg=8)
+
+
+def tinyshrooms(seed):
+    g = tile_space()
+    for i, (x, y, rnd) in enumerate(spots(seed, 4, 0.34)):
+        c = (0xFFB0A0, 0xFFE9A0, 0xA8C8FF)[i % 3]
+        cone("s", (x, y, 0.05), 0.02, 0.016, 0.1, toon("stem", 0xF2E6CC, dark=0.8), g, outline=0.006, bevel=0, seg=10)
+        ball("c", (x, y, 0.11), (0.06, 0.06, 0.04), toon(f"tc{c}", c, dark=0.8), g, outline=0.012, seg=14)
+
+
 def pebbles(seed, color):
     g = tile_space()
     for i, (x, y, rnd) in enumerate(spots(seed, 5, 0.38)):
@@ -443,6 +519,16 @@ ITEMS = {
     "tree2": lambda: oak(2),
     "dead0": lambda: deadtree(0),
     "dead1": lambda: deadtree(1),
+    "moss0": lambda: mosstree(0),
+    "moss1": lambda: mosstree(1),
+    "moss2": lambda: mosstree(2),
+    "shroom0": lambda: shroom(0),
+    "shroom1": lambda: shroom(1),
+    "exit": exit_arch,
+    "g-fern0": lambda: fern(21),
+    "g-fern1": lambda: fern(22),
+    "g-shroom0": lambda: tinyshrooms(23),
+    "g-shroom1": lambda: tinyshrooms(24),
     "bush0": lambda: bush(0xFFFFFF),
     "bush1": lambda: bush(0xE8483C),
     "rock-ore_1": lambda: rock(0x9A948C, 0xE8894A, 1),

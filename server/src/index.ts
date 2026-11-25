@@ -6,6 +6,7 @@ import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOM_OF } from "../../shared/protocol";
+import { ZONE_IDS } from "../../shared/zones";
 import { WorldRoom } from "./rooms/WorldRoom";
 
 // Node prints "SQLite is an experimental feature" once; it works fine, so hide just that note.
@@ -29,8 +30,7 @@ if (existsSync(clientDist)) app.use(express.static(clientDist));
 
 const httpServer = http.createServer(app);
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) });
-gameServer.define(ROOM_OF.brindle, WorldRoom, { zone: "brindle" });
-gameServer.define(ROOM_OF.hollow, WorldRoom, { zone: "hollow" });
+for (const zone of ZONE_IDS) gameServer.define(ROOM_OF[zone], WorldRoom, { zone });
 
 gameServer.listen(PORT).then(() => {
   console.log(`Tales of Hearthvale server on http://localhost:${PORT}`);

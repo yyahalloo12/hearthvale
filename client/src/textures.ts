@@ -65,6 +65,15 @@ export function makeTextures(scene: Phaser.Scene) {
   // The Hollow: grey, washed-out ground and torn holes.
   tile(scene, "t-ash", 0x75707e, (g) => speckle(g, 0x827c8c, 9, 17));
   tile(scene, "t-pale", 0x625d6c);
+  // Mossfen: deep green, with lighter ferny patches.
+  tile(scene, "t-moss-0", 0x5f9f4f, (g) => speckle(g, 0x6cae5a, 9, 7));
+  tile(scene, "t-moss-1", 0x5b9a4c, (g) => speckle(g, 0x4e8a42, 8, 19));
+  tile(scene, "t-fern", 0x68aa56, (g) => speckle(g, 0x7aba66, 10, 41));
+  tile(scene, "t-trail", 0xb59a70, (g) => speckle(g, 0xa08860, 10, 5));
+  tile(scene, "t-pool", 0x3f8f9a, (g) => {
+    g.fillStyle(0x86c9c4, 0.7);
+    g.fillRoundedRect(HW - 10, HH - 3, 11, 2, 1);
+  });
   tile(scene, "t-void", 0x1a1722, (g) => speckle(g, 0x6a4a9a, 5, 31, 0.8));
 
   make(scene, "c-shadow", 32, 12, (g) => {
@@ -86,8 +95,17 @@ export function hash(x: number, y: number, salt = 0): number {
 }
 const pick = (x: number, y: number, n: number, salt: number) => Math.floor(hash(x, y, salt) * n);
 
-export function groundKey(t: Tile, x: number, y: number): string {
+export function groundKey(t: Tile, x: number, y: number, map?: GameMap): string {
+  if (map?.id === "mossfen") {
+    if (t === Tile.Path) return "t-trail";
+    if (t === Tile.Water) return "t-pool";
+    if (t === Tile.Flowers) return "t-fern";
+  }
   switch (t) {
+    case Tile.Moss:
+      return `t-moss-${pick(x, y, 2, 1)}`;
+    case Tile.Fern:
+      return "t-fern";
     case Tile.Path:
       return "t-path";
     case Tile.Plaza:
@@ -123,6 +141,10 @@ export function groundDetail(t: Tile, x: number, y: number): string | null {
       return r < 0.07 ? "g-lily" : null;
     case Tile.Sand:
       return r < 0.14 ? "g-shell" : null;
+    case Tile.Moss:
+      return r < 0.1 ? `g-shroom${pick(x, y, 2, 3)}` : r < 0.3 ? `g-tuft${pick(x, y, 3, 3)}` : null;
+    case Tile.Fern:
+      return r < 0.6 ? `g-fern${pick(x, y, 2, 3)}` : null;
     case Tile.Ash:
       return r < 0.12 ? `g-crack${pick(x, y, 2, 3)}` : null;
     case Tile.Pale:
@@ -136,11 +158,11 @@ export function groundDetail(t: Tile, x: number, y: number): string | null {
 export function propFrame(map: GameMap, x: number, y: number, rockItem?: string): string | null {
   switch (map.props[y][x]) {
     case Prop.Tree:
-      return map.pvp ? `dead${pick(x, y, 2, 4)}` : `tree${pick(x, y, 3, 4)}`;
+      return map.pvp ? `dead${pick(x, y, 2, 4)}` : map.id === "mossfen" ? `moss${pick(x, y, 3, 4)}` : `tree${pick(x, y, 3, 4)}`;
     case Prop.Rock:
       return `rock-${rockItem ?? "ore_1"}`;
     case Prop.Bush:
-      return `bush${pick(x, y, 2, 4)}`;
+      return `${map.id === "mossfen" ? "shroom" : "bush"}${pick(x, y, 2, 4)}`;
     case Prop.Ruin:
       return `ruin${pick(x, y, 2, 4)}`;
     case Prop.Well:

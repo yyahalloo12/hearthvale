@@ -2,6 +2,8 @@
   "ore_1": {"name": "แร่ทองแดง", "kind": "material", "tier": 1, "icon": "🪨", "price": 1},
   "ore_2": {"name": "แร่เหล็ก", "kind": "material", "tier": 2, "icon": "⛰️", "price": 2},
   "wood_1": {"name": "ไม้โอ๊ก", "kind": "material", "tier": 1, "icon": "🪵", "price": 1},
+  "wood_2": {"name": "ไม้มอส", "kind": "material", "tier": 2, "icon": "🪵", "price": 2, "desc": "ตัดได้ในป่ามอสเฟน"},
+  "hide_2": {"name": "หนังหมาป่า", "kind": "material", "tier": 2, "icon": "🟫", "price": 4, "desc": "จากหมาป่าและหมีในป่ามอสเฟน"},
   "ore_3": {"name": "แร่หมอก", "kind": "material", "tier": 3, "icon": "🌫️", "price": 8, "desc": "มีเฉพาะใน Hollow"},
   "wood_3": {"name": "ไม้ไร้สี", "kind": "material", "tier": 3, "icon": "🦴", "price": 8, "desc": "มีเฉพาะใน Hollow"},
   "thread_3": {"name": "ด้ายชะตาขาด", "kind": "material", "tier": 3, "icon": "🧵", "price": 15, "desc": "ดรอปจากมอนสเตอร์ใน Hollow"},

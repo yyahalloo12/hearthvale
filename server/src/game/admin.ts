@@ -41,7 +41,7 @@ export const ADMIN_HELP = [
   "/level 20 · /exp 500 · /gold 1000 · /job squire · /smith 100 · /resettree",
   "/give ore_1 50 · /give sword_2 1 3 (เลขท้าย = คุณภาพ 0-3) · /items ค้นรหัสไอเทม",
   "/heal · /god (อมตะ) · /speed 3 · /kill @ชื่อ",
-  "/tp 24 24 · /goto @ชื่อ · /bring @ชื่อ · /hollow · /village",
+  "/tp 24 24 · /goto @ชื่อ · /bring @ชื่อ · /village · /forest · /hollow",
   "/spawn hen 3 · /monsters · /clear 10 (ลบมอนสเตอร์ในรัศมี)",
   "/gates (ย้ายประตู Hollow) · /corrupt 60 · /say ข้อความ · /who · /kick @ชื่อ",
 ];
@@ -164,8 +164,9 @@ export function runAdminCommand(host: AdminHost, me: string, text: string): stri
       return [host.teleport(id, Math.round(p.x), Math.round(p.y)) ? `พา ${who} มาแล้ว` : "พามาไม่ได้"];
     }
     case "hollow":
+    case "forest":
     case "village":
-      return host.goZone(id, cmd === "hollow" ? "hollow" : "brindle") ? [] : [`${who} อยู่ที่นั่นแล้ว หรือล้มอยู่`];
+      return host.goZone(id, cmd === "hollow" ? "hollow" : cmd === "forest" ? "mossfen" : "brindle") ? [] : [`${who} อยู่ที่นั่นแล้ว หรือล้มอยู่`];
     case "spawn": {
       const kind = args[0] ?? "";
       if (!Object.hasOwn(MONSTERS, kind)) return ["ใช้แบบนี้: /spawn hen 3 ดูรหัสด้วย /monsters"];
