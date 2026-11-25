@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { ITEMS } from "../../shared/items";
-import { toScreen } from "./iso";
+import { place } from "./iso";
 import { PLAYER_LAYERS, PLAYER_SHEET } from "./sprites";
 
 /** Metal colour by tier. */
@@ -211,9 +211,9 @@ export class PlayerView {
   }
 
   private place() {
-    const p = toScreen(this.x, this.y);
+    const p = place(this.x, this.y);
     this.root.setPosition(p.x, p.y);
-    this.root.setDepth(p.y + 1);
+    this.root.setDepth(p.depth + 1);
   }
 
   destroy() {

@@ -19,6 +19,14 @@ export const STACK_MAX = 99;
 /** How close you must stand to the anvil or the chest. */
 export const STATION_RANGE = 3;
 export const GATHER_MS = 2500;
+/** The windmill's blessing: faster walking for a while. */
+export const WIND_MS = 180_000;
+export const WIND_SPEED = 0.2;
+/** Mossfen: light all lanterns within this time, and the fog opens for that long. */
+export const LANTERN_MS = 90_000;
+export const FOG_OPEN_MS = 180_000;
+/** Brindle scarecrows give this much more EXP and coins at night. */
+export const NIGHT_BONUS = 1.5;
 
 export interface ItemDef {
   name: string;
@@ -365,10 +373,10 @@ export function resourceAt(map: GameMap, x: number, y: number): Resource | null 
   return null;
 }
 
-export type StationKind = "smith" | "storage" | "portal" | "board";
+export type StationKind = "smith" | "storage" | "portal" | "board" | "windmill" | "lantern" | "treasure";
 export function stationAt(map: GameMap, x: number, y: number): StationKind | null {
   const prop = map.props[y]?.[x];
-  return prop === Prop.Anvil ? "smith" : prop === Prop.Chest ? "storage" : prop === Prop.Portal ? "portal" : prop === Prop.Board ? "board" : null;
+  return prop === Prop.Anvil ? "smith" : prop === Prop.Chest ? "storage" : prop === Prop.Portal ? "portal" : prop === Prop.Board ? "board" : prop === Prop.Windmill ? "windmill" : prop === Prop.Lantern ? "lantern" : prop === Prop.Treasure ? "treasure" : null;
 }
 
 /** Where a station is, so both sides can check the distance. */

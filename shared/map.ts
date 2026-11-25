@@ -18,6 +18,8 @@ export enum Tile {
   Void = 8,
   Moss = 9,
   Fern = 10,
+  Bridge = 11,
+  Spring = 12,
 }
 
 export enum Prop {
@@ -33,6 +35,9 @@ export enum Prop {
   Portal = 9,
   Ruin = 10,
   Board = 11,
+  Windmill = 12,
+  Lantern = 13,
+  Treasure = 14,
 }
 
 export type ZoneId = "brindle" | "mossfen" | "hollow";
@@ -60,7 +65,18 @@ export interface GameMap {
   /** Monsters never chase anyone standing inside this circle (the village). */
   safe: { x: number; y: number; r: number };
   exits: MapExit[];
+  /** whole height of each tile, and which tiles are ramps (see terrain.ts) */
+  level: number[][];
+  ramp: number[][];
+  /** named groups of tiles that can open and close while playing */
+  regions: Record<string, number[]>;
+  /** tiles closed right now */
+  closed: Set<number>;
+  /** round pools that wash corruption away (Hollow) */
+  springs: { x: number; y: number; r: number }[];
 }
+
+import { grid, mesa, river, road } from "./terrain";
 
 /** Small deterministic random generator (mulberry32). */
 export function rng(seed: number) {
@@ -74,7 +90,82 @@ export function rng(seed: number) {
   };
 }
 
+/**
+ * Brindle Village and its countryside. The old 48x48 village keeps its place in
+ * the north-west corner, so saved positions and stalls stay right.
+ */
 export function buildBrindleVillage(): GameMap {
+  const old = buildOldVillage();
+  const SIZE = 84;
+  const rand = rng(777);
+  const map: GameMap = {
+    ...old,
+    width: SIZE,
+    height: SIZE,
+    tiles: grid<Tile>(SIZE, SIZE, Tile.Grass),
+    props: grid<Prop>(SIZE, SIZE, Prop.None),
+    level: grid(SIZE, SIZE, 0),
+    ramp: grid(SIZE, SIZE, 0),
+    regions: {},
+    closed: new Set(),
+    springs: [],
+    exits: [{ x: 80, y: 24, to: "mossfen", at: { x: 5, y: 44 }, label: "ป่ามอสเฟน (Lv 10+)" }],
+  };
+  for (let y = 0; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) {
+      if (x < 48 && y < 48) {
+        map.tiles[y][x] = old.tiles[y][x];
+        // the old forest edge in the east and south makes way for the new land
+        const edge = old.props[y][x] === Prop.Tree && (x >= 43 || y >= 43);
+        map.props[y][x] = edge ? Prop.None : old.props[y][x];
+      } else if (rand() < 0.08) map.tiles[y][x] = Tile.Flowers;
+    }
+
+  river(map, (y) => 58 + 4 * Math.sin(y / 9), 3);
+  road(map, [[44, 24], [81, 24]]);
+  road(map, [[24, 44], [24, 81]]);
+  road(map, [[25, 72], [52, 74], [66, 60], [66, 25]]);
+
+  // Hills: the windmill stands on the highest one.
+  mesa(map, 38, 62, 11, 8, "se");
+  mesa(map, 37, 60, 7.5, 5.2, "se");
+  mesa(map, 36, 58, 4.2, 3.2, "s");
+  mesa(map, 8, 4, 7, 3.4, "s");
+  mesa(map, 7, 3, 4, 1.8, "s");
+  mesa(map, 11, 64, 8, 7, "ne");
+  mesa(map, 10, 63, 5, 4, "e");
+  mesa(map, 75, 11, 7, 7, "sw");
+  mesa(map, 75, 9, 4.5, 4, "s");
+  mesa(map, 75, 70, 6.5, 7, "sw");
+  mesa(map, 75, 68, 4, 3.4, "s");
+
+  // Windmill: a 2x2 footprint on the top of its hill.
+  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) map.props[57 + dy][35 + dx] = Prop.Windmill;
+
+  for (let y = 0; y < SIZE; y++)
+    for (let x = 0; x < SIZE; x++) {
+      if (x < 46 && y < 46) continue;
+      const t = map.tiles[y][x];
+      if (map.props[y][x] !== Prop.None || (t !== Tile.Grass && t !== Tile.Flowers) || map.ramp[y][x]) continue;
+      if (nearRamp(map, x, y)) continue;
+      const edge = Math.min(x, y, SIZE - 1 - x, SIZE - 1 - y);
+      if (edge <= 1) map.props[y][x] = Prop.Tree;
+      else if (edge <= 4 && rand() < 0.45 - edge * 0.08) map.props[y][x] = Prop.Tree;
+      else if (map.level[y][x] >= 3) continue;
+      else if (rand() < 0.035) map.props[y][x] = Prop.Tree;
+      else if (rand() < 0.022) map.props[y][x] = Prop.Rock;
+      else if (rand() < 0.022) map.props[y][x] = Prop.Bush;
+    }
+  return map;
+}
+
+/** True on and right around ramps, which stay free of trees and rocks. */
+export function nearRamp(map: GameMap, x: number, y: number): boolean {
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (map.ramp[y + dy]?.[x + dx]) return true;
+  return false;
+}
+
+function buildOldVillage() {
   const W = 48;
   const H = 48;
   const rand = rng(1337);
@@ -157,22 +248,19 @@ export function buildBrindleVillage(): GameMap {
   props[5][24] = Prop.Portal;
 
   // Roads stay open to the map edge except the outermost tree ring.
-  return { id: "brindle", name: "Brindle Village", pvp: false, width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 }, exits: [{ x: 44, y: 24, to: "mossfen", at: { x: 5, y: 44 }, label: "ป่ามอสเฟน (Lv 10+)" }] };
+  return { id: "brindle" as const, name: "Brindle Village", pvp: false, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 } };
 }
 
-/** The "main" prop tile of a 2x2 house is its top-left tile. */
+/** The "main" prop tile of a 2x2 building (house, windmill) is its top-left tile. */
 export function isHouseAnchor(map: GameMap, x: number, y: number) {
-  return (
-    map.props[y][x] === Prop.House &&
-    map.props[y - 1]?.[x] !== Prop.House &&
-    map.props[y]?.[x - 1] !== Prop.House
-  );
+  const p = map.props[y][x];
+  return (p === Prop.House || p === Prop.Windmill) && map.props[y - 1]?.[x] !== p && map.props[y]?.[x - 1] !== p;
 }
 
 export function isWalkable(map: GameMap, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= map.width || y >= map.height) return false;
   if (map.tiles[y][x] === Tile.Water || map.tiles[y][x] === Tile.Void) return false;
-  return map.props[y][x] === Prop.None;
+  return map.props[y][x] === Prop.None && !map.closed.has(y * map.width + x);
 }
 
 export function isSafe(map: GameMap, x: number, y: number) {

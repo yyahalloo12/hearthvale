@@ -41,12 +41,16 @@ function speckle(g: Phaser.GameObjects.Graphics, color: number, count: number, s
 
 /** One ground diamond, one pixel bigger all round so no gaps show between tiles. */
 function tile(scene: Phaser.Scene, key: string, base: number, extra?: (g: Phaser.GameObjects.Graphics) => void) {
-  make(scene, key, TILE_W + 2, TILE_H + 2, (g) => {
-    g.fillStyle(base);
-    diamond(g, HW + 1, HH + 1, HW + 1, HH + 1);
-    g.fillPath();
-    extra?.(g);
-  });
+  // "-h1".."-h3": the same ground higher up, in brighter, sunnier colours
+  for (let h = 0; h <= 3; h++)
+    make(scene, h ? `${key}-h${h}` : key, TILE_W + 2, TILE_H + 2, (g) => {
+      const k = h * 0.11;
+      const mix = (v: number, to: number) => Math.round(v + (to - v) * k);
+      g.fillStyle((mix((base >> 16) & 255, 255) << 16) | (mix((base >> 8) & 255, 250) << 8) | mix(base & 255, 170));
+      diamond(g, HW + 1, HH + 1, HW + 1, HH + 1);
+      g.fillPath();
+      extra?.(g);
+    });
 }
 
 export function makeTextures(scene: Phaser.Scene) {
@@ -72,6 +76,11 @@ export function makeTextures(scene: Phaser.Scene) {
   tile(scene, "t-trail", 0xb59a70, (g) => speckle(g, 0xa08860, 10, 5));
   tile(scene, "t-pool", 0x3f8f9a, (g) => {
     g.fillStyle(0x86c9c4, 0.7);
+    g.fillRoundedRect(HW - 10, HH - 3, 11, 2, 1);
+  });
+  tile(scene, "t-bridge", 0x6b4226);
+  tile(scene, "t-spring", 0x6f7fb8, (g) => {
+    g.fillStyle(0xd8c8ff, 0.6);
     g.fillRoundedRect(HW - 10, HH - 3, 11, 2, 1);
   });
   tile(scene, "t-void", 0x1a1722, (g) => speckle(g, 0x6a4a9a, 5, 31, 0.8));
@@ -102,6 +111,10 @@ export function groundKey(t: Tile, x: number, y: number, map?: GameMap): string 
     if (t === Tile.Flowers) return "t-fern";
   }
   switch (t) {
+    case Tile.Bridge:
+      return "t-bridge";
+    case Tile.Spring:
+      return "t-spring";
     case Tile.Moss:
       return `t-moss-${pick(x, y, 2, 1)}`;
     case Tile.Fern:
@@ -141,6 +154,10 @@ export function groundDetail(t: Tile, x: number, y: number): string | null {
       return r < 0.07 ? "g-lily" : null;
     case Tile.Sand:
       return r < 0.14 ? "g-shell" : null;
+    case Tile.Bridge:
+      return `g-plank${pick(x, y, 2, 3)}`;
+    case Tile.Spring:
+      return r < 0.7 ? `g-spring${pick(x, y, 2, 3)}` : null;
     case Tile.Moss:
       return r < 0.1 ? `g-shroom${pick(x, y, 2, 3)}` : r < 0.3 ? `g-tuft${pick(x, y, 3, 3)}` : null;
     case Tile.Fern:
@@ -175,6 +192,10 @@ export function propFrame(map: GameMap, x: number, y: number, rockItem?: string)
       return "portal";
     case Prop.Board:
       return "board";
+    case Prop.Lantern:
+      return "lantern0";
+    case Prop.Treasure:
+      return "treasure";
     case Prop.Fence:
       return fenceFrame(map, x, y);
     default:
@@ -207,4 +228,6 @@ export const PROP_SHADOW: Partial<Record<Prop, number>> = {
   [Prop.Chest]: 1.5,
   [Prop.Board]: 1.6,
   [Prop.Ruin]: 1.5,
+  [Prop.Lantern]: 1.2,
+  [Prop.Treasure]: 1.5,
 };

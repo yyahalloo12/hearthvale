@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { MONSTERS } from "../../shared/stats";
-import { toScreen } from "./iso";
+import { place } from "./iso";
 import { MONSTER_COLS, MONSTER_SHEETS } from "./sprites";
 
 /** One monster on screen, smoothly following the server position. */
@@ -138,9 +138,9 @@ export class MonsterView {
   }
 
   private place() {
-    const p = toScreen(this.x, this.y);
+    const p = place(this.x, this.y);
     this.root.setPosition(p.x, p.y);
-    this.root.setDepth(p.y + 1);
+    this.root.setDepth(p.depth + 1);
   }
 
   /** Fade out and remove. */

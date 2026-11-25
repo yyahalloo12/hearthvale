@@ -314,3 +314,17 @@ button.secondary:disabled { opacity: 0.6; cursor: wait; }
 #craft-tabs { display: flex; gap: 4px; margin-top: 10px; }
 #craft-tabs button { flex: 1; font-size: 13px; padding: 6px; background: #fffaf0; border: 2px solid var(--wood); border-radius: 4px; cursor: pointer; }
 #craft-tabs button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: bold; }
+
+/* ---- bigger maps: night, mist ---- */
+#night, #mist { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+#night { background: #141a4a; opacity: 0; mix-blend-mode: multiply; transition: opacity 0.4s; }
+#mist[hidden] { display: none; }
+#mist {
+  background:
+    radial-gradient(ellipse 60% 30% at 20% 30%, rgba(225, 240, 230, 0.28), transparent 70%),
+    radial-gradient(ellipse 50% 26% at 80% 70%, rgba(225, 240, 230, 0.24), transparent 70%),
+    radial-gradient(ellipse 70% 24% at 50% 100%, rgba(225, 240, 230, 0.3), transparent 70%);
+  animation: mist 24s ease-in-out infinite alternate;
+}
+@keyframes mist { to { transform: translateX(6%) scale(1.12); opacity: 0.7; } }
+#daytime { font-size: 12px; margin-top: 3px; }

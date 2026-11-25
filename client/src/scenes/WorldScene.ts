@@ -1,17 +1,19 @@
 import { getStateCallbacks, Room } from "colyseus.js";
 import Phaser from "phaser";
-import { TILE_H } from "../../../shared/constants";
 import { GLOW_AT } from "../../../shared/hollow";
-import { findStation, ITEMS, resourceAt, STATION_RANGE, stationAt } from "../../../shared/items";
+import { findStation, ITEMS, STATION_RANGE } from "../../../shared/items";
+import { darkness, isNight, untilChange } from "../../../shared/daylight";
+import { setRegion } from "../../../shared/terrain";
 import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
-import { GameMap, isHouseAnchor, isWalkable, Prop, ZoneId } from "../../../shared/map";
+import { GameMap, isWalkable, ZoneId } from "../../../shared/map";
 import { buildZone, ZONE_NAMES } from "../../../shared/zones";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
 import { ENEMY_SKILLS, Job, SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
-import { askEnterHollow, initHud, setCorruption, setOnline, setZone, skillForKey, startCooldown, updateMe } from "../hud";
+import { askEnterHollow, initHud, setCorruption, setDaytime, setOnline, setZone, skillForKey, startCooldown, updateMe } from "../hud";
 import { closeStation, initInventory, openStation, openStationKind, setInventory, setItemLevel, showGathering } from "../inventory";
-import { toScreen, toTile } from "../iso";
+import { place, setIsoMap, toTile } from "../iso";
+import { FALLEN, Land } from "../land";
 import { closeMarket, initMarket, marketMode, openBoard, setBoard, setMarketInventory, setStall, visitedStall } from "../market";
 import { drawMinimap, setMinimap } from "../minimap";
 import { MonsterView } from "../MonsterView";
@@ -19,9 +21,9 @@ import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
 import { PlayerView, TIER_TINT } from "../PlayerView";
 import { loadSprites, PLAYER_SHEET, SCENERY_SCALE } from "../sprites";
-import { groundDetail, groundKey, houseFrame, makeTextures, PROP_SHADOW, propFrame } from "../textures";
+import { makeTextures } from "../textures";
 
-const STATION_LABEL = { smith: "ช่างฝีมือ", storage: "คลังเก็บของ", portal: "ทางเข้า Hollow", board: "กระดานประมูล" } as const;
+
 
 export class WorldScene extends Phaser.Scene {
   private room!: Room;
@@ -41,8 +43,12 @@ export class WorldScene extends Phaser.Scene {
   private targetId: string | null = null;
   private me: any;
   private gold: number | null = null;
-  /** rocks, trees and stations that can be clicked, by "x,y" */
-  private usable = new Map<string, { x: number; y: number; img: Phaser.GameObjects.Image }>();
+  land!: Land;
+  private veils: Phaser.GameObjects.Image[] = [];
+  private gone = new Map<string, Phaser.GameObjects.Graphics>();
+  private warning: Phaser.GameObjects.Graphics | null = null;
+  private landTimer = 0;
+  private fireflies: Phaser.GameObjects.Image[] = [];
 
   constructor() {
     super(""); // the key comes from scene.add(), so each map visit can have its own
@@ -62,7 +68,21 @@ export class WorldScene extends Phaser.Scene {
     makeTextures(this);
     makeMonsterTextures(this);
     this.map = buildZone(this.zone);
-    this.drawMap();
+    setIsoMap(this.map);
+    const st = this.room.state as any;
+    this.land = new Land(
+      this,
+      this.map,
+      (key) => !!st.depleted?.has(key),
+      (key) => !!st.lit?.has(key),
+    );
+    this.drawExits();
+    document.getElementById("mist")!.hidden = this.zone !== "mossfen";
+    this.veils = [];
+    this.gone.clear();
+    this.warning = null;
+    this.fireflies = [];
+    this.landTimer = -1000;
 
     this.marker = this.add.image(0, 0, "click-marker").setVisible(false).setDepth(-1);
     this.cameras.main.setBackgroundColor(this.map.pvp ? "#211d2a" : this.zone === "mossfen" ? "#1f4a36" : "#2c5a34");
@@ -113,53 +133,105 @@ export class WorldScene extends Phaser.Scene {
     return this.add.image(x, y, "scenery", frame).setScale(SCENERY_SCALE);
   }
 
-  private drawMap() {
-    const { map } = this;
-    for (const e of map.exits) {
-      const p = toScreen(e.x, e.y);
-      this.scenery(p.x, p.y, "exit").setDepth(p.y - 1);
+  private drawExits() {
+    for (const e of this.map.exits) {
+      const p = place(e.x, e.y);
+      this.scenery(p.x, p.y, "exit").setDepth(p.depth - 1);
       this.add
         .text(p.x, p.y - 66, `ไป${e.label}`, { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: "#d8ffd0", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1)
-        .setDepth(p.y + 1);
+        .setDepth(p.depth + 1);
     }
-    for (let y = 0; y < map.height; y++) {
-      for (let x = 0; x < map.width; x++) {
-        const p = toScreen(x, y);
-        this.add.image(p.x, p.y, groundKey(map.tiles[y][x], x, y, map)).setDepth(-10000);
-        const detail = groundDetail(map.tiles[y][x], x, y);
-        if (detail) this.scenery(p.x, p.y, detail).setDepth(-9990);
-        const prop = map.props[y][x];
-        if (prop === Prop.House) {
-          if (isHouseAnchor(map, x, y)) {
-            // centre of the 2x2 footprint, sorted by its front corner
-            const c = toScreen(x + 0.5, y + 0.5);
-            this.scenery(c.x, c.y, houseFrame(x, y)).setDepth(toScreen(x + 1.5, y + 1.5).y - TILE_H / 2);
-          }
-          continue;
-        }
-        const res = resourceAt(map, x, y);
-        const frame = propFrame(map, x, y, res?.item);
-        if (frame) {
-          const shadow = PROP_SHADOW[prop];
-          if (shadow) this.add.image(p.x, p.y + 2, "c-shadow").setScale(shadow).setDepth(-9980);
-          const img = this.scenery(p.x, p.y, frame).setDepth(p.y);
-          const station = stationAt(map, x, y);
-          if (res || station) this.usable.set(`${x},${y}`, { x, y, img });
-          if (station)
-            this.add
-              .text(p.x, p.y - (station === "portal" ? 80 : 40), STATION_LABEL[station], {
-                fontFamily: "Tahoma, sans-serif",
-                fontSize: "12px",
-                color: "#ffe9a8",
-                stroke: "#000000",
-                strokeThickness: 3,
-              })
-              .setOrigin(0.5, 1)
-              .setDepth(p.y + 1);
-        }
+  }
+
+  // ---- what makes each map special ------------------------------------------
+
+  /** Draws all tiles of a region with one colour, a little above the ground. */
+  private paintRegion(id: string, color: number, alpha: number) {
+    const g = this.add.graphics().setDepth(-9990);
+    g.fillStyle(color, alpha);
+    for (const k of this.map.regions[id] ?? []) {
+      const p = place(k % this.map.width, Math.floor(k / this.map.width));
+      g.beginPath();
+      g.moveTo(p.x, p.y - 17);
+      g.lineTo(p.x + 33, p.y);
+      g.lineTo(p.x, p.y + 17);
+      g.lineTo(p.x - 33, p.y);
+      g.closePath();
+      g.fillPath();
+    }
+    return g;
+  }
+
+  /** Fog over the grove's ramp, or a hole where the ground fell. */
+  private showRegion(id: string, closed: boolean) {
+    setRegion(this.map, id, closed);
+    if (id === "fog") {
+      this.veils.forEach((v) => v.destroy());
+      this.veils = [];
+      if (!closed) return;
+      for (const k of this.map.regions.fog) {
+        const p = place(k % this.map.width, Math.floor(k / this.map.width));
+        const v = this.scenery(p.x, p.y, "fogveil").setDepth(p.depth + 4).setAlpha(0.9);
+        this.tweens.add({ targets: v, x: p.x + 8, alpha: 0.65, duration: 1800, yoyo: true, repeat: -1 });
+        this.veils.push(v);
       }
+      return;
     }
+    this.gone.get(id)?.destroy();
+    this.gone.delete(id);
+    if (closed) {
+      this.gone.set(id, this.paintRegion(id, FALLEN, 1));
+      this.shakeNear(id, 350, 0.012);
+    }
+  }
+
+  private shakeNear(id: string, ms: number, power: number) {
+    const k = this.map.regions[id]?.[0];
+    const me = this.me;
+    if (k === undefined || !me) return;
+    if (Math.hypot((k % this.map.width) - me.x, Math.floor(k / this.map.width) - me.y) < 16) this.cameras.main.shake(ms, power);
+  }
+
+  /** Ground that is about to fall glows red and trembles. */
+  private showWarning(id: string) {
+    this.warning?.destroy();
+    this.warning = null;
+    if (!id) return;
+    this.warning = this.paintRegion(id, 0xff3a3a, 0.4);
+    this.tweens.add({ targets: this.warning, alpha: 0.4, duration: 260, yoyo: true, repeat: -1 });
+    this.shakeNear(id, 500, 0.004);
+  }
+
+  /** Dusk, night and dawn outside the Hollow, with fireflies. */
+  private showDaylight() {
+    const dark = this.map.pvp ? 0 : darkness();
+    document.getElementById("night")!.style.opacity = String(dark * 0.5);
+    if (this.map.pvp) return setDaytime("");
+    const clock = (ms: number) => {
+      const s = Math.max(0, Math.round(ms / 1000));
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    };
+    const fog = (this.room.state as any).fogUntil as number;
+    const lit = (this.room.state as any).lit?.size ?? 0;
+    setDaytime(
+      `${isNight() ? "🌙 กลางคืน" : "☀️ กลางวัน"} อีก ${clock(untilChange())}` +
+        (fog ? ` · 🏮 ลานสมบัติเปิดอีก ${clock(fog - Date.now())}` : lit ? ` · 🏮 โคม ${lit}/3` : ""),
+    );
+    const want = dark > 0.5 ? 14 : 0;
+    const view = this.cameras.main.worldView;
+    while (this.fireflies.length < want) {
+      const f = this.add.image(view.x + Math.random() * view.width, view.y + Math.random() * view.height, "sparkle").setTint(0xfff39a).setScale(0.6).setDepth(99990).setAlpha(0);
+      this.fireflies.push(f);
+      const fly = () => {
+        if (!f.active) return;
+        const v = this.cameras.main.worldView;
+        if (!v.contains(f.x, f.y)) f.setPosition(v.x + Math.random() * v.width, v.y + Math.random() * v.height);
+        this.tweens.add({ targets: f, x: f.x + Phaser.Math.Between(-50, 50), y: f.y + Phaser.Math.Between(-36, 36), alpha: Math.random() * 0.9, duration: 1400 + Math.random() * 1200, onComplete: fly });
+      };
+      fly();
+    }
+    while (this.fireflies.length > want) this.fireflies.pop()!.destroy();
   }
 
   private bindRoom() {
@@ -237,18 +309,23 @@ export class WorldScene extends Phaser.Scene {
       view.die();
     });
 
-    $(state).depleted.onAdd((_v: boolean, key: string) => this.usable.get(key)?.img.setAlpha(0.35));
-    $(state).depleted.onRemove((_v: boolean, key: string) => this.usable.get(key)?.img.setAlpha(1));
+    $(state).depleted.onAdd((_v: boolean, key: string) => this.land.usable.get(key)?.img.setAlpha(0.35));
+    $(state).depleted.onRemove((_v: boolean, key: string) => this.land.usable.get(key)?.img.setAlpha(1));
+    $(state).lit.onAdd((_v: number, key: string) => this.land.usable.get(key)?.img.setFrame("lantern1"));
+    $(state).lit.onRemove((_v: number, key: string) => this.land.usable.get(key)?.img.setFrame("lantern0"));
+    $(state).closed.onAdd((_v: boolean, id: string) => this.showRegion(id, true));
+    $(state).closed.onRemove((_v: boolean, id: string) => this.showRegion(id, false));
+    $(state).listen("cracking", (id: string) => this.showWarning(id));
 
     $(state).gates.onAdd((gate: any) => this.addGate(gate.x, gate.y));
     $(state).gates.onRemove(() => this.redrawGates());
     $(state).bundles.onAdd((b: any, id: string) => {
-      const p = toScreen(b.x, b.y);
+      const p = place(b.x, b.y);
       const img = this.scenery(0, 0, "bundle");
       const label = this.add
         .text(0, -36, `ห่อของ ${b.owner}`, { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: "#ffe9a8", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1);
-      this.bundles.set(id, this.add.container(p.x, p.y, [img, label]).setDepth(p.y));
+      this.bundles.set(id, this.add.container(p.x, p.y, [img, label]).setDepth(p.depth));
     });
     $(state).bundles.onRemove((_b: any, id: string) => {
       this.bundles.get(id)?.destroy();
@@ -316,7 +393,7 @@ export class WorldScene extends Phaser.Scene {
 
   /** A stall with its keeper; the keeper is drawn here only while the owner is away. */
   private addStall(id: string, s: any) {
-    const p = toScreen(s.x, s.y);
+    const p = place(s.x, s.y);
     const layer = (l: string) => this.add.image(0, 0, `player-${l}`, 0).setOrigin(0.5, PLAYER_SHEET.originY).setScale(PLAYER_SHEET.scale);
     const parts = [layer("base"), layer("tunic").setTint(s.color)];
     const helm = ITEMS[s.helm];
@@ -326,7 +403,7 @@ export class WorldScene extends Phaser.Scene {
     const text = (y: number, t: string, color: string, size: number) =>
       this.add.text(0, y, t, { fontFamily: "Tahoma, sans-serif", fontSize: `${size}px`, color, stroke: "#000", strokeThickness: 3 }).setOrigin(0.5, 1);
     const root = this.add.container(p.x, p.y, [keeper, stand, text(-84, s.title, "#ffe9a8", 13), text(-100, s.owner, "#ffffff", 11)]);
-    root.setDepth(p.y + 2);
+    root.setDepth(p.depth + 2);
     this.stalls.set(id, { root, keeper, owner: s.owner, x: s.x, y: s.y });
     this.showKeepers();
   }
@@ -342,12 +419,12 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private addGate(x: number, y: number) {
-    const p = toScreen(x, y);
-    const img = this.scenery(p.x, p.y, "gate").setDepth(p.y - 1);
+    const p = place(x, y);
+    const img = this.scenery(p.x, p.y, "gate").setDepth(p.depth - 1);
     const label = this.add
       .text(p.x, p.y - 68, "ประตูทางออก", { fontFamily: "Tahoma, sans-serif", fontSize: "13px", color: "#ffd23a", stroke: "#000", strokeThickness: 3 })
       .setOrigin(0.5, 1)
-      .setDepth(p.y);
+      .setDepth(p.depth);
     this.tweens.add({ targets: img, alpha: 0.65, duration: 900, yoyo: true, repeat: -1 });
     this.gates.push(img, label);
   }
@@ -536,10 +613,12 @@ export class WorldScene extends Phaser.Scene {
   /** The rock, tree or station under the pointer (only the lower part of a tree, so you can walk behind it). */
   private pickUsable(wx: number, wy: number): { x: number; y: number } | null {
     let best: { x: number; y: number; img: Phaser.GameObjects.Image } | null = null;
-    for (const u of this.usable.values()) {
+    for (const u of this.land.usable.values()) {
+      if (!u.img.displayList) continue; // not in view
       const { img } = u;
-      const h = Math.min(img.displayHeight, 56);
-      if (Math.abs(wx - img.x) > Math.min(img.displayWidth, 46) / 2 || wy > img.y + 12 || wy < img.y - h) continue;
+      const big = u.kind === "windmill";
+      const h = Math.min(img.displayHeight, big ? 100 : 56);
+      if (Math.abs(wx - img.x) > Math.min(img.displayWidth, big ? 80 : 46) / 2 || wy > img.y + (big ? 28 : 12) || wy < img.y - h) continue;
       if (!best || img.depth > best.img.depth) best = u;
     }
     return best;
@@ -627,7 +706,7 @@ export class WorldScene extends Phaser.Scene {
       if (usable) {
         this.setTarget(null);
         this.room.send(Msg.Interact, { x: usable.x, y: usable.y });
-        const at = toScreen(usable.x, usable.y);
+        const at = place(usable.x, usable.y);
         this.marker.setPosition(at.x, at.y).setVisible(true).setAlpha(1);
         return;
       }
@@ -635,7 +714,7 @@ export class WorldScene extends Phaser.Scene {
       if (!isWalkable(this.map, t.x, t.y)) return;
       this.setTarget(null);
       this.room.send(Msg.Move, { x: t.x, y: t.y });
-      const p = toScreen(t.x, t.y);
+      const p = place(t.x, t.y);
       this.marker.setPosition(p.x, p.y).setVisible(true).setAlpha(1);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
@@ -660,6 +739,19 @@ export class WorldScene extends Phaser.Scene {
   update(time: number, delta: number) {
     for (const v of this.views.values()) v.update(delta);
     for (const m of this.monsters.values()) m.update(delta);
+    // after a jump across the map the camera goes straight there
+    const cam = this.cameras.main;
+    const target = (cam as any)._follow as { x: number; y: number } | null;
+    if (target && (!cam.worldView.width || Math.hypot(cam.midPoint.x - target.x, cam.midPoint.y - target.y) > 900)) {
+      cam.centerOn(target.x, target.y);
+      cam.preRender();
+      this.landTimer = -1000;
+    }
+    if (time - this.landTimer > 100) {
+      this.landTimer = time;
+      this.land.update(this.cameras.main.worldView, time);
+      this.showDaylight();
+    }
     if (time - this.mapTimer > 200) {
       this.mapTimer = time;
       drawMinimap(this.room.state, this.room.sessionId);

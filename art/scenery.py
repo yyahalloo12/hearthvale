@@ -408,6 +408,70 @@ def stall(color):
         ball("goods", (-0.42 + 0.28 * i, -0.54, 0.53), 0.1, toon(f"goods{c}", c, dark=0.78), outline=0.02, seg=16)
 
 
+def windmill(frame):
+    g = tile_space()
+    WALL = toon("millwall", 0xF6E7C4, dark=0.78)
+    STONE = toon("stone", 0xA8A198)
+    BEAM = toon("beam", 0x7A4A2A)
+    ROOF = toon("millroof", 0xC8453A, dark=0.7)
+    SAIL = toon("sail", 0xFFF8E6, dark=0.85)
+    cone("base", (0, 0, 0.3), 1.02, 0.94, 0.6, STONE, seg=8)
+    cone("tower", (0, 0, 1.3), 0.9, 0.62, 1.5, WALL, seg=8)
+    for z, r in ((0.64, 0.95), (1.32, 0.8), (2.02, 0.66)):
+        ring("band", (0, 0, z), r, 0.05, BEAM, outline=0.02)
+    cone("roof", (0, 0, 2.42), 0.84, 0.06, 0.84, ROOF, seg=8)
+    box("door", (-0.0, -0.96, 0.5), (0.42, 0.12, 0.76), toon("door", 0x8A4F2C), outline=0.022)
+    box("win", (0.0, -0.75, 1.62), (0.26, 0.1, 0.28), toon("glass", 0x9ADBFF, dark=0.85), outline=0.022)
+    hub = pivot("hub", (0, -1.0, 2.14))
+    hub.rotation_euler.y = rad(frame * 15)
+    cone("axle", (0, 0.2, 0), 0.07, 0.07, 0.5, BEAM, hub, outline=0.02, rot=(rad(90), 0, 0))
+    ball("cap", (0, -0.06, 0), 0.13, toon("gold", 0xF2B82E, dark=0.7), hub, outline=0.02, seg=16)
+    for k in range(4):
+        arm = pivot("arm", (0, 0, 0), hub)
+        arm.rotation_euler.y = rad(90 * k)
+        box("spar", (0, 0, 0.66), (0.07, 0.06, 1.3), BEAM, arm, outline=0.02, bevel=0.01)
+        box("sail", (0.17, 0.0, 0.76), (0.3, 0.03, 0.92), SAIL, arm, outline=0.02, bevel=0.01)
+        for z in (0.45, 0.72, 0.99):
+            box("slat", (0.17, -0.03, z), (0.32, 0.02, 0.03), BEAM, arm, outline=0, bevel=0)
+
+
+def lantern(lit):
+    S = toon("stone", 0x98A08C)
+    M = toon("moss", 0x6BA84F, dark=0.7)
+    cone("base", (0, 0, 0.1), 0.3, 0.26, 0.2, S, seg=8)
+    cone("pillar", (0, 0, 0.45), 0.15, 0.12, 0.6, S, seg=8)
+    cone("tray", (0, 0, 0.78), 0.2, 0.27, 0.1, S, seg=8)
+    for k in range(4):
+        a = k * math.pi / 2 + 0.78
+        cone("leg", (0.18 * math.cos(a), 0.18 * math.sin(a), 0.96), 0.045, 0.045, 0.3, S, outline=0.016, bevel=0)
+    ball("flame", (0, 0, 0.96), (0.13, 0.13, 0.15), flat("flame", 0xFFE27A) if lit else toon("cold", 0x5A6068), outline=0.02, seg=16)
+    cone("roof", (0, 0, 1.22), 0.38, 0.06, 0.26, S, seg=8)
+    ball("knob", (0, 0, 1.38), 0.07, S, outline=0.02, seg=14)
+    ball("moss1", (-0.16, -0.16, 0.2), (0.13, 0.11, 0.07), M, outline=0.016, seg=14)
+    ball("moss2", (0.2, -0.04, 1.16), (0.12, 0.1, 0.06), M, outline=0.016, seg=14)
+    if lit:
+        for k in range(6):
+            a = k * math.pi / 3
+            ball("spark", (0.46 * math.cos(a), 0.3 * math.sin(a) - 0.1, 0.96 + 0.16 * math.sin(k * 2)), 0.035, flat("flame", 0xFFE27A), outline=0, seg=10)
+
+
+def treasure():
+    chest()
+    GOLD = toon("gold", 0xF2B82E, dark=0.7)
+    for i, (x, y, c) in enumerate(((-0.5, -0.3, 0xF2B82E), (-0.3, -0.5, 0xF2B82E), (0.42, -0.42, 0xFF8FC8), (0.56, -0.2, 0x8FD3FF))):
+        if i < 2:
+            cone("coin", (x, y, 0.03), 0.09, 0.09, 0.04, GOLD, outline=0.014, bevel=0.01)
+        else:
+            cone("gem", (x, y, 0.09), 0.08, 0.0, 0.18, toon(f"gem{c}", c, dark=0.75, light=1.2), outline=0.016, seg=6, bevel=0)
+
+
+def fogveil():
+    F = flat("fog", 0xE6F2EA)
+    rnd = random.Random(4)
+    for i in range(9):
+        ball("puff", (rnd.uniform(-0.5, 0.5), rnd.uniform(-0.3, 0.3), rnd.uniform(0.2, 1.1)), (rnd.uniform(0.26, 0.42), 0.2, rnd.uniform(0.16, 0.26)), F, outline=0, seg=18)
+
+
 # ---- ground details (flat, lie inside one tile) ------------------------------------------------
 def spots(seed, n, reach=0.4):
     rnd = random.Random(seed)
@@ -467,6 +531,26 @@ def slabs(seed, color, gap=0.035, n=3):
             f = 1 - 0.09 * rnd.random() - 0.05 * ((i + k) % 2)
             m = toon(f"slab{color}{seed}{i}{k}", tuple(c * f for c in srgb(color)), dark=0.86, light=1.08)
             box("slab", ((i - (n - 1) / 2) * step + shift, (k - (n - 1) / 2) * step, 0), (step - gap, step - gap, 0.05), m, g, outline=0, bevel=0.02)
+
+
+def planks(seed):
+    g = tile_space()
+    rnd = random.Random(seed)
+    n = 4
+    step = T / n
+    for i in range(n):
+        c = 0xB07A45 if i % 2 else 0x9E6A3A
+        box("plank", (0, (i - (n - 1) / 2) * step, 0.02), (T, step - 0.02, 0.06), toon(f"plank{c}{seed}", tuple(v * rnd.uniform(0.92, 1.05) for v in srgb(c)), dark=0.82), g, outline=0, bevel=0.012)
+        for x in (-T * 0.4, T * 0.4):
+            ball("nail", (x, (i - (n - 1) / 2) * step, 0.055), 0.02, toon("iron", 0x656A78), g, outline=0, seg=8)
+
+
+def springwater(seed):
+    g = tile_space()
+    for i, (x, y, rnd) in enumerate(spots(seed, 5, 0.36)):
+        c = (0xFF8FC8, 0x8FD3FF, 0xFFE27A, 0x9AF0B0, 0xC39BFF)[i]
+        ring("ripple", (x, y, 0.01), 0.1 + 0.02 * i, 0.016, flat(f"rip{c}", c), g, outline=0, scale=(1, 1, 0.3))
+        ball("drop", (x + 0.1, y, 0.02), (0.045, 0.045, 0.02), flat(f"rip{c}", c), g, outline=0, seg=10)
 
 
 def lily(seed):
@@ -541,6 +625,20 @@ ITEMS = {
     "portal": portal,
     "gate": gate,
     "bundle": bundle,
+    "windmill0": lambda: windmill(0),
+    "windmill1": lambda: windmill(1),
+    "windmill2": lambda: windmill(2),
+    "windmill3": lambda: windmill(3),
+    "windmill4": lambda: windmill(4),
+    "windmill5": lambda: windmill(5),
+    "lantern0": lambda: lantern(False),
+    "lantern1": lambda: lantern(True),
+    "treasure": treasure,
+    "fogveil": fogveil,
+    "g-plank0": lambda: planks(1),
+    "g-plank1": lambda: planks(2),
+    "g-spring0": lambda: springwater(3),
+    "g-spring1": lambda: springwater(6),
     "board": board,
     "stall0": lambda: stall(0xD9484F),
     "stall1": lambda: stall(0x3F7FB5),

@@ -3,12 +3,15 @@
  * carry, exits move every 15 minutes, and corruption grows while you stay.
  */
 import type { ItemStack } from "./items";
-import { GameMap, isWalkable, Prop, rng, Tile } from "./map";
+import { GameMap, nearRamp, Prop, rng, Tile } from "./map";
 import type { Point } from "./pathfinding";
+import { grid, mesa, oval, reachableFrom, setRegion } from "./terrain";
+
+export { reachableFrom } from "./terrain";
 
 /**
- * Lowest level to enter. The GDD says 30, but the maps for levels 10-30 come in
- * step 7, so for now it opens at 10 and its monsters are level 10-22.
+ * Lowest level to enter. The GDD says 30, but the maps for levels 20-30 come
+ * later, so for now it opens at 10 and its monsters are level 10-22.
  */
 export const HOLLOW_MIN_LEVEL = 10;
 export const GATE_COUNT = 3;
@@ -21,13 +24,21 @@ export const LINGER_MS = 30_000;
 /** Corruption points (0-100) gained per minute, and the point where everyone sees you. */
 export const CORRUPTION_PER_MIN = 5;
 export const GLOW_AT = 50;
+/** Colour springs wash this much away per second, but everyone sees you in them. */
+export const SPRING_PER_SEC = 4;
+/** The ground gives way now and then: warning time, how long it stays open, and how often. */
+export const CRACK_WARN_MS = 8000;
+export const CRACK_OPEN_MS = 40_000;
+export const CRACK_EVERY_MS = 75_000;
+/** Part of your health lost when you fall. */
+export const FALL_DAMAGE = 0.4;
 /** Damage between players is lower than against monsters, so fights last longer. */
 export const PVP_DAMAGE = 0.7;
 /** No harm given or taken just after arriving. */
 export const PROTECT_MS = 5000;
 
-const SIZE = 72;
-const C = SIZE / 2;
+const SIZE = 125;
+const C = 62;
 
 /** Drops get better with corruption: up to double the chance at 100. */
 export function corruptionBonus(corruption: number) {
@@ -41,104 +52,118 @@ export interface HollowMap extends GameMap {
   entries: Point[];
 }
 
-/** All tiles that can be walked to from `start`. */
-export function reachableFrom(map: GameMap, start: Point): Set<number> {
-  const seen = new Set<number>([start.y * map.width + start.x]);
-  const todo = [start];
-  while (todo.length) {
-    const { x, y } = todo.pop()!;
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const k = ny * map.width + nx;
-      if (seen.has(k) || !isWalkable(map, nx, ny)) continue;
-      seen.add(k);
-      todo.push({ x: nx, y: ny });
-    }
-  }
-  return seen;
-}
-
 export function buildHollow(): HollowMap {
   const rand = rng(90210);
-  const tiles: Tile[][] = [];
-  const props: Prop[][] = [];
-  for (let y = 0; y < SIZE; y++) {
-    tiles.push(new Array(SIZE).fill(Tile.Ash));
-    props.push(new Array(SIZE).fill(Prop.None));
-  }
   const map: HollowMap = {
     id: "hollow",
     name: "The Hollow",
     pvp: true,
     width: SIZE,
     height: SIZE,
-    tiles,
-    props,
+    tiles: grid<Tile>(SIZE, SIZE, Tile.Ash),
+    props: grid<Prop>(SIZE, SIZE, Prop.None),
     spawn: { x: C, y: C },
     safe: { x: -100, y: -100, r: 0 },
     exits: [],
+    level: grid(SIZE, SIZE, 0),
+    ramp: grid(SIZE, SIZE, 0),
+    regions: {},
+    closed: new Set(),
+    springs: [],
     gateSpots: [],
     entries: [],
   };
+  const { tiles, props } = map;
+  const polar = (deg: number, r: number) => ({ x: C + Math.cos((deg * Math.PI) / 180) * r, y: C + Math.sin((deg * Math.PI) / 180) * r });
 
   for (let y = 0; y < SIZE; y++)
     for (let x = 0; x < SIZE; x++) if (rand() < 0.25) tiles[y][x] = Tile.Pale;
 
   // Torn holes in the world.
-  for (let i = 0; i < 16; i++) {
-    const a = rand() * Math.PI * 2;
-    const d = 10 + rand() * 20;
-    const hx = C + Math.cos(a) * d;
-    const hy = C + Math.sin(a) * d;
-    const r = 1.4 + rand() * 1.8;
-    for (let y = 0; y < SIZE; y++)
-      for (let x = 0; x < SIZE; x++) if (Math.hypot(x - hx, y - hy) < r) tiles[y][x] = Tile.Void;
+  for (let i = 0; i < 34; i++) {
+    const at = polar(rand() * 360, 18 + rand() * 38);
+    const r = 1.5 + rand() * 2;
+    for (const k of oval(map, at.x, at.y, r)) tiles[Math.floor(k / SIZE)][k % SIZE] = Tile.Void;
   }
 
+  // Broken terraces all around, and a tall throne hill in the middle.
+  for (let i = 0; i < 9; i++) {
+    const at = polar(i * 40 + 14, 44);
+    mesa(map, Math.round(at.x), Math.round(at.y), 6.5, 5.5, "se");
+    if (i % 2 === 0) mesa(map, Math.round(at.x), Math.round(at.y) - 1, 3.6, 3, "s");
+  }
+  mesa(map, C, C, 11, 10, "nsew");
+  mesa(map, C, C - 1, 6.5, 6, "se");
+  mesa(map, C, C - 2, 3.6, 3, "s");
+  map.spawn = { x: C, y: C + 16 };
+  for (const k of oval(map, map.spawn.x, map.spawn.y, 2)) tiles[Math.floor(k / SIZE)][k % SIZE] = Tile.Ash;
+
   // A broken ring wall around the inner part (the better, more dangerous part).
-  for (let a = 0; a < 360; a += 3) {
-    if (a % 60 < 18) continue; // six openings
-    const x = Math.round(C + Math.cos((a * Math.PI) / 180) * 15);
-    const y = Math.round(C + Math.sin((a * Math.PI) / 180) * 15);
-    if (tiles[y][x] !== Tile.Void) props[y][x] = Prop.Ruin;
+  for (let a = 0; a < 360; a += 1.8) {
+    if (a % 45 < 15) continue; // eight openings
+    const p = polar(a, 27);
+    const x = Math.round(p.x);
+    const y = Math.round(p.y);
+    if (tiles[y][x] !== Tile.Void && !map.level[y][x]) props[y][x] = Prop.Ruin;
+  }
+
+  // Ground that will give way.
+  for (let i = 0; i < 8; i++) {
+    const p = polar(i * 45 + 30, 34);
+    map.regions[`crack${i}`] = oval(map, Math.round(p.x), Math.round(p.y), 3.4).filter((k) => !map.level[Math.floor(k / SIZE)][k % SIZE] && !map.ramp[Math.floor(k / SIZE)][k % SIZE]);
+  }
+  const cracked = new Set(Object.values(map.regions).flat());
+
+  // Springs of colour.
+  for (const a of [70, 190, 310]) {
+    const p = polar(a, 20);
+    const s = { x: Math.round(p.x), y: Math.round(p.y), r: 2.6 };
+    map.springs.push(s);
+    for (const k of oval(map, s.x, s.y, s.r)) {
+      const x = k % SIZE;
+      const y = Math.floor(k / SIZE);
+      if (!map.level[y][x]) {
+        tiles[y][x] = Tile.Spring;
+        props[y][x] = Prop.None;
+      }
+    }
   }
 
   for (let y = 0; y < SIZE; y++)
     for (let x = 0; x < SIZE; x++) {
-      if (props[y][x] !== Prop.None || tiles[y][x] === Tile.Void) continue;
+      if (props[y][x] !== Prop.None || tiles[y][x] === Tile.Void || tiles[y][x] === Tile.Spring) continue;
       const edge = Math.min(x, y, SIZE - 1 - x, SIZE - 1 - y);
       const d = Math.hypot(x - C, y - C);
       if (edge <= 1) props[y][x] = Prop.Tree;
-      else if (d > 4 && rand() < 0.035) props[y][x] = Prop.Tree;
-      else if (d > 4 && rand() < (d < 15 ? 0.03 : 0.018)) props[y][x] = Prop.Rock;
-      else if (d > 4 && rand() < 0.012) props[y][x] = Prop.Ruin;
+      else if (d < 5 || map.ramp[y][x] || nearRamp(map, x, y) || cracked.has(y * SIZE + x)) continue;
+      else if (rand() < 0.035) props[y][x] = Prop.Tree;
+      else if (rand() < (d < 27 ? 0.03 : 0.018)) props[y][x] = Prop.Rock;
+      else if (rand() < 0.012) props[y][x] = Prop.Ruin;
     }
 
-  // Gates and arrival points: spread around, always on ground that connects.
-  const ok = reachableFrom(map, map.spawn);
-  const near = (x: number, y: number): Point => {
+  // Gates and arrival points: spread around, on ground that connects even when a crack is open.
+  let ok = reachableFrom(map, map.spawn);
+  for (const id of Object.keys(map.regions)) {
+    setRegion(map, id, true);
+    const left = reachableFrom(map, map.spawn);
+    ok = new Set([...ok].filter((k) => left.has(k)));
+    setRegion(map, id, false);
+  }
+  const near = (p: { x: number; y: number }): Point => {
     let best = map.spawn;
     let bestD = Infinity;
     for (const k of ok) {
-      const p = { x: k % SIZE, y: Math.floor(k / SIZE) };
-      const d = Math.hypot(p.x - x, p.y - y);
-      if (d < bestD) {
+      const q = { x: k % SIZE, y: Math.floor(k / SIZE) };
+      const d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (d < bestD && !map.ramp[q.y][q.x]) {
         bestD = d;
-        best = p;
+        best = q;
       }
     }
     return best;
   };
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2 + 0.2;
-    const r = i % 3 === 0 ? 11 : 24;
-    map.gateSpots.push(near(C + Math.cos(a) * r, C + Math.sin(a) * r));
-  }
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + 0.55;
-    map.entries.push(near(C + Math.cos(a) * 31, C + Math.sin(a) * 31));
-  }
+  for (let i = 0; i < 12; i++) map.gateSpots.push(near(polar(i * 30 + 11, i % 3 === 0 ? 18 : 40)));
+  for (let i = 0; i < 6; i++) map.entries.push(near(polar(i * 60 + 31, 56)));
   return map;
 }
 

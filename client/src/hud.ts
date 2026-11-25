@@ -61,6 +61,11 @@ export function setZone(name: string, hollow: boolean) {
   document.querySelectorAll<HTMLElement>(".skill .cd").forEach((el) => (el.style.height = "0"));
 }
 
+/** Sun or moon, and how long until it changes. */
+export function setDaytime(text: string) {
+  if ($("daytime").textContent !== text) $("daytime").textContent = text;
+}
+
 export function setCorruption(value: number, gatesUntil: number) {
   $("corruption-fill").style.width = `${value}%`;
   $("corruption-text").textContent = `การกัดกร่อน ${value}%${value >= GLOW_AT ? " ทุกคนเห็นคุณ!" : ""}`;

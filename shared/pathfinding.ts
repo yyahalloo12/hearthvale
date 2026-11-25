@@ -1,4 +1,5 @@
 import { GameMap, isWalkable } from "./map";
+import { canStep } from "./terrain";
 
 export interface Point {
   x: number;
@@ -12,7 +13,7 @@ const DIRS: [number, number, number][] = [
 
 /**
  * A* on the tile grid with 8 directions. Diagonal steps may not cut the
- * corner of a blocked tile. Returns the tiles to walk through, excluding the
+ * corner of a blocked tile, and height changes only along ramps. Returns the tiles to walk through, excluding the
  * start, or null when there is no path within `maxSteps`.
  */
 export function findPath(map: GameMap, start: Point, goal: Point, maxSteps = 80): Point[] | null {
@@ -74,7 +75,7 @@ export function findPath(map: GameMap, start: Point, goal: Point, maxSteps = 80)
     if (k === gk) break;
     if (closed.has(k)) continue;
     closed.add(k);
-    if (++expanded > 4000) return null;
+    if (++expanded > 6000) return null;
     const x = k % W;
     const y = (k - x) / W;
     const gc = g.get(k)!;
@@ -82,8 +83,7 @@ export function findPath(map: GameMap, start: Point, goal: Point, maxSteps = 80)
     for (const [dx, dy, cost] of DIRS) {
       const nx = x + dx;
       const ny = y + dy;
-      if (!isWalkable(map, nx, ny)) continue;
-      if (dx && dy && (!isWalkable(map, x + dx, y) || !isWalkable(map, x, y + dy))) continue;
+      if (!canStep(map, x, y, nx, ny)) continue;
       const nk = key(nx, ny);
       const ng = gc + cost;
       if (ng < (g.get(nk) ?? Infinity)) {

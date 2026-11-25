@@ -1,5 +1,6 @@
 import { GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
 import { findPath, Point } from "../../../shared/pathfinding";
+import { inReach } from "../../../shared/terrain";
 import { ATTACK_RANGE, MonsterDef, MONSTERS, monsterStats } from "../../../shared/stats";
 import spawnsJson from "../../../shared/data/spawns.json";
 import hollowSpawnsJson from "../../../shared/data/spawns_hollow.json";
@@ -32,6 +33,8 @@ export interface MonsterCtl {
   nextThinkAt: number;
   repathAt: number;
   stunUntil: number;
+  /** cannot reach its target since then (0 = fine) */
+  stuckAt: number;
   slowUntil: number;
   slow: number;
   markUntil: number;
@@ -46,6 +49,8 @@ export interface MonsterCtl {
 /** What the monster system needs from the room. */
 export interface MonsterHost {
   map: GameMap;
+  /** ground that connects to the rest of the map */
+  reach: Set<number>;
   monsters: Map<string, Monster>;
   /** Live, attackable players with positions. */
   playerAt(id: string): { x: number; y: number; dead: boolean } | undefined;
@@ -94,6 +99,7 @@ export class MonsterSystem {
       nextThinkAt: this.host.now() + 1000 + Math.random() * 4000,
       repathAt: 0,
       stunUntil: 0,
+      stuckAt: 0,
       slowUntil: 0,
       slow: 0,
       markUntil: 0,
@@ -135,7 +141,7 @@ export class MonsterSystem {
     for (let i = 0; i < 40; i++) {
       const x = Math.round(c.x + (Math.random() * 2 - 1) * r);
       const y = Math.round(c.y + (Math.random() * 2 - 1) * r);
-      if (isWalkable(this.host.map, x, y)) return { x, y };
+      if (isWalkable(this.host.map, x, y) && this.host.reach.has(y * this.host.map.width + x)) return { x, y };
     }
     return null;
   }
@@ -180,6 +186,22 @@ export class MonsterSystem {
   /** Monsters chasing this player give up (player died or left). */
   forget(playerId: string) {
     for (const c of this.ctl.values()) if (c.targetId === playerId) this.goHome(c);
+  }
+
+  /** The ground under it is gone: back home at once. */
+  rescue(isGone: (x: number, y: number) => boolean) {
+    for (const c of this.ctl.values()) {
+      const m = this.host.monsters.get(c.id);
+      if (!m || !isGone(Math.round(m.x), Math.round(m.y))) continue;
+      const to = this.randomTileNear(c.spawn, c.spawn.radius) ?? c.home;
+      c.home = to;
+      c.path = [];
+      c.targetId = null;
+      c.state = "idle";
+      m.x = to.x;
+      m.y = to.y;
+      m.moving = false;
+    }
   }
 
   private goHome(c: MonsterCtl) {
@@ -250,7 +272,8 @@ export class MonsterSystem {
           this.goHome(c);
         } else {
           const d = dist(m, p);
-          if (d <= ATTACK_RANGE) {
+          if (d <= ATTACK_RANGE && inReach(this.host.map, m, p, ATTACK_RANGE)) {
+            c.stuckAt = 0;
             // finish the current step, then fight
             if (c.path.length > 1) c.path.length = 1;
             stepAlong(m, c.path, speed, dt);
@@ -267,7 +290,16 @@ export class MonsterSystem {
               const goal = { x: Math.round(p.x), y: Math.round(p.y) };
               const from = planFrom(m, c.path);
               const rest = findPath(this.host.map, from, goal, 30);
-              if (rest) c.path = c.path.length ? [c.path[0], ...rest] : rest;
+              if (rest) {
+                c.path = c.path.length ? [c.path[0], ...rest] : rest;
+                c.stuckAt = 0;
+              } else if (!c.stuckAt) c.stuckAt = now;
+              // somebody shooting from where it cannot go: give up and recover
+              else if (now - c.stuckAt > 3000 && !c.path.length) {
+                c.stuckAt = 0;
+                this.goHome(c);
+                continue;
+              }
             }
             stepAlong(m, c.path, speed, dt);
           }

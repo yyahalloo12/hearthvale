@@ -12,6 +12,11 @@ import {
   WALK_SPEED,
 } from "../../../shared/constants";
 import {
+  CRACK_EVERY_MS,
+  CRACK_OPEN_MS,
+  CRACK_WARN_MS,
+  FALL_DAMAGE,
+  SPRING_PER_SEC,
   BUNDLE_MS,
   CORRUPTION_PER_MIN,
   corruptionBonus,
@@ -38,7 +43,12 @@ import {
   equipTotals,
   findStation,
   FlatStats,
+  FOG_OPEN_MS,
   GATHER_MS,
+  LANTERN_MS,
+  NIGHT_BONUS,
+  WIND_MS,
+  WIND_SPEED,
   Inventory,
   ITEMS,
   ItemStack,
@@ -74,6 +84,9 @@ import {
 } from "../../../shared/market";
 import { GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
 import { buildZone, ZONE_NAMES, zoneId } from "../../../shared/zones";
+import { isNight } from "../../../shared/daylight";
+import { GROVE, LANTERNS } from "../../../shared/mossfen";
+import { inReach, levelOf, reachableFrom, setRegion } from "../../../shared/terrain";
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
@@ -142,6 +155,7 @@ interface PlayerCtl {
   lastCombatAt: number;
   pendingSkill: SkillId | null;
   cooldowns: Map<string, number>;
+  windUntil: number;
   guardUntil: number;
   guardReduce: number;
   blessUntil: number;
@@ -194,6 +208,12 @@ export class WorldRoom extends Room<WorldState> {
   map!: GameMap;
   ctl = new Map<string, PlayerCtl>();
   monsterSys!: MonsterSystem;
+  /** ground that connects to the rest of the map */
+  private reach = new Set<number>();
+  private crackAt = 0;
+  private crackEnds = 0;
+  /** who already opened the grove's chest this time */
+  private chestTaken = new Set<number>();
   private bundles = new Map<string, BundleCtl>();
   private stalls = new Map<string, market.StallRow>();
   /** used-up rocks and trees: "x,y" -> when they come back */
@@ -203,10 +223,14 @@ export class WorldRoom extends Room<WorldState> {
     this.map = buildZone(zoneId(options?.zone));
     this.setState(new WorldState());
     this.state.mapName = this.map.name;
+    this.reach = reachableFrom(this.map, this.map.spawn);
+    for (const id of Object.keys(this.map.regions)) if (this.map.regions[id].some((k) => this.map.closed.has(k))) this.state.closed.set(id, true);
+    this.crackAt = Date.now() + CRACK_EVERY_MS;
     this.autoDispose = false; // the world stays alive (monsters keep living) with nobody online
 
     this.monsterSys = new MonsterSystem({
       map: this.map,
+      reach: this.reach,
       monsters: this.state.monsters as unknown as Map<string, any>,
       playerAt: (id) => this.state.players.get(id),
       nearestPlayer: (x, y, r) => this.nearestPlayer(x, y, r),
@@ -259,11 +283,15 @@ export class WorldRoom extends Room<WorldState> {
       } catch {
         /* bad JSON: nothing in it */
       }
-      if (items.length) this.addBundle(b.id, { items, owner: b.owner, x: b.x, y: b.y, expires: b.expires });
+      if (items.length) this.addBundle(b.id, { items, owner: b.owner, ...(this.standable(b.x, b.y) ? { x: b.x, y: b.y } : this.nearestStandable(b.x, b.y)), expires: b.expires });
     }
     if (this.map.id === "brindle") {
       market.expireOld();
-      for (const s of market.loadStalls()) this.showStall(s);
+      for (const s of market.loadStalls()) {
+        this.showStall(s);
+        // a stall on ground that is gone goes back to its owner
+        if (!this.standable(s.x, s.y)) this.closeStall(s.id);
+      }
       this.closeOldStalls();
     }
   }
@@ -363,7 +391,7 @@ export class WorldRoom extends Room<WorldState> {
     this.showGear(p, inv);
     this.applyStats(p, { mods, gear: worn.flat }, true);
     const saved = { x: Math.round(c.x), y: Math.round(c.y) };
-    const spot = c.x >= 0 && isWalkable(this.map, saved.x, saved.y) ? saved : this.findSpawn();
+    const spot = c.x >= 0 && this.standable(saved.x, saved.y) ? saved : this.findSpawn();
     p.x = spot.x;
     p.y = spot.y;
     p.facing = Math.floor(Math.random() * 8);
@@ -387,6 +415,7 @@ export class WorldRoom extends Room<WorldState> {
       lastCombatAt: 0,
       pendingSkill: null,
       cooldowns: new Map(),
+      windUntil: 0,
       guardUntil: 0,
       guardReduce: 0,
       blessUntil: 0,
@@ -646,9 +675,139 @@ export class WorldRoom extends Room<WorldState> {
     for (let tries = 0; tries < 50; tries++) {
       const x = spawn.x + Math.floor(Math.random() * 5) - 2;
       const y = spawn.y + Math.floor(Math.random() * 5) - 2;
-      if (isWalkable(this.map, x, y)) return { x, y };
+      if (this.standable(x, y)) return { x, y };
     }
     return { ...spawn };
+  }
+
+  /** Walkable, and not cut off from the rest of the map. */
+  private standable(x: number, y: number) {
+    return isWalkable(this.map, x, y) && this.reach.has(y * this.map.width + x);
+  }
+
+  private nearestStandable(x: number, y: number): Point {
+    for (let r = 0; r < 30; r++)
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const p = { x: Math.round(x) + dx, y: Math.round(y) + dy };
+          if (p.x >= 0 && p.y >= 0 && this.standable(p.x, p.y)) return p;
+        }
+    return this.findSpawn();
+  }
+
+  /** Puts somebody on another spot at once, and stops whatever they were doing. */
+  private placeAt(id: string, p: Player, c: PlayerCtl, at: Point) {
+    this.stopInteract(this.clientOf(id), c);
+    c.path = [];
+    c.targetId = null;
+    c.pendingSkill = null;
+    c.charge = null;
+    c.leaping = false;
+    p.x = at.x;
+    p.y = at.y;
+    p.moving = false;
+  }
+
+  // ---- what makes each map special ------------------------------------------
+
+  private setClosed(region: string, closed: boolean) {
+    setRegion(this.map, region, closed);
+    if (closed) this.state.closed.set(region, true);
+    else this.state.closed.delete(region);
+  }
+
+  private tickMap() {
+    const now = Date.now();
+    if (this.map.id === "mossfen") {
+      for (const [key, until] of this.state.lit) if (until <= now && !this.state.fogUntil) this.state.lit.delete(key);
+      if (this.state.fogUntil && this.state.fogUntil <= now) this.closeFog();
+    }
+    if (!this.map.pvp) return;
+    // the Hollow's ground: warn, fall, come back
+    if (this.state.cracking && this.crackEnds <= now) {
+      const id = this.state.cracking;
+      this.state.cracking = "";
+      this.setClosed(id, true);
+      this.crackEnds = now + CRACK_OPEN_MS;
+      this.fall(id);
+    } else if (!this.state.cracking && this.state.closed.size && this.crackEnds <= now) {
+      for (const id of [...this.state.closed.keys()]) this.setClosed(id, false);
+      this.crackAt = now + CRACK_EVERY_MS;
+    } else if (!this.state.cracking && !this.state.closed.size && this.crackAt <= now) {
+      const ids = Object.keys(this.map.regions);
+      this.state.cracking = ids[Math.floor(Math.random() * ids.length)];
+      this.crackEnds = now + CRACK_WARN_MS;
+      this.broadcastSystem("พื้นดินใน Hollow เริ่มแตกร้าว ดูจุดสีแดงบนแผนที่!");
+    }
+  }
+
+  /** Everyone on fallen ground takes damage and climbs out at the edge. */
+  private fall(region: string) {
+    const gone = new Set(this.map.regions[region]);
+    const on = (x: number, y: number) => gone.has(Math.round(y) * this.map.width + Math.round(x));
+    this.state.players.forEach((p, id) => {
+      const c = this.ctl.get(id);
+      if (!c || c.leaving || !on(p.x, p.y)) return;
+      this.placeAt(id, p, c, this.nearestStandable(p.x, p.y));
+      if (p.dead || c.god) return;
+      p.hp = Math.max(0, p.hp - Math.round(p.maxHp * FALL_DAMAGE));
+      this.clientOf(id)?.send(Msg.Notice, { text: "พื้นถล่ม! คุณตกลงไปและปีนกลับขึ้นมา" });
+      if (p.hp <= 0) this.playerDies(id, p, c, "พื้นที่ถล่ม");
+    });
+    this.monsterSys.rescue(on);
+    for (const [id, b] of [...this.bundles]) if (on(b.x, b.y)) {
+      // things lying there land at the edge
+      const at = this.nearestStandable(b.x, b.y);
+      this.removeBundle(id);
+      this.addBundle(id, { ...b, ...at });
+    }
+  }
+
+  private useSpecial(client: Client, p: Player, c: PlayerCtl, kind: StationKind, x: number, y: number) {
+    const now = Date.now();
+    if (kind === "windmill") {
+      c.windUntil = this.clock.currentTime + WIND_MS;
+      p.windy = true;
+      client.send(Msg.Notice, { text: "ลมจากกังหันพัดส่งคุณ เดินเร็วขึ้น 20% นาน 3 นาที" });
+    } else if (kind === "lantern") {
+      if (this.state.fogUntil) return client.send(Msg.Notice, { text: "หมอกเปิดอยู่แล้ว รีบไปที่ลานสมบัติ" });
+      this.state.lit.set(`${x},${y}`, now + LANTERN_MS);
+      const n = this.state.lit.size;
+      if (n < LANTERNS.length) return this.broadcastSystem(`${p.name} จุดโคมหินแล้ว ${n}/${LANTERNS.length} (โคมดับใน 90 วินาที)`);
+      this.state.fogUntil = now + FOG_OPEN_MS;
+      this.chestTaken.clear();
+      this.setClosed("fog", false);
+      this.broadcastSystem("โคมหินสว่างครบ! หมอกเปิดทางขึ้นลานสมบัติ 3 นาที");
+    } else if (kind === "treasure") {
+      if (!this.state.fogUntil) return;
+      if (this.chestTaken.has(c.accountId)) return client.send(Msg.Notice, { text: "คุณเปิดหีบรอบนี้ไปแล้ว" });
+      const items = [
+        { id: "crystal_1", qty: 2 + Math.floor(Math.random() * 2) },
+        { id: "herb_2", qty: 4 + Math.floor(Math.random() * 4) },
+        { id: "wood_2", qty: 4 + Math.floor(Math.random() * 4) },
+      ];
+      if (!this.giveLoot(client, p, c, items)) return;
+      this.chestTaken.add(c.accountId);
+      c.gold += 120;
+      this.itemsChanged(client, p, c);
+      client.send(Msg.Notice, { text: "เปิดหีบลานสมบัติแล้ว" });
+    }
+  }
+
+  /** The fog comes back; anyone still up there is carried down to its edge. */
+  private closeFog() {
+    this.state.fogUntil = 0;
+    this.state.lit.clear();
+    this.setClosed("fog", true);
+    this.broadcastSystem("หมอกปิดทางขึ้นลานสมบัติแล้ว");
+    const up = (x: number, y: number) => Math.hypot(x - GROVE.x, y - GROVE.y) < 10 && levelOf(this.map, Math.round(x), Math.round(y)) >= 2;
+    const fog = new Set(this.map.regions.fog);
+    this.state.players.forEach((p, id) => {
+      const c = this.ctl.get(id);
+      if (c && !c.leaving && (up(p.x, p.y) || fog.has(Math.round(p.y) * this.map.width + Math.round(p.x))))
+        this.placeAt(id, p, c, this.nearestStandable(GROVE.x, GROVE.y + 8));
+    });
   }
 
   // ---- stats --------------------------------------------------------------
@@ -1055,6 +1214,7 @@ export class WorldRoom extends Room<WorldState> {
   private tickEffects(p: Player, c: PlayerCtl, now: number, dt: number) {
     if (p.guarding && c.guardUntil <= now) p.guarding = false;
     if (p.blessed && c.blessUntil <= now) p.blessed = false;
+    if (p.windy && c.windUntil <= now) p.windy = false;
     if (p.manaShield && (c.manaShieldUntil <= now || p.mp <= 0)) {
       c.manaShieldUntil = 0;
       p.manaShield = false;
@@ -1104,7 +1264,7 @@ export class WorldRoom extends Room<WorldState> {
     const from = planFrom(p, c.path);
     const spots: Point[] = [];
     for (let dy = -1; dy <= 1; dy++)
-      for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && isWalkable(this.map, x + dx, y + dy)) spots.push({ x: x + dx, y: y + dy });
+      for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && isWalkable(this.map, x + dx, y + dy) && Math.abs(levelOf(this.map, x + dx, y + dy) - levelOf(this.map, x, y)) <= 1) spots.push({ x: x + dx, y: y + dy });
     spots.sort((a, b) => dist(a, from) - dist(b, from));
     for (const spot of spots) {
       const rest = findPath(this.map, from, spot, MAX_PATH_STEPS);
@@ -1124,6 +1284,11 @@ export class WorldRoom extends Room<WorldState> {
     const client = this.clients.find((cl) => cl.sessionId === id);
     if (!client || dist(p, it) > 1.6) return this.stopInteract(client, c);
     faceTowards(p, it);
+    if (it.station === "windmill" || it.station === "lantern" || it.station === "treasure") {
+      this.useSpecial(client, p, c, it.station, it.x, it.y);
+      c.interact = null;
+      return;
+    }
     if (it.station) {
       client.send(Msg.OpenStation, { kind: it.station } satisfies OpenStationEvent);
       c.interact = null;
@@ -1952,10 +2117,11 @@ export class WorldRoom extends Room<WorldState> {
       c.pendingSkill = null;
       const client = this.clients.find((cl) => cl.sessionId === id);
       c.struck.delete(monsterId);
-      c.gold += killGold(mc.def);
+      const night = this.map.id === "brindle" && m.kind === "scarecrow" && isNight() ? NIGHT_BONUS : 1;
+      c.gold += Math.round(killGold(mc.def) * night);
       this.giveLoot(client, p, c, rollDrops(mc.def.drops, c.inv.bag, Math.random, corruptionBonus(c.corruption)));
       this.sendPrivate(client);
-      this.gainExp(client, p, c, killExp(mc.exp, level, p.level));
+      this.gainExp(client, p, c, killExp(Math.round(mc.exp * night), level, p.level));
       if (mc.def.boss) this.broadcastSystem(`${p.name} ปราบ${MONSTERS[m.kind]?.name ?? "บอส"}ได้แล้ว!`);
     }
   }
@@ -1969,7 +2135,10 @@ export class WorldRoom extends Room<WorldState> {
       return true;
     }
     const before = c.corruption;
-    c.corruption = Math.min(100, c.corruption + (CORRUPTION_PER_MIN / 60) * dt);
+    const spring = this.map.springs.some((s) => dist(s, p) <= s.r);
+    if (p.inSpring !== spring) p.inSpring = spring;
+    if (spring) c.corruption = Math.max(0, c.corruption - SPRING_PER_SEC * dt);
+    else c.corruption = Math.min(100, c.corruption + (CORRUPTION_PER_MIN / 60) * dt);
     if (Math.floor(c.corruption) !== p.corruption) p.corruption = Math.floor(c.corruption);
     const client = this.clients.find((cl) => cl.sessionId === id);
     if (before < GLOW_AT && c.corruption >= GLOW_AT) client?.send(Msg.Notice, { text: "การกัดกร่อนเกินครึ่งแล้ว ทุกคนเห็นคุณบนแผนที่!" });
@@ -1996,7 +2165,7 @@ export class WorldRoom extends Room<WorldState> {
       }
 
       this.tickEffects(p, c, now, dt);
-      const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100) * c.speedTimes * (c.slowUntil > now ? 1 - c.slow : 1);
+      const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100) * c.speedTimes * (c.windUntil > now ? 1 + WIND_SPEED : 1) * (c.slowUntil > now ? 1 - c.slow : 1);
       const weaponRange = attackRange(ITEMS[c.inv.equip.weapon?.id ?? ""]?.look);
       const reach = c.pendingSkill ? SKILLS[c.pendingSkill].range : weaponRange;
       const swingMs = PLAYER_ATTACK_MS / (1 + c.mods.attackSpeedPct / 100);
@@ -2016,7 +2185,7 @@ export class WorldRoom extends Room<WorldState> {
             p.moving = false;
             const { power, stunMs, targetId } = c.charge;
             c.charge = null;
-            if (dist(p, m) <= ATTACK_RANGE + 0.5) this.playerHits(id, p, c, targetId, power, "charge", stunMs);
+            if (inReach(this.map, p, m, ATTACK_RANGE + 0.5)) this.playerHits(id, p, c, targetId, power, "charge", stunMs);
           }
         }
       } else if (c.targetId) {
@@ -2024,7 +2193,7 @@ export class WorldRoom extends Room<WorldState> {
         if (!m) {
           c.targetId = null;
           c.pendingSkill = null;
-        } else if (dist(p, m) <= reach) {
+        } else if (inReach(this.map, p, m, reach)) {
           if (c.path.length > 1) c.path.length = 1; // finish this step, then stop
           stepAlong(p, c.path, speed, dt);
           if (!c.path.length) {
@@ -2075,6 +2244,7 @@ export class WorldRoom extends Room<WorldState> {
       }
     });
 
+    this.tickMap();
     if (this.map.pvp && Date.now() >= this.state.gatesUntil) this.moveGates(true);
     for (const [id, b] of this.bundles) if (b.expires <= Date.now()) this.removeBundle(id);
 

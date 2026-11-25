@@ -19,6 +19,10 @@ export class Player extends Schema {
   /** 0 for jobs without mana */
   @type("int32") mp = 0;
   @type("int32") maxMp = 0;
+  /** the windmill's blessing */
+  @type("boolean") windy = false;
+  /** standing in a colour spring: everyone sees you */
+  @type("boolean") inSpring = false;
   @type("boolean") blessed = false;
   @type("boolean") manaShield = false;
   @type("boolean") slowed = false;
@@ -78,6 +82,14 @@ export class Stall extends Schema {
 
 export class WorldState extends Schema {
   @type("string") mapName = "";
+  /** regions of the map that are closed now (fog, fallen ground) */
+  @type({ map: "boolean" }) closed = new MapSchema<boolean>();
+  /** region about to fall, or "" */
+  @type("string") cracking = "";
+  /** lit lantern stones: "x,y" -> when they go out (epoch ms) */
+  @type({ map: "float64" }) lit = new MapSchema<number>();
+  /** the fog is open until this time (epoch ms), 0 = closed */
+  @type("float64") fogUntil = 0;
   @type([Gate]) gates = new ArraySchema<Gate>();
   /** when the gates move next (epoch ms) */
   @type("float64") gatesUntil = 0;
