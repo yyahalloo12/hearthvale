@@ -5,12 +5,14 @@
 - `kit.py` วัสดุการ์ตูน เส้นขอบ กล้องมุมเฉียงของเกม และการต่อภาพเป็นแผ่น
 - `player.py` ตัวละคร 5 ชั้น: ตัว เสื้อ (ย้อมสีในเกม) หมวก ดาบ ขวาน
 - `monsters.py` มอนสเตอร์ 7 ชนิด
+- `scenery.py` บ้าน ต้นไม้ หิน รั้ว จุดใช้งาน และรายละเอียดพื้น รวมเป็นแผ่นเดียว (`scenery.png` + `scenery.json`)
 
 เรนเดอร์ใหม่ (รันในโฟลเดอร์โปรเจกต์):
 
 ```powershell
 & "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" --background --factory-startup --python art/player.py -- client/public/art
 & "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" --background --factory-startup --python art/monsters.py -- client/public/art
+& "C:\Program Files\Blender Foundation\Blender 5.3\blender.exe" --background --factory-startup --python art/scenery.py -- client/public/art
 ```
 
 เติม `preview` ท้ายคำสั่งเพื่อดูภาพตัวอย่างใหญ่ หรือเติมชื่อมอนสเตอร์ เช่น `hen` เพื่อเรนเดอร์เฉพาะตัวนั้น

@@ -19,6 +19,8 @@ export const PLAYER_SHEET = {
   attack: [8, 9, 10, 11],
   dead: 12,
 };
+/** The scenery atlas is drawn at twice its size on screen. */
+export const SCENERY_SCALE = 0.5;
 export const PLAYER_LAYERS = ["base", "tunic", "helm", "sword", "axe"] as const;
 
 export interface MonsterSheet {
@@ -54,6 +56,7 @@ export function loadSprites(scene: Phaser.Scene) {
   const sheet = (key: string, w: number, h: number) => {
     if (!scene.textures.exists(key)) scene.load.spritesheet(key, `/art/${key}.png`, { frameWidth: w, frameHeight: h });
   };
+  if (!scene.textures.exists("scenery")) scene.load.atlas("scenery", "/art/scenery.png", "/art/scenery.json");
   for (const l of PLAYER_LAYERS) sheet(`player-${l}`, PLAYER_SHEET.w, PLAYER_SHEET.h);
   for (const [k, s] of Object.entries(MONSTER_SHEETS)) sheet(`mon-${k}`, s.w, s.h);
 }

@@ -15,20 +15,9 @@ import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
 import { PlayerView } from "../PlayerView";
-import { loadSprites } from "../sprites";
-import { groundKey, makeTextures } from "../textures";
+import { loadSprites, SCENERY_SCALE } from "../sprites";
+import { groundDetail, groundKey, houseFrame, makeTextures, PROP_SHADOW, propFrame } from "../textures";
 
-const PROP_TEXTURE: Partial<Record<Prop, string>> = {
-  [Prop.Tree]: "p-tree",
-  [Prop.Well]: "p-well",
-  [Prop.Fence]: "p-fence",
-  [Prop.Rock]: "p-rock",
-  [Prop.Bush]: "p-bush",
-  [Prop.Anvil]: "p-anvil",
-  [Prop.Chest]: "p-chest",
-  [Prop.Portal]: "p-portal",
-  [Prop.Ruin]: "p-ruin",
-};
 const STATION_LABEL = { smith: "ช่างตีเหล็ก", storage: "คลังเก็บของ", portal: "ทางเข้า Hollow" } as const;
 
 export class WorldScene extends Phaser.Scene {
@@ -103,36 +92,39 @@ export class WorldScene extends Phaser.Scene {
     (window as any).__hv = { scene: this, room: this.room };
   }
 
+  /** A scenery frame with its foot on this point (the atlas knows where that is). */
+  private scenery(x: number, y: number, frame: string) {
+    return this.add.image(x, y, "scenery", frame).setScale(SCENERY_SCALE);
+  }
+
   private drawMap() {
     const { map } = this;
     for (let y = 0; y < map.height; y++) {
       for (let x = 0; x < map.width; x++) {
         const p = toScreen(x, y);
         this.add.image(p.x, p.y, groundKey(map.tiles[y][x], x, y)).setDepth(-10000);
+        const detail = groundDetail(map.tiles[y][x], x, y);
+        if (detail) this.scenery(p.x, p.y, detail).setDepth(-9990);
         const prop = map.props[y][x];
         if (prop === Prop.House) {
           if (isHouseAnchor(map, x, y)) {
-            // bottom vertex of the 2x2 footprint
-            const b = toScreen(x + 1.5, y + 1.5);
-            this.add.image(b.x, b.y, "p-house").setOrigin(0.5, 1).setDepth(b.y - TILE_H / 2);
+            // centre of the 2x2 footprint, sorted by its front corner
+            const c = toScreen(x + 0.5, y + 0.5);
+            this.scenery(c.x, c.y, houseFrame(x, y)).setDepth(toScreen(x + 1.5, y + 1.5).y - TILE_H / 2);
           }
           continue;
         }
-        const key = this.map.pvp && prop === Prop.Tree ? "p-deadtree" : PROP_TEXTURE[prop];
-        if (key) {
-          const img = this.add
-            .image(p.x, p.y + TILE_H / 2 - 4, key)
-            .setOrigin(0.5, 1)
-            .setDepth(p.y);
-          const res = resourceAt(map, x, y);
+        const res = resourceAt(map, x, y);
+        const frame = propFrame(map, x, y, res?.item);
+        if (frame) {
+          const shadow = PROP_SHADOW[prop];
+          if (shadow) this.add.image(p.x, p.y + 2, "c-shadow").setScale(shadow).setDepth(-9980);
+          const img = this.scenery(p.x, p.y, frame).setDepth(p.y);
           const station = stationAt(map, x, y);
           if (res || station) this.usable.set(`${x},${y}`, { x, y, img });
-          if (res?.item === "ore_1") img.setTint(0xe8a878);
-          if (res?.item === "ore_2") img.setTint(0x9fb4d0);
-          if (res?.item === "ore_3") img.setTint(0xc9b8ff);
           if (station)
             this.add
-              .text(p.x, p.y - (station === "portal" ? 78 : 34), STATION_LABEL[station], {
+              .text(p.x, p.y - (station === "portal" ? 80 : 40), STATION_LABEL[station], {
                 fontFamily: "Tahoma, sans-serif",
                 fontSize: "12px",
                 color: "#ffe9a8",
@@ -223,9 +215,9 @@ export class WorldScene extends Phaser.Scene {
     $(state).gates.onRemove(() => this.redrawGates());
     $(state).bundles.onAdd((b: any, id: string) => {
       const p = toScreen(b.x, b.y);
-      const img = this.add.image(0, 6, "p-bundle").setOrigin(0.5, 1);
+      const img = this.scenery(0, 0, "bundle");
       const label = this.add
-        .text(0, -30, `ห่อของ ${b.owner}`, { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: "#ffe9a8", stroke: "#000", strokeThickness: 3 })
+        .text(0, -36, `ห่อของ ${b.owner}`, { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: "#ffe9a8", stroke: "#000", strokeThickness: 3 })
         .setOrigin(0.5, 1);
       this.bundles.set(id, this.add.container(p.x, p.y, [img, label]).setDepth(p.y));
     });
@@ -284,9 +276,9 @@ export class WorldScene extends Phaser.Scene {
 
   private addGate(x: number, y: number) {
     const p = toScreen(x, y);
-    const img = this.add.image(p.x, p.y + 12, "p-gate").setOrigin(0.5, 1).setDepth(p.y - 1);
+    const img = this.scenery(p.x, p.y, "gate").setDepth(p.y - 1);
     const label = this.add
-      .text(p.x, p.y - 80, "ประตูทางออก", { fontFamily: "Tahoma, sans-serif", fontSize: "13px", color: "#ffd23a", stroke: "#000", strokeThickness: 3 })
+      .text(p.x, p.y - 68, "ประตูทางออก", { fontFamily: "Tahoma, sans-serif", fontSize: "13px", color: "#ffd23a", stroke: "#000", strokeThickness: 3 })
       .setOrigin(0.5, 1)
       .setDepth(p.y);
     this.tweens.add({ targets: img, alpha: 0.65, duration: 900, yoyo: true, repeat: -1 });
@@ -414,8 +406,8 @@ export class WorldScene extends Phaser.Scene {
     let best: { x: number; y: number; img: Phaser.GameObjects.Image } | null = null;
     for (const u of this.usable.values()) {
       const { img } = u;
-      const h = Math.min(img.height, 58);
-      if (Math.abs(wx - img.x) > Math.min(img.width, 44) / 2 || wy > img.y || wy < img.y - h) continue;
+      const h = Math.min(img.displayHeight, 56);
+      if (Math.abs(wx - img.x) > Math.min(img.displayWidth, 46) / 2 || wy > img.y + 12 || wy < img.y - h) continue;
       if (!best || img.depth > best.img.depth) best = u;
     }
     return best;
