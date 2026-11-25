@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tales of Hearthvale</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+
+    <div id="login" class="panel">
+      <h1>Tales of Hearthvale</h1>
+      <p class="sub">ผู้ผูกด้ายคนใหม่ ตั้งชื่อของคุณ</p>
+      <form id="login-form" autocomplete="off">
+        <label for="name">ชื่อตัวละคร</label>
+        <input id="name" maxlength="16" placeholder="เช่น Ploy" required />
+        <label>สีเสื้อ</label>
+        <div id="colors"></div>
+        <button type="submit" id="enter">เข้าสู่โลก</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </div>
+
+    <div id="hud" hidden>
+      <div id="map-name"></div>
+      <div id="online"></div>
+    </div>
+
+    <div id="chat" hidden>
+      <div id="chat-log" aria-live="polite"></div>
+      <form id="chat-form" autocomplete="off">
+        <input id="chat-input" maxlength="120" placeholder="กด Enter เพื่อพิมพ์" />
+      </form>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
