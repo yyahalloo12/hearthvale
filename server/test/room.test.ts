@@ -4,6 +4,7 @@ import { Client, Room } from "colyseus.js";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { after, before, test } from "node:test";
+import { addItem, BAG_SIZE, emptyInventory, resourceAt } from "../../shared/items";
 import { Msg } from "../../shared/protocol";
 import { WorldRoom } from "../src/rooms/WorldRoom";
 
@@ -131,7 +132,7 @@ test("passive nodes: learn, spend points, pay to give back, and save", async () 
   a.onMessage(Msg.Notice, (n: any) => notices.push(n.text));
   a.send(Msg.Sync);
   await until(() => priv !== null);
-  assert.deepEqual(priv, { gold: 0, nodes: [] });
+  assert.deepEqual(priv, { gold: 0, nodes: [], inv: emptyInventory() });
 
   // not next to a starting point: ignored. Level 1 has one point.
   a.send(Msg.LearnPassive, { id: "r3" });
@@ -169,7 +170,7 @@ test("passive nodes: learn, spend points, pay to give back, and save", async () 
   a.onMessage(Msg.Private, (d: any) => (back = d));
   a.send(Msg.Sync);
   await until(() => back !== null);
-  assert.deepEqual(back, { gold: 950, nodes: ["c_str", "r3"] });
+  assert.deepEqual(back, { gold: 950, nodes: ["c_str", "r3"], inv: emptyInventory() });
   await a.leave();
 });
 
@@ -202,5 +203,116 @@ test("first strike always crits the first hit, life steal heals, kills drop coin
   assert.ok(hpAfterFirst > 20, "life steal healed (nothing else could: bloodthirst stops regeneration)");
   await until(() => hits.some((h) => h.killed), 12000);
   await until(() => priv?.gold >= 5);
+  await a.leave();
+});
+
+test("gather, buy, craft, wear and store items, and keep them after logging in again", async () => {
+  const c = new Client(`ws://localhost:${PORT}`);
+  let a: Room<any> = await c.joinOrCreate("world", { name: "Smithy", password: "smith", create: true });
+  let priv: any = null;
+  const notices: string[] = [];
+  const opened: string[] = [];
+  const listen = () => {
+    a.onMessage(Msg.Private, (d: any) => (priv = d));
+    a.onMessage(Msg.Notice, (n: any) => notices.push(n.text));
+    a.onMessage(Msg.OpenStation, (e: any) => opened.push(e.kind));
+    a.onMessage(Msg.Loot, () => {});
+    a.onMessage(Msg.Gathering, () => {});
+  };
+  listen();
+  const room = matchMaker.getLocalRoomById(a.roomId) as unknown as WorldRoom;
+  const me = room.state.players.get(a.sessionId)!;
+  const ctl = room.ctl.get(a.sessionId)!;
+  a.send(Msg.Sync);
+  await until(() => priv !== null);
+
+  // a rock without a pickaxe, and the smith from across the map: refused
+  const rock = { x: 17, y: 21 };
+  assert.equal(resourceAt(room.map, rock.x, rock.y)?.item, "ore_1");
+  a.send(Msg.Interact, rock);
+  await until(() => notices.length === 1);
+  me.x = 16;
+  me.y = 10;
+  a.send(Msg.Buy, { item: "pickaxe" });
+  await until(() => notices.length === 2);
+
+  // walk to the anvil and buy a pickaxe
+  me.x = 24;
+  me.y = 26;
+  ctl.gold = 20;
+  a.send(Msg.Interact, { x: 21, y: 27 });
+  await until(() => opened.includes("smith"), 6000);
+  a.send(Msg.Buy, { item: "pickaxe" });
+  await until(() => priv.inv.bag.length === 1);
+  assert.equal(priv.gold, 5);
+  a.send(Msg.Buy, { item: "pickaxe" });
+  await until(() => notices.length === 3);
+  a.send(Msg.Buy, { item: "constructor" });
+
+  // mine the rock: takes a moment, gives ore, and the rock is used up for a while
+  a.send(Msg.Interact, rock);
+  await until(() => priv.inv.bag.some((s: any) => s.id === "ore_1"), 12000);
+  assert.equal(a.state.depleted.get("17,21"), true);
+  a.send(Msg.Interact, rock);
+  await until(() => notices.length === 4);
+
+  // craft a sword at the anvil
+  addItem(ctl.inv.bag, BAG_SIZE, "ore_1", 5);
+  addItem(ctl.inv.bag, BAG_SIZE, "wood_1", 2);
+  a.send(Msg.Interact, { x: 21, y: 27 });
+  await until(() => opened.length === 2, 8000);
+  a.send(Msg.Craft, { item: "sword_1" });
+  await until(() => priv.inv.bag.some((s: any) => s.id === "sword_1"));
+  const sword = priv.inv.bag.find((s: any) => s.id === "sword_1");
+  assert.equal(sword.maker, "Smithy");
+  a.send(Msg.Equip, { uid: sword.uid });
+  await until(() => a.state.players.get(a.sessionId).weapon === "sword_1");
+
+  // sell the ore that is left
+  const ore = priv.inv.bag.find((s: any) => s.id === "ore_1");
+  const goldBefore = priv.gold;
+  a.send(Msg.Sell, { uid: ore.uid });
+  await until(() => priv.gold > goldBefore);
+  assert.equal(priv.gold, goldBefore + ore.qty);
+
+  // put the pickaxe in storage
+  a.send(Msg.Interact, { x: 27, y: 21 });
+  await until(() => opened.includes("storage"), 8000);
+  const pick = priv.inv.bag.find((s: any) => s.id === "pickaxe");
+  a.send(Msg.Deposit, { uid: pick.uid });
+  await until(() => priv.inv.storage.length === 1);
+  assert.equal(priv.inv.bag.length, 0);
+  const saved = structuredClone(priv);
+  await a.leave();
+
+  a = await c.joinOrCreate("world", { name: "Smithy", password: "smith", create: false });
+  priv = null;
+  listen();
+  a.send(Msg.Sync);
+  await until(() => priv !== null);
+  assert.deepEqual(priv, saved);
+  await until(() => a.state.players.get(a.sessionId)?.weapon === "sword_1");
+  await a.leave();
+});
+
+test("walking away stops gathering", async () => {
+  const c = new Client(`ws://localhost:${PORT}`);
+  const a: Room<any> = await c.joinOrCreate("world", { name: "Digger", password: "dig1", create: true });
+  const ev: any[] = [];
+  a.onMessage(Msg.Gathering, (e: any) => ev.push(e.ms));
+  const room = matchMaker.getLocalRoomById(a.roomId) as unknown as WorldRoom;
+  const ctl = room.ctl.get(a.sessionId)!;
+  const me = room.state.players.get(a.sessionId)!;
+  addItem(ctl.inv.bag, BAG_SIZE, "pickaxe", 1);
+  me.x = 16;
+  me.y = 22;
+  a.send(Msg.Interact, { x: 16, y: 20 });
+  await until(() => ev.length === 1, 5000);
+  a.send(Msg.Move, { x: 20, y: 24 });
+  await until(() => ev.length === 2);
+  assert.equal(ev[1], 0);
+  await wait(3000);
+  assert.equal(ctl.inv.bag.length, 1);
+  assert.equal(room.state.depleted.has("16,20"), false);
   await a.leave();
 });

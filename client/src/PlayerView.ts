@@ -1,5 +1,9 @@
 import Phaser from "phaser";
+import { ITEMS } from "../../shared/items";
 import { toScreen } from "./iso";
+
+/** Metal colour by tier. */
+const TIER_TINT = [0xffffff, 0xd88a4e, 0xc3ccd6, 0x8fd3ff, 0xd9a0e0, 0xffd23a, 0xff6f6f];
 
 /** Facing 3,4,5 look away from the camera (we see the back of the head). */
 const BACK_FACING = new Set([3, 4, 5]);
@@ -22,6 +26,8 @@ export class PlayerView {
   private bubbleTimer?: Phaser.Time.TimerEvent;
   private hpBar: Phaser.GameObjects.Graphics;
   private shield: Phaser.GameObjects.Image;
+  private weapon: Phaser.GameObjects.Image;
+  private helm: Phaser.GameObjects.Image;
   private figure: Phaser.GameObjects.Container;
   private dead = false;
 
@@ -44,7 +50,9 @@ export class PlayerView {
     const face = scene.add.image(0, 0, "c-head");
     this.eyes = scene.add.graphics();
     this.hair = scene.add.image(0, -9, "c-hair");
-    this.head = scene.add.container(0, -36, [face, this.eyes, this.hair, this.hairBack]);
+    this.helm = scene.add.image(0, -10, "g-helm").setVisible(false);
+    this.weapon = scene.add.image(-13, -14, "g-sword").setVisible(false).setAngle(-18);
+    this.head = scene.add.container(0, -36, [face, this.eyes, this.hair, this.hairBack, this.helm]);
     this.label = scene.add
       .text(0, -66, name, {
         fontFamily: "Tahoma, sans-serif",
@@ -57,7 +65,7 @@ export class PlayerView {
 
     this.hpBar = scene.add.graphics();
     this.shield = scene.add.image(12, -14, "shield").setVisible(false);
-    this.figure = scene.add.container(0, 0, [this.body, this.head, this.shield]);
+    this.figure = scene.add.container(0, 0, [this.body, this.head, this.weapon, this.shield]);
     this.root = scene.add.container(0, 0, [shadow, this.figure, this.label, this.hpBar]);
     this.setFacing(0);
     this.place();
@@ -91,6 +99,16 @@ export class PlayerView {
     this.hpBar.fillRect(-w / 2 - 1, -63, w + 2, 6);
     this.hpBar.fillStyle(hp / max > 0.3 ? 0x5bd15b : 0xe85c5c);
     this.hpBar.fillRect(-w / 2, -62, (w * Math.max(0, hp)) / max, 4);
+  }
+
+  /** Show the worn weapon and helmet ("" = none). */
+  setGear(weapon: string, helm: string) {
+    const w = ITEMS[weapon];
+    this.weapon.setVisible(!!w);
+    if (w) this.weapon.setTexture(w.look === "axe" ? "g-axe" : "g-sword").setTint(TIER_TINT[w.tier] ?? 0xffffff);
+    const h = ITEMS[helm];
+    this.helm.setVisible(!!h);
+    if (h) this.helm.setTint(TIER_TINT[h.tier] ?? 0xffffff);
   }
 
   setGuarding(on: boolean) {

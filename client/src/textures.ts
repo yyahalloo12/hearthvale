@@ -236,6 +236,64 @@ export function makeTextures(scene: Phaser.Scene) {
     g.fillCircle(18, 17, 16);
   });
 
+  // Gear seen on characters (white parts get tinted by tier).
+  make(scene, "g-sword", 14, 34, (g) => {
+    g.fillStyle(0xffffff);
+    g.fillTriangle(7, 0, 10, 6, 4, 6);
+    g.fillRect(4, 6, 6, 17);
+    g.fillRect(0, 22, 14, 4);
+    g.fillRect(5, 26, 4, 8);
+  });
+  make(scene, "g-axe", 20, 34, (g) => {
+    g.fillStyle(0x7a4a26);
+    g.fillRect(8, 2, 4, 32);
+    g.fillStyle(0xffffff);
+    g.fillEllipse(14, 9, 12, 16);
+    g.fillEllipse(5, 9, 8, 10);
+  });
+  make(scene, "g-helm", 38, 22, (g) => {
+    g.fillStyle(0xffffff);
+    g.fillEllipse(19, 13, 36, 24);
+    g.fillRect(1, 12, 36, 5);
+    g.fillStyle(0x000000, 0.18);
+    g.fillRect(1, 15, 36, 3);
+    g.fillRect(17, 2, 4, 12);
+  });
+
+  // The blacksmith's anvil and the storage chest.
+  make(scene, "p-anvil", 64, 56, (g) => {
+    g.fillStyle(0x000000, 0.18);
+    g.fillEllipse(32, 48, 52, 14);
+    g.fillStyle(0x7a4a26);
+    g.fillRect(18, 34, 28, 15);
+    g.fillStyle(0x5c3518);
+    g.fillRect(18, 40, 28, 3);
+    g.fillStyle(0x4a4d55);
+    g.fillRect(26, 24, 12, 10);
+    g.fillStyle(0x6b6f7a);
+    g.fillRect(14, 14, 34, 11);
+    g.fillTriangle(14, 14, 14, 24, 2, 16);
+    g.fillStyle(0x8f94a0);
+    g.fillRect(14, 14, 34, 3);
+    g.fillStyle(0xffa53a);
+    g.fillRect(24, 11, 16, 4);
+  });
+  make(scene, "p-chest", 64, 56, (g) => {
+    g.fillStyle(0x000000, 0.18);
+    g.fillEllipse(32, 48, 52, 14);
+    g.fillStyle(0x8a5a32);
+    g.fillRect(10, 24, 44, 25);
+    g.fillStyle(0xa8743f);
+    g.fillRoundedRect(8, 10, 48, 18, 8);
+    g.fillStyle(0xe6c84a);
+    g.fillRect(8, 24, 48, 4);
+    g.fillRect(14, 12, 4, 36);
+    g.fillRect(46, 12, 4, 36);
+    g.fillRect(27, 22, 10, 11);
+    g.fillStyle(0x4a2c17);
+    g.fillRect(31, 26, 2, 4);
+  });
+
   make(scene, "click-marker", 40, 20, (g) => {
     g.lineStyle(2, 0xffffff, 0.9);
     diamond(g, 20, 10, 18, 9);

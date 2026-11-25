@@ -18,6 +18,9 @@ export class Player extends Schema {
   @type("int32") maxHp = 1;
   @type("boolean") dead = false;
   @type("boolean") guarding = false;
+  /** Item ids of what others can see on you ("" = nothing). */
+  @type("string") weapon = "";
+  @type("string") helm = "";
   /** Learned skill levels, e.g. { heavy_strike: 2 }. */
   @type({ map: "uint8" }) skills = new MapSchema<number>();
 }
@@ -38,4 +41,6 @@ export class WorldState extends Schema {
   @type("string") mapName = "";
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: Monster }) monsters = new MapSchema<Monster>();
+  /** Rocks and trees that are used up for now, by "x,y". */
+  @type({ map: "boolean" }) depleted = new MapSchema<boolean>();
 }

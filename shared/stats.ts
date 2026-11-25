@@ -4,6 +4,7 @@
  */
 import monstersJson from "./data/monsters.json";
 import skillsJson from "./data/skills.json";
+import type { DropDef, FlatStats } from "./items";
 import type { Mods } from "./passives";
 
 export type Job = "wanderer" | "squire";
@@ -29,6 +30,7 @@ export interface MonsterDef {
   exp: number;
   /** coins dropped: [least, most] */
   gold: [number, number];
+  drops?: DropDef[];
   speed: number;
   attackMs: number;
   aggroRange: number;
@@ -68,12 +70,17 @@ export function expToNext(level: number): number {
   return Math.round(20 * Math.pow(level, 1.6));
 }
 
-export function playerStats(level: number, job: Job, mods?: Mods): Stats {
+export function playerStats(level: number, job: Job, mods?: Mods, gear?: FlatStats): Stats {
   const l = level - 1;
   const s = { maxHp: 80 + 12 * l, atk: 10 + 2.2 * l, def: 3 + l };
   if (job === "squire") {
     s.maxHp *= 1.2;
     s.def *= 1.1;
+  }
+  if (gear) {
+    s.maxHp += gear.hp;
+    s.atk += gear.atk;
+    s.def += gear.def;
   }
   if (mods) {
     s.maxHp *= 1 + mods.hpPct / 100;

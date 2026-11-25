@@ -32,7 +32,7 @@ export interface Mods {
   bloodthirst: boolean;
   firststrike: boolean;
 }
-type NumMod = Exclude<keyof Mods, "bloodthirst" | "firststrike">;
+export type NumMod = Exclude<keyof Mods, "bloodthirst" | "firststrike">;
 
 export interface PassiveNode {
   id: string;
@@ -67,7 +67,7 @@ const MOD_TEXT: Record<NumMod, (v: number) => string> = {
   atkPct: (v) => `พลังโจมตี +${v}%`,
   defPct: (v) => `ป้องกัน +${v}%`,
   critChance: (v) => `โอกาสคริติคอล +${v}%`,
-  attackSpeedPct: (v) => `ความเร็วโจมตี +${v}%`,
+  attackSpeedPct: (v) => `ความเร็วโจมตี ${v > 0 ? "+" : ""}${v}%`,
   moveSpeedPct: (v) => `ความเร็วเดิน +${v}%`,
   dodge: (v) => `หลบหลีก +${v}%`,
   skillDmgPct: (v) => `ดาเมจสกิล +${v}%`,
@@ -120,8 +120,8 @@ export function emptyMods(): Mods {
   };
 }
 
-/** Final bonuses used in combat: nodes added up, attributes turned into percents, caps applied. */
-export function passiveMods(learned: Iterable<string>): Mods {
+/** Final bonuses used in combat: nodes (and gear) added up, attributes turned into percents, caps applied. */
+export function passiveMods(learned: Iterable<string>, extra: Partial<Record<NumMod, number>> = {}): Mods {
   const m = emptyMods();
   for (const id of learned) {
     const n = PASSIVES.get(id);
@@ -129,6 +129,7 @@ export function passiveMods(learned: Iterable<string>): Mods {
     for (const [k, v] of Object.entries(n.mods)) m[k as NumMod] += v;
     if (n.special) m[n.special] = true;
   }
+  for (const [k, v] of Object.entries(extra)) m[k as NumMod] += v;
   m.atkPct += m.str * 0.6;
   m.critChance += m.agi * 0.15;
   m.attackSpeedPct += m.agi * 0.3;

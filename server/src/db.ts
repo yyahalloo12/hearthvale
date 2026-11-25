@@ -23,6 +23,7 @@ export interface CharacterRow {
   skills: string; // JSON
   nodes: string; // JSON: learned passive nodes
   gold: number;
+  inv: string; // JSON: bag, gear, storage, crafting skill
   x: number;
   y: number;
 }
@@ -61,6 +62,7 @@ async function open(): Promise<DB> {
       skills TEXT NOT NULL DEFAULT '{}',
       nodes TEXT NOT NULL DEFAULT '[]',
       gold INTEGER NOT NULL DEFAULT 0,
+      inv TEXT NOT NULL DEFAULT '{}',
       x REAL NOT NULL DEFAULT -1,
       y REAL NOT NULL DEFAULT -1,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -70,6 +72,7 @@ async function open(): Promise<DB> {
   const have = new Set((db.prepare("PRAGMA table_info(characters)").all() as { name: string }[]).map((c) => c.name));
   if (!have.has("nodes")) db.exec("ALTER TABLE characters ADD COLUMN nodes TEXT NOT NULL DEFAULT '[]'");
   if (!have.has("gold")) db.exec("ALTER TABLE characters ADD COLUMN gold INTEGER NOT NULL DEFAULT 0");
+  if (!have.has("inv")) db.exec("ALTER TABLE characters ADD COLUMN inv TEXT NOT NULL DEFAULT '{}'");
   return db;
 }
 
@@ -114,7 +117,7 @@ export async function loadCharacter(accountId: number): Promise<CharacterRow | n
 export async function saveCharacter(c: Omit<CharacterRow, "name" | "color">) {
   const d = await open();
   d.prepare(
-    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, x = ?, y = ?, updated_at = datetime('now')
+    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, x = ?, y = ?, updated_at = datetime('now')
      WHERE account_id = ?`,
-  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.x, c.y, c.account_id);
+  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.x, c.y, c.account_id);
 }

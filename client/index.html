@@ -62,6 +62,35 @@
       </div>
     </div>
 
+    <button id="bag-open" hidden>กระเป๋า (I)</button>
+
+    <div id="station" class="panel" role="dialog" aria-label="ร้านและคลัง" hidden>
+      <div class="win-head"><h2 id="station-title"></h2><button id="station-close" aria-label="ปิด">✕</button></div>
+      <div class="win-body">
+        <div id="smith-only">
+          <div id="smith-skill"></div>
+          <label class="crystal"><input type="checkbox" id="use-crystal" /> <span id="crystal-have"></span></label>
+          <h3>ตีของ</h3>
+          <div id="recipes"></div>
+          <h3>ซื้อเครื่องมือ</h3>
+          <div id="shop"></div>
+        </div>
+        <div id="storage-grid" class="grid" hidden></div>
+      </div>
+    </div>
+
+    <div id="bag" class="panel" role="dialog" aria-label="กระเป๋า" hidden>
+      <div class="win-head"><h2>กระเป๋า</h2><button id="bag-close" aria-label="ปิด">✕</button></div>
+      <div class="win-body">
+        <div id="equip-slots"></div>
+        <div id="bag-count"></div>
+        <div id="bag-grid" class="grid"></div>
+        <div id="item-details"></div>
+      </div>
+    </div>
+
+    <div id="castbar" hidden><div id="cast-fill"></div><span id="cast-text"></span></div>
+
     <div id="skillbar" hidden>
       <button id="job-change" hidden>เปลี่ยนอาชีพเป็นสไควร์</button>
       <div id="skill-points"></div>

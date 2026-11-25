@@ -219,3 +219,55 @@ button.secondary:disabled { opacity: 0.6; cursor: wait; }
 #tree-selected button:disabled { opacity: 0.45; cursor: not-allowed; }
 #tree-selected .why { margin-top: 4px; font-size: 12px; color: #8a1c1c; min-height: 1.4em; }
 #tree-help { font-size: 12px; opacity: 0.8; }
+
+/* ---- step 4: bag, smith, storage, gathering ---- */
+#bag-open {
+  position: absolute; top: 56px; right: 10px; z-index: 5;
+  font-size: 14px; font-weight: bold; padding: 8px 14px;
+  color: var(--wood-dark); background: var(--paper); border: 3px solid var(--wood); border-radius: 6px; cursor: pointer;
+}
+#bag, #station { position: absolute; top: 24px; bottom: 24px; z-index: 6; display: flex; flex-direction: column; font-size: 13px; }
+#bag { right: 24px; width: 330px; }
+#station { right: 378px; width: 400px; }
+#bag[hidden], #station[hidden] { display: none; }
+.win-head { display: flex; align-items: center; padding: 8px 12px; border-bottom: 3px solid var(--wood); }
+.win-head h2 { flex: 1; margin: 0; font-size: 18px; color: var(--wood-dark); }
+.win-head button { font-size: 14px; padding: 4px 9px; background: #fffaf0; border: 2px solid var(--wood); border-radius: 4px; cursor: pointer; }
+.win-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.win-body h3 { margin: 12px 0 6px; font-size: 15px; color: var(--wood-dark); }
+#equip-slots { display: flex; justify-content: space-around; margin-bottom: 10px; }
+.ename { text-align: center; font-size: 11px; margin-top: 2px; }
+#bag-count { font-weight: bold; color: #8a5a00; margin-bottom: 6px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, 46px); gap: 4px; }
+.grid[hidden] { display: none; }
+.islot { position: relative; width: 46px; height: 46px; padding: 0; background: #fffaf0; border: 2px solid #b99a6b; border-radius: 4px; cursor: pointer; }
+.islot:disabled { background: rgba(107, 66, 38, 0.12); border-style: dashed; cursor: default; }
+.islot .icon { font-size: 24px; line-height: 42px; }
+.islot .qty { position: absolute; right: 2px; bottom: 1px; font-size: 11px; font-weight: bold; color: #3b2a1a; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.islot.tier2 { background: #e7edf5; }
+.islot.q1 { border-color: #3f9d5a; }
+.islot.q2 { border-color: #4a7fd0; }
+.islot.q3 { border-color: #d98a00; box-shadow: 0 0 6px #ffb43a; }
+.islot.sel { outline: 3px solid var(--accent); }
+#item-details { margin-top: 10px; padding-top: 8px; border-top: 2px solid #cdb586; min-height: 120px; line-height: 1.5; }
+#item-details h3 { margin: 0 0 4px; }
+.qt1 { color: #2f7a35 !important; }
+.qt2 { color: #2f5fae !important; }
+.qt3 { color: #b36b00 !important; }
+#item-details .row { display: flex; gap: 6px; margin-top: 8px; }
+#item-details button, .recipe button { font-size: 13px; font-weight: bold; padding: 7px 10px; color: #fff; background: #4f9e54; border: 2px solid var(--wood-dark); border-radius: 4px; cursor: pointer; }
+#item-details button.sell { background: #b0553f; }
+#item-details button:disabled, .recipe button:disabled { opacity: 0.4; cursor: not-allowed; }
+#smith-skill { font-size: 12px; }
+.crystal { display: block; margin-top: 6px; cursor: pointer; }
+.recipe { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #dcc79c; }
+.recipe .icon { font-size: 24px; width: 32px; text-align: center; }
+.recipe .mid { flex: 1; min-width: 0; }
+.rname { font-weight: bold; }
+.rnum { font-size: 12px; opacity: 0.8; }
+.needs { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: #2f7a35; }
+.needs .lack { color: #a3261e; }
+#castbar { position: absolute; left: 50%; bottom: 130px; transform: translateX(-50%); width: 240px; height: 22px; background: #3b2a1a; border: 2px solid var(--wood-dark); border-radius: 4px; overflow: hidden; z-index: 5; }
+#castbar[hidden] { display: none; }
+#cast-fill { height: 100%; width: 0; background: linear-gradient(#f0b45a, #d98a2e); }
+#cast-text { position: absolute; inset: 0; text-align: center; color: #fff; font-size: 12px; line-height: 19px; text-shadow: 0 1px 1px #000; }

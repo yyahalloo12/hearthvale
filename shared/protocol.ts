@@ -1,4 +1,5 @@
 /** Message names and payloads exchanged between client and server. */
+import type { Inventory, StationKind } from "./items";
 
 export const Msg = {
   /** client -> server: walk to a tile */
@@ -15,6 +16,22 @@ export const Msg = {
   LearnPassive: "learn_passive",
   /** client -> server: give a passive node back for coins {id} */
   RefundPassive: "refund_passive",
+  /** client -> server: walk to a rock, tree, anvil or chest and use it {x, y} */
+  Interact: "interact",
+  /** client -> server: wear an item {uid} */
+  Equip: "equip",
+  /** client -> server: take worn gear off {slot} */
+  Unequip: "unequip",
+  /** client -> server (at the smith): make an item {item, crystal} */
+  Craft: "craft",
+  /** client -> server (at the smith): buy a tool {item} */
+  Buy: "buy",
+  /** client -> server (at the smith): sell a whole stack {uid} */
+  Sell: "sell",
+  /** client -> server (at the chest): bag to storage {uid} */
+  Deposit: "deposit",
+  /** client -> server (at the chest): storage to bag {uid} */
+  Withdraw: "withdraw",
   /** client -> server: the game screen is ready, send me my private data */
   Sync: "sync",
   /** client -> server: get up after dying */
@@ -32,7 +49,13 @@ export const Msg = {
   LevelUp: "level_up",
   /** server -> client: EXP you gained */
   ExpGain: "exp_gain",
-  /** server -> client: things only you may see (coins, passive nodes) */
+  /** server -> client: you reached the anvil or the chest {kind} */
+  OpenStation: "open_station",
+  /** server -> client: gathering started {ms, name}, or stopped {ms: 0} */
+  Gathering: "gathering",
+  /** server -> client: items you picked up */
+  Loot: "loot",
+  /** server -> client: things only you may see (coins, passive nodes, items) */
   Private: "private",
   /** server -> client: a skill went on cooldown */
   Cooldown: "cooldown",
@@ -78,6 +101,20 @@ export interface HitEvent {
 export interface PrivateData {
   gold: number;
   nodes: string[];
+  inv: Inventory;
+}
+
+export interface LootEvent {
+  items: { id: string; qty: number }[];
+}
+
+export interface GatheringEvent {
+  ms: number;
+  name?: string;
+}
+
+export interface OpenStationEvent {
+  kind: StationKind;
 }
 
 export interface CooldownEvent {

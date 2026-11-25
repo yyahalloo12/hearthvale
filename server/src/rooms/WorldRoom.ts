@@ -11,11 +11,38 @@ import {
   TUNIC_COLORS,
   WALK_SPEED,
 } from "../../../shared/constants";
+import {
+  addItem,
+  BAG_SIZE,
+  cleanInventory,
+  craft,
+  equipItem,
+  equipTotals,
+  findStation,
+  FlatStats,
+  GATHER_MS,
+  Inventory,
+  ITEMS,
+  moveStack,
+  Resource,
+  resourceAt,
+  rollDrops,
+  sellPrice,
+  Slot,
+  SLOTS,
+  stackName,
+  STATION_RANGE,
+  stationAt,
+  StationKind,
+  STORAGE_SIZE,
+  countItem,
+  unequipItem,
+} from "../../../shared/items";
 import { buildBrindleVillage, GameMap, isSafe, isWalkable } from "../../../shared/map";
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
-import { ChatLine, CooldownEvent, HitEvent, JoinOptions, Msg, PrivateData } from "../../../shared/protocol";
+import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PrivateData } from "../../../shared/protocol";
 import {
   ATTACK_RANGE,
   CRIT_CHANCE,
@@ -63,8 +90,13 @@ interface PlayerCtl {
   regen: number;
   gold: number;
   nodes: Set<string>;
-  /** bonuses from `nodes`, worked out again whenever they change */
+  inv: Inventory;
+  /** bonuses from nodes and gear, worked out again whenever they change */
   mods: Mods;
+  /** plain numbers from gear */
+  gear: FlatStats;
+  /** the rock, tree or station being walked to or used */
+  interact: { x: number; y: number; res: Resource | null; station: StationKind | null; doneAt: number } | null;
   /** monsters already hit once (for the "first strike" keystone) */
   struck: Set<string>;
 }
@@ -80,6 +112,8 @@ export class WorldRoom extends Room<WorldState> {
   monsterSys!: MonsterSystem;
   /** accounts that are logged in (or logging in), to stop double logins */
   private onlineAccounts = new Set<number>();
+  /** used-up rocks and trees: "x,y" -> when they come back */
+  private depletedUntil = new Map<string, number>();
 
   onCreate() {
     this.map = buildBrindleVillage();
@@ -108,6 +142,14 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(Msg.ChangeJob, (client) => this.handleChangeJob(client));
     this.onMessage(Msg.LearnPassive, (client, msg) => this.handleLearnPassive(client, msg));
     this.onMessage(Msg.RefundPassive, (client, msg) => this.handleRefundPassive(client, msg));
+    this.onMessage(Msg.Interact, (client, msg) => this.handleInteract(client, msg));
+    this.onMessage(Msg.Equip, (client, msg) => this.handleEquip(client, msg));
+    this.onMessage(Msg.Unequip, (client, msg) => this.handleUnequip(client, msg));
+    this.onMessage(Msg.Craft, (client, msg) => this.handleCraft(client, msg));
+    this.onMessage(Msg.Buy, (client, msg) => this.handleBuy(client, msg));
+    this.onMessage(Msg.Sell, (client, msg) => this.handleSell(client, msg));
+    this.onMessage(Msg.Deposit, (client, msg) => this.handleMoveStack(client, msg, true));
+    this.onMessage(Msg.Withdraw, (client, msg) => this.handleMoveStack(client, msg, false));
     this.onMessage(Msg.Sync, (client) => this.sendPrivate(client));
     this.onMessage(Msg.Respawn, (client) => this.handleRespawn(client));
     this.onMessage(Msg.Chat, (client, msg) => this.handleChat(client, msg));
@@ -168,8 +210,17 @@ export class WorldRoom extends Room<WorldState> {
       /* bad JSON: no nodes */
     }
     const nodes = cleanNodes(savedNodes, p.level, p.job);
-    const mods = passiveMods(nodes);
-    this.applyStats(p, mods, true);
+    let savedInv: unknown = null;
+    try {
+      savedInv = JSON.parse(c.inv);
+    } catch {
+      /* bad JSON: empty bag */
+    }
+    const inv = cleanInventory(savedInv);
+    const worn = equipTotals(inv.equip);
+    const mods = passiveMods(nodes, worn.mods);
+    this.showGear(p, inv);
+    this.applyStats(p, { mods, gear: worn.flat }, true);
     const saved = { x: Math.round(c.x), y: Math.round(c.y) };
     const spot = c.x >= 0 && isWalkable(this.map, saved.x, saved.y) ? saved : this.findSpawn();
     p.x = spot.x;
@@ -193,7 +244,10 @@ export class WorldRoom extends Room<WorldState> {
       regen: 0,
       gold: Math.max(0, c.gold),
       nodes,
+      inv,
       mods,
+      gear: worn.flat,
+      interact: null,
       struck: new Set(),
     });
     this.broadcastSystem(`${p.name} เดินทางมาถึงหมู่บ้านบรินเดิล`);
@@ -229,6 +283,7 @@ export class WorldRoom extends Room<WorldState> {
       skills: JSON.stringify(Object.fromEntries(p.skills.entries())),
       nodes: JSON.stringify([...c.nodes]),
       gold: c.gold,
+      inv: JSON.stringify(c.inv),
       x: ok ? tile.x : -1,
       y: ok ? tile.y : -1,
     });
@@ -253,27 +308,40 @@ export class WorldRoom extends Room<WorldState> {
 
   // ---- stats --------------------------------------------------------------
 
-  private applyStats(p: Player, mods: Mods, heal: boolean) {
-    const s = playerStats(p.level, p.job as Job, mods);
+  private applyStats(p: Player, c: Pick<PlayerCtl, "mods" | "gear">, heal: boolean) {
+    const s = playerStats(p.level, p.job as Job, c.mods, c.gear);
     p.maxHp = s.maxHp;
     p.hp = heal ? s.maxHp : Math.min(p.hp, s.maxHp);
   }
 
   private statsOf(p: Player, c: PlayerCtl) {
-    return playerStats(p.level, p.job as Job, c.mods);
+    return playerStats(p.level, p.job as Job, c.mods, c.gear);
   }
 
   private sendPrivate(client: Client | undefined) {
     const c = client && this.ctl.get(client.sessionId);
     if (!c) return;
-    const data: PrivateData = { gold: c.gold, nodes: [...c.nodes] };
+    const data: PrivateData = { gold: c.gold, nodes: [...c.nodes], inv: c.inv };
     client.send(Msg.Private, data);
   }
 
-  /** Passive nodes changed: work out bonuses again, tell the player, save. */
-  private nodesChanged(client: Client, p: Player, c: PlayerCtl) {
-    c.mods = passiveMods(c.nodes);
-    this.applyStats(p, c.mods, false);
+  private showGear(p: Player, inv: Inventory) {
+    p.weapon = inv.equip.weapon?.id ?? "";
+    p.helm = inv.equip.head?.id ?? "";
+  }
+
+  /** Nodes or gear changed: work out bonuses again, tell the player, save. */
+  private buildChanged(client: Client, p: Player, c: PlayerCtl) {
+    const worn = equipTotals(c.inv.equip);
+    c.mods = passiveMods(c.nodes, worn.mods);
+    c.gear = worn.flat;
+    this.showGear(p, c.inv);
+    this.applyStats(p, c, false);
+    this.itemsChanged(client, p, c);
+  }
+
+  /** Items or coins changed: tell the player and save (one row, so nothing is doubled or lost). */
+  private itemsChanged(client: Client, p: Player, c: PlayerCtl) {
     this.sendPrivate(client);
     this.save(p, c).catch((e) => console.error("[world] save failed", e));
   }
@@ -296,7 +364,7 @@ export class WorldRoom extends Room<WorldState> {
     }
     if (p.level >= MAX_LEVEL) p.exp = 0;
     if (leveled) {
-      this.applyStats(p, c.mods, true);
+      this.applyStats(p, c, true);
       const id = client?.sessionId ?? "";
       this.broadcast(Msg.LevelUp, { id, level: p.level });
       if (p.level === JOB_CHANGE_LEVEL && p.job === "wanderer")
@@ -321,6 +389,7 @@ export class WorldRoom extends Room<WorldState> {
     if (!Number.isFinite(gx) || !Number.isFinite(gy)) return;
     pc.c.targetId = null;
     pc.c.pendingSkill = null;
+    this.stopInteract(client, pc.c);
     // Plan from the tile we are standing on, or the tile we are stepping into.
     const from = planFrom(pc.p, pc.c.path);
     const rest = findPath(this.map, from, { x: gx, y: gy }, MAX_PATH_STEPS);
@@ -332,6 +401,7 @@ export class WorldRoom extends Room<WorldState> {
     const pc = this.get(client);
     const id = (msg as { id?: unknown })?.id;
     if (!pc || pc.p.dead || pc.c.charge || typeof id !== "string" || !this.state.monsters.has(id)) return;
+    this.stopInteract(client, pc.c);
     pc.c.targetId = id;
     pc.c.pendingSkill = null;
     pc.c.repathAt = 0;
@@ -360,6 +430,7 @@ export class WorldRoom extends Room<WorldState> {
     const targetId = typeof (msg as any)?.target === "string" ? (msg as any).target : c.targetId;
     const m = targetId ? this.state.monsters.get(targetId) : undefined;
     if (!m) return client.send(Msg.Notice, { text: "เลือกเป้าหมายก่อน (คลิกที่มอนสเตอร์)" });
+    this.stopInteract(client, c);
 
     if (skill === "charge") {
       if (dist(p, m) > def.range + 0.5) return client.send(Msg.Notice, { text: "เป้าหมายไกลเกินไป" });
@@ -405,9 +476,171 @@ export class WorldRoom extends Room<WorldState> {
     if (!pc || pc.p.job !== "wanderer") return;
     if (pc.p.level < JOB_CHANGE_LEVEL) return client.send(Msg.Notice, { text: `ต้องถึงเลเวล ${JOB_CHANGE_LEVEL} ก่อน` });
     pc.p.job = "squire";
-    this.applyStats(pc.p, pc.c.mods, true);
+    this.applyStats(pc.p, pc.c, true);
     this.broadcastSystem(`${pc.p.name} ได้เป็น${JOB_NAMES.squire}แล้ว!`);
     this.save(pc.p, pc.c).catch(() => {});
+  }
+
+  // ---- gathering, items and crafting ---------------------------------------
+
+  private stopInteract(client: Client | undefined, c: PlayerCtl) {
+    if (c.interact?.doneAt) client?.send(Msg.Gathering, { ms: 0 } satisfies GatheringEvent);
+    c.interact = null;
+  }
+
+  /** Walk next to a rock, tree, anvil or chest; the tick does the rest. */
+  private handleInteract(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    if (!pc || pc.p.dead || pc.c.charge) return;
+    const { p, c } = pc;
+    const x = Math.floor(Number((msg as Point | null)?.x));
+    const y = Math.floor(Number((msg as Point | null)?.y));
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const res = resourceAt(this.map, x, y);
+    const station = stationAt(this.map, x, y);
+    if (!res && !station) return;
+    if (res && !countItem(c.inv.bag, res.tool))
+      return client.send(Msg.Notice, { text: `ต้องมี${ITEMS[res.tool].name}ในกระเป๋า (ซื้อได้ที่ช่างตีเหล็กในหมู่บ้าน)` });
+    if (res && this.state.depleted.has(`${x},${y}`)) return client.send(Msg.Notice, { text: `${res.name}หมดแล้ว รอสักครู่` });
+
+    const from = planFrom(p, c.path);
+    const spots: Point[] = [];
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && isWalkable(this.map, x + dx, y + dy)) spots.push({ x: x + dx, y: y + dy });
+    spots.sort((a, b) => dist(a, from) - dist(b, from));
+    for (const spot of spots) {
+      const rest = findPath(this.map, from, spot, MAX_PATH_STEPS);
+      if (!rest) continue;
+      this.stopInteract(client, c);
+      c.targetId = null;
+      c.pendingSkill = null;
+      c.path = c.path.length ? [c.path[0], ...rest] : rest;
+      c.interact = { x, y, res, station, doneAt: 0 };
+      return;
+    }
+  }
+
+  /** Standing still next to the thing we walked to. */
+  private tickInteract(id: string, p: Player, c: PlayerCtl, now: number) {
+    const it = c.interact!;
+    const client = this.clients.find((cl) => cl.sessionId === id);
+    if (!client || dist(p, it) > 1.6) return this.stopInteract(client, c);
+    faceTowards(p, it);
+    if (it.station) {
+      client.send(Msg.OpenStation, { kind: it.station } satisfies OpenStationEvent);
+      c.interact = null;
+      return;
+    }
+    const res = it.res!;
+    const key = `${it.x},${it.y}`;
+    if (this.state.depleted.has(key)) {
+      client.send(Msg.Notice, { text: "มีคนเก็บไปก่อนแล้ว" });
+      return this.stopInteract(client, c);
+    }
+    if (!it.doneAt) {
+      it.doneAt = now + GATHER_MS;
+      client.send(Msg.Gathering, { ms: GATHER_MS, name: res.name } satisfies GatheringEvent);
+      return;
+    }
+    if (now < it.doneAt) return;
+    this.stopInteract(client, c);
+    const qty = res.qty[0] + Math.floor(Math.random() * (res.qty[1] - res.qty[0] + 1));
+    if (!this.giveLoot(client, p, c, [{ id: res.item, qty }])) return; // bag full: leave the rock for later
+    this.state.depleted.set(key, true);
+    this.depletedUntil.set(key, now + res.respawnMs);
+    this.itemsChanged(client, p, c);
+  }
+
+  /** Puts items in the bag and shows them. False when nothing fitted. */
+  private giveLoot(client: Client | undefined, _p: Player, c: PlayerCtl, items: { id: string; qty: number }[]): boolean {
+    const got: { id: string; qty: number }[] = [];
+    let full = false;
+    for (const it of items) {
+      const left = addItem(c.inv.bag, BAG_SIZE, it.id, it.qty);
+      if (left < it.qty) got.push({ id: it.id, qty: it.qty - left });
+      if (left > 0) full = true;
+    }
+    if (full) client?.send(Msg.Notice, { text: "กระเป๋าเต็ม เก็บของได้ไม่หมด" });
+    if (got.length) client?.send(Msg.Loot, { items: got } satisfies LootEvent);
+    return got.length > 0;
+  }
+
+  private nearStation(client: Client, kind: StationKind) {
+    const pc = this.get(client);
+    if (!pc || pc.p.dead) return null;
+    const at = findStation(this.map, kind);
+    if (!at || dist(pc.p, at) > STATION_RANGE) {
+      client.send(Msg.Notice, { text: "อยู่ไกลเกินไป เดินเข้าไปใกล้ก่อน" });
+      return null;
+    }
+    return pc;
+  }
+
+  private handleEquip(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const uid = (msg as { uid?: unknown } | null)?.uid;
+    if (!pc || pc.p.dead || typeof uid !== "string") return;
+    const err = equipItem(pc.c.inv, uid, pc.p.level);
+    if (err) return client.send(Msg.Notice, { text: err });
+    this.buildChanged(client, pc.p, pc.c);
+  }
+
+  private handleUnequip(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const slot = (msg as { slot?: unknown } | null)?.slot as Slot;
+    if (!pc || pc.p.dead || !SLOTS.includes(slot)) return;
+    const err = unequipItem(pc.c.inv, slot);
+    if (err) return client.send(Msg.Notice, { text: err });
+    this.buildChanged(client, pc.p, pc.c);
+  }
+
+  private handleCraft(client: Client, msg: unknown) {
+    const item = (msg as { item?: unknown } | null)?.item;
+    if (typeof item !== "string") return;
+    const pc = this.nearStation(client, "smith");
+    if (!pc) return;
+    const r = craft(pc.c.inv, item, (msg as { crystal?: unknown }).crystal === true, pc.p.name);
+    if ("error" in r) return client.send(Msg.Notice, { text: r.error });
+    client.send(Msg.Notice, { text: `ตีได้ ${stackName(r.made)}${r.skillUp ? ` ฝีมือช่างเพิ่มเป็น ${pc.c.inv.smithing}` : ""}` });
+    if (r.made.quality === 3) this.broadcastSystem(`${pc.p.name} ตี${ITEMS[r.made.id].name}ได้เป็นผลงานชิ้นเอก!`);
+    this.itemsChanged(client, pc.p, pc.c);
+  }
+
+  private handleBuy(client: Client, msg: unknown) {
+    const item = (msg as { item?: unknown } | null)?.item;
+    const def = typeof item === "string" && Object.hasOwn(ITEMS, item) ? ITEMS[item] : undefined;
+    if (!def?.buy) return;
+    const pc = this.nearStation(client, "smith");
+    if (!pc) return;
+    const { p, c } = pc;
+    if (c.gold < def.buy) return client.send(Msg.Notice, { text: `เหรียญไม่พอ ต้องใช้ ${def.buy} เหรียญ` });
+    if (addItem(c.inv.bag, BAG_SIZE, item as string, 1) > 0) return client.send(Msg.Notice, { text: "กระเป๋าเต็ม" });
+    c.gold -= def.buy;
+    this.itemsChanged(client, p, c);
+  }
+
+  private handleSell(client: Client, msg: unknown) {
+    const uid = (msg as { uid?: unknown } | null)?.uid;
+    if (typeof uid !== "string") return;
+    const pc = this.nearStation(client, "smith");
+    if (!pc) return;
+    const { p, c } = pc;
+    const i = c.inv.bag.findIndex((s) => s.uid === uid);
+    if (i < 0) return;
+    const [s] = c.inv.bag.splice(i, 1);
+    c.gold += sellPrice(s) * s.qty;
+    this.itemsChanged(client, p, c);
+  }
+
+  private handleMoveStack(client: Client, msg: unknown, deposit: boolean) {
+    const uid = (msg as { uid?: unknown } | null)?.uid;
+    if (typeof uid !== "string") return;
+    const pc = this.nearStation(client, "storage");
+    if (!pc) return;
+    const { bag, storage } = pc.c.inv;
+    const ok = deposit ? moveStack(bag, storage, STORAGE_SIZE, uid) : moveStack(storage, bag, BAG_SIZE, uid);
+    if (!ok) return client.send(Msg.Notice, { text: deposit ? "คลังเต็ม" : "กระเป๋าเต็ม" });
+    this.itemsChanged(client, pc.p, pc.c);
   }
 
   private handleLearnPassive(client: Client, msg: unknown) {
@@ -418,7 +651,7 @@ export class WorldRoom extends Room<WorldState> {
     if (c.nodes.size >= passivePointsEarned(p.level)) return client.send(Msg.Notice, { text: "ไม่มีแต้มต้นไม้เหลือ" });
     if (!canReach(id, c.nodes, p.job)) return;
     c.nodes.add(id);
-    this.nodesChanged(client, p, c);
+    this.buildChanged(client, p, c);
   }
 
   private handleRefundPassive(client: Client, msg: unknown) {
@@ -434,7 +667,7 @@ export class WorldRoom extends Room<WorldState> {
     if (c.gold < cost) return client.send(Msg.Notice, { text: `เหรียญไม่พอ ต้องใช้ ${cost} เหรียญ` });
     c.gold -= cost;
     c.nodes.delete(id);
-    this.nodesChanged(client, p, c);
+    this.buildChanged(client, p, c);
     client.send(Msg.Notice, { text: `ล้างโหนด ${PASSIVES.get(id)?.name ?? ""} แล้ว เสีย ${cost} เหรียญ` });
   }
 
@@ -516,6 +749,7 @@ export class WorldRoom extends Room<WorldState> {
     c.targetId = null;
     c.pendingSkill = null;
     c.charge = null;
+    this.stopInteract(this.clients.find((cl) => cl.sessionId === id), c);
     c.deadAt = this.clock.currentTime;
     const loss = Math.floor(expToNext(p.level) * DEATH_EXP_LOSS);
     p.exp = Math.max(0, p.exp - loss);
@@ -553,6 +787,7 @@ export class WorldRoom extends Room<WorldState> {
       const client = this.clients.find((cl) => cl.sessionId === id);
       c.struck.delete(monsterId);
       c.gold += killGold(mc.def);
+      this.giveLoot(client, p, c, rollDrops(mc.def.drops, c.inv.bag));
       this.sendPrivate(client);
       this.gainExp(client, p, c, killExp(mc.exp, level, p.level));
       if (mc.def.boss) this.broadcastSystem(`${p.name} ปราบ${MONSTERS[m.kind]?.name ?? "บอส"}ได้แล้ว!`);
@@ -621,6 +856,7 @@ export class WorldRoom extends Room<WorldState> {
         }
       } else {
         stepAlong(p, c.path, speed, dt);
+        if (c.interact && !c.path.length) this.tickInteract(id, p, c, now);
       }
 
       // Regeneration: fast out of combat, a trickle in combat (none with the bloodthirst keystone).
@@ -634,6 +870,12 @@ export class WorldRoom extends Room<WorldState> {
         }
       }
     });
+
+    for (const [key, at] of this.depletedUntil)
+      if (at <= now) {
+        this.depletedUntil.delete(key);
+        this.state.depleted.delete(key);
+      }
 
     this.monsterSys.tick(dt);
   }

@@ -23,6 +23,8 @@ export enum Prop {
   Fence = 4,
   Rock = 5,
   Bush = 6,
+  Anvil = 7,
+  Chest = 8,
 }
 
 export interface GameMap {
@@ -122,6 +124,10 @@ export function buildBrindleVillage(): GameMap {
       else if (Math.hypot(x - cx, y - cy) > 7 && rand() < 0.02) props[y][x] = Prop.Rock;
       else if (Math.hypot(x - cx, y - cy) > 6 && rand() < 0.02) props[y][x] = Prop.Bush;
     }
+  // The blacksmith's anvil and the storage chest stand on the plaza.
+  props[27][21] = Prop.Anvil;
+  props[21][27] = Prop.Chest;
+
   // Roads stay open to the map edge except the outermost tree ring.
   return { name: "Brindle Village", width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 } };
 }

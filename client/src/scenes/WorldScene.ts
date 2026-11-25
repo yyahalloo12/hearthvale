@@ -1,11 +1,13 @@
 import { getStateCallbacks, Room } from "colyseus.js";
 import Phaser from "phaser";
 import { TILE_H } from "../../../shared/constants";
+import { findStation, ITEMS, resourceAt, STATION_RANGE, stationAt } from "../../../shared/items";
 import { buildBrindleVillage, GameMap, isHouseAnchor, isWalkable, Prop } from "../../../shared/map";
-import { ChatLine, CooldownEvent, HitEvent, Msg, PrivateData } from "../../../shared/protocol";
+import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData } from "../../../shared/protocol";
 import { SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
 import { initHud, setOnline, skillForKey, startCooldown, updateMe } from "../hud";
+import { closeStation, initInventory, openStation, openStationKind, setInventory, setItemLevel, showGathering } from "../inventory";
 import { toScreen, toTile } from "../iso";
 import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
@@ -19,6 +21,8 @@ const PROP_TEXTURE: Partial<Record<Prop, string>> = {
   [Prop.Fence]: "p-fence",
   [Prop.Rock]: "p-rock",
   [Prop.Bush]: "p-bush",
+  [Prop.Anvil]: "p-anvil",
+  [Prop.Chest]: "p-chest",
 };
 
 export class WorldScene extends Phaser.Scene {
@@ -31,6 +35,8 @@ export class WorldScene extends Phaser.Scene {
   private targetId: string | null = null;
   private me: any;
   private gold: number | null = null;
+  /** rocks, trees and stations that can be clicked, by "x,y" */
+  private usable = new Map<string, { x: number; y: number; img: Phaser.GameObjects.Image }>();
 
   constructor() {
     super("world");
@@ -60,6 +66,15 @@ export class WorldScene extends Phaser.Scene {
       learn: (id) => this.room.send(Msg.LearnPassive, { id }),
       refund: (id) => this.room.send(Msg.RefundPassive, { id }),
     });
+    initInventory({
+      equip: (uid) => this.room.send(Msg.Equip, { uid }),
+      unequip: (slot) => this.room.send(Msg.Unequip, { slot }),
+      craft: (item, crystal) => this.room.send(Msg.Craft, { item, crystal }),
+      buy: (item) => this.room.send(Msg.Buy, { item }),
+      sell: (uid) => this.room.send(Msg.Sell, { uid }),
+      deposit: (uid) => this.room.send(Msg.Deposit, { uid }),
+      withdraw: (uid) => this.room.send(Msg.Withdraw, { uid }),
+    });
     this.bindRoom();
     this.bindInput();
     this.room.send(Msg.Sync);
@@ -84,10 +99,26 @@ export class WorldScene extends Phaser.Scene {
         }
         const key = PROP_TEXTURE[prop];
         if (key) {
-          this.add
+          const img = this.add
             .image(p.x, p.y + TILE_H / 2 - 4, key)
             .setOrigin(0.5, 1)
             .setDepth(p.y);
+          const res = resourceAt(map, x, y);
+          const station = stationAt(map, x, y);
+          if (res || station) this.usable.set(`${x},${y}`, { x, y, img });
+          if (res?.item === "ore_1") img.setTint(0xe8a878);
+          if (res?.item === "ore_2") img.setTint(0x9fb4d0);
+          if (station)
+            this.add
+              .text(p.x, p.y - 34, station === "smith" ? "ช่างตีเหล็ก" : "คลังเก็บของ", {
+                fontFamily: "Tahoma, sans-serif",
+                fontSize: "12px",
+                color: "#ffe9a8",
+                stroke: "#000000",
+                strokeThickness: 3,
+              })
+              .setOrigin(0.5, 1)
+              .setDepth(p.y + 1);
         }
       }
     }
@@ -103,6 +134,7 @@ export class WorldScene extends Phaser.Scene {
       view.setFacing(player.facing);
       view.setHp(player.hp, player.maxHp);
       view.setDead(player.dead);
+      view.setGear(player.weapon, player.helm);
       this.views.set(id, view);
       if (isMe) {
         this.me = player;
@@ -118,6 +150,7 @@ export class WorldScene extends Phaser.Scene {
         view.setHp(player.hp, player.maxHp);
         view.setDead(player.dead);
         view.setGuarding(player.guarding);
+        view.setGear(player.weapon, player.helm);
         if (isMe) {
           if (!player.moving) this.marker.setVisible(false);
           this.refreshMe();
@@ -157,6 +190,18 @@ export class WorldScene extends Phaser.Scene {
       view.die();
     });
 
+    $(state).depleted.onAdd((_v: boolean, key: string) => this.usable.get(key)?.img.setAlpha(0.35));
+    $(state).depleted.onRemove((_v: boolean, key: string) => this.usable.get(key)?.img.setAlpha(1));
+
+    this.room.onMessage(Msg.OpenStation, (e: OpenStationEvent) => openStation(e.kind));
+    this.room.onMessage(Msg.Gathering, (e: GatheringEvent) => showGathering(e.ms, e.name));
+    this.room.onMessage(Msg.Loot, (e: LootEvent) => {
+      const v = this.views.get(this.room.sessionId);
+      if (!v) return;
+      e.items.forEach((it, i) =>
+        this.floatText(v.headPoint().x, v.headPoint().y - 46 - i * 16, `+${it.qty} ${ITEMS[it.id]?.name ?? it.id}`, "#b8f0b0", 13),
+      );
+    });
     this.room.onMessage(Msg.ChatLine, (line: ChatLine) => {
       addChatLine(line);
       if (line.from) this.views.get(line.from)?.say(line.text);
@@ -172,6 +217,7 @@ export class WorldScene extends Phaser.Scene {
       const gained = this.gold === null ? 0 : d.gold - this.gold;
       this.gold = d.gold;
       setTreePrivate(d.gold, d.nodes);
+      setInventory(d.inv, d.gold);
       const v = this.views.get(this.room.sessionId);
       if (gained > 0 && v) this.floatText(v.headPoint().x, v.headPoint().y - 30, `+${gained} เหรียญ`, "#ffe08a", 13);
     });
@@ -192,6 +238,12 @@ export class WorldScene extends Phaser.Scene {
     const p = this.me;
     if (!p) return;
     setTreeCharacter(p.level, p.job);
+    setItemLevel(p.level);
+    const kind = openStationKind();
+    if (kind) {
+      const at = findStation(this.map, kind);
+      if (p.dead || !at || Math.hypot(p.x - at.x, p.y - at.y) > STATION_RANGE) closeStation();
+    }
     updateMe({
       name: p.name,
       level: p.level,
@@ -291,6 +343,18 @@ export class WorldScene extends Phaser.Scene {
     return { x: c.x - cam.worldView.x, y: c.y - cam.worldView.y };
   }
 
+  /** The rock, tree or station under the pointer (only the lower part of a tree, so you can walk behind it). */
+  private pickUsable(wx: number, wy: number): { x: number; y: number } | null {
+    let best: { x: number; y: number; img: Phaser.GameObjects.Image } | null = null;
+    for (const u of this.usable.values()) {
+      const { img } = u;
+      const h = Math.min(img.height, 58);
+      if (Math.abs(wx - img.x) > Math.min(img.width, 44) / 2 || wy > img.y || wy < img.y - h) continue;
+      if (!best || img.depth > best.img.depth) best = u;
+    }
+    return best;
+  }
+
   private pickMonster(wx: number, wy: number): string | null {
     let best: string | null = null;
     let bestD = Infinity;
@@ -336,6 +400,14 @@ export class WorldScene extends Phaser.Scene {
         this.setTarget(monsterId);
         this.room.send(Msg.Attack, { id: monsterId });
         this.marker.setVisible(false);
+        return;
+      }
+      const usable = this.pickUsable(pointer.worldX, pointer.worldY);
+      if (usable) {
+        this.setTarget(null);
+        this.room.send(Msg.Interact, { x: usable.x, y: usable.y });
+        const at = toScreen(usable.x, usable.y);
+        this.marker.setPosition(at.x, at.y).setVisible(true).setAlpha(1);
         return;
       }
       const t = toTile(pointer.worldX, pointer.worldY);
