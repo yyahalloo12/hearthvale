@@ -13,8 +13,9 @@ import {
 } from "../../../shared/constants";
 import { buildBrindleVillage, GameMap, isSafe, isWalkable } from "../../../shared/map";
 import { cleanChat, cleanName } from "../../../shared/names";
+import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
-import { ChatLine, CooldownEvent, HitEvent, JoinOptions, Msg } from "../../../shared/protocol";
+import { ChatLine, CooldownEvent, HitEvent, JoinOptions, Msg, PrivateData } from "../../../shared/protocol";
 import {
   ATTACK_RANGE,
   CRIT_CHANCE,
@@ -25,6 +26,7 @@ import {
   JOB_CHANGE_LEVEL,
   JOB_NAMES,
   killExp,
+  killGold,
   MAX_LEVEL,
   MONSTERS,
   OUT_OF_COMBAT_MS,
@@ -59,6 +61,12 @@ interface PlayerCtl {
   deadAt: number;
   /** fractional HP regenerated but not yet applied */
   regen: number;
+  gold: number;
+  nodes: Set<string>;
+  /** bonuses from `nodes`, worked out again whenever they change */
+  mods: Mods;
+  /** monsters already hit once (for the "first strike" keystone) */
+  struck: Set<string>;
 }
 
 interface AuthData {
@@ -98,6 +106,9 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(Msg.Skill, (client, msg) => this.handleSkill(client, msg));
     this.onMessage(Msg.LearnSkill, (client, msg) => this.handleLearn(client, msg));
     this.onMessage(Msg.ChangeJob, (client) => this.handleChangeJob(client));
+    this.onMessage(Msg.LearnPassive, (client, msg) => this.handleLearnPassive(client, msg));
+    this.onMessage(Msg.RefundPassive, (client, msg) => this.handleRefundPassive(client, msg));
+    this.onMessage(Msg.Sync, (client) => this.sendPrivate(client));
     this.onMessage(Msg.Respawn, (client) => this.handleRespawn(client));
     this.onMessage(Msg.Chat, (client, msg) => this.handleChat(client, msg));
   }
@@ -150,7 +161,15 @@ export class WorldRoom extends Room<WorldState> {
     } catch {
       /* bad JSON: no skills */
     }
-    this.applyStats(p, true);
+    let savedNodes: unknown = [];
+    try {
+      savedNodes = JSON.parse(c.nodes);
+    } catch {
+      /* bad JSON: no nodes */
+    }
+    const nodes = cleanNodes(savedNodes, p.level, p.job);
+    const mods = passiveMods(nodes);
+    this.applyStats(p, mods, true);
     const saved = { x: Math.round(c.x), y: Math.round(c.y) };
     const spot = c.x >= 0 && isWalkable(this.map, saved.x, saved.y) ? saved : this.findSpawn();
     p.x = spot.x;
@@ -172,6 +191,10 @@ export class WorldRoom extends Room<WorldState> {
       charge: null,
       deadAt: 0,
       regen: 0,
+      gold: Math.max(0, c.gold),
+      nodes,
+      mods,
+      struck: new Set(),
     });
     this.broadcastSystem(`${p.name} เดินทางมาถึงหมู่บ้านบรินเดิล`);
     console.log(`[world] join ${p.name} (${client.sessionId}), online ${this.clients.length}`);
@@ -204,6 +227,8 @@ export class WorldRoom extends Room<WorldState> {
       exp: p.exp,
       job: p.job,
       skills: JSON.stringify(Object.fromEntries(p.skills.entries())),
+      nodes: JSON.stringify([...c.nodes]),
+      gold: c.gold,
       x: ok ? tile.x : -1,
       y: ok ? tile.y : -1,
     });
@@ -228,14 +253,29 @@ export class WorldRoom extends Room<WorldState> {
 
   // ---- stats --------------------------------------------------------------
 
-  private applyStats(p: Player, heal: boolean) {
-    const s = playerStats(p.level, p.job as Job);
+  private applyStats(p: Player, mods: Mods, heal: boolean) {
+    const s = playerStats(p.level, p.job as Job, mods);
     p.maxHp = s.maxHp;
     p.hp = heal ? s.maxHp : Math.min(p.hp, s.maxHp);
   }
 
-  private statsOf(p: Player) {
-    return playerStats(p.level, p.job as Job);
+  private statsOf(p: Player, c: PlayerCtl) {
+    return playerStats(p.level, p.job as Job, c.mods);
+  }
+
+  private sendPrivate(client: Client | undefined) {
+    const c = client && this.ctl.get(client.sessionId);
+    if (!c) return;
+    const data: PrivateData = { gold: c.gold, nodes: [...c.nodes] };
+    client.send(Msg.Private, data);
+  }
+
+  /** Passive nodes changed: work out bonuses again, tell the player, save. */
+  private nodesChanged(client: Client, p: Player, c: PlayerCtl) {
+    c.mods = passiveMods(c.nodes);
+    this.applyStats(p, c.mods, false);
+    this.sendPrivate(client);
+    this.save(p, c).catch((e) => console.error("[world] save failed", e));
   }
 
   private skillPointsLeft(p: Player) {
@@ -244,7 +284,7 @@ export class WorldRoom extends Room<WorldState> {
     return skillPointsEarned(p.level) - spent;
   }
 
-  private gainExp(client: Client | undefined, p: Player, amount: number) {
+  private gainExp(client: Client | undefined, p: Player, c: PlayerCtl, amount: number) {
     if (p.level >= MAX_LEVEL) return;
     p.exp += amount;
     client?.send(Msg.ExpGain, { amount });
@@ -256,13 +296,12 @@ export class WorldRoom extends Room<WorldState> {
     }
     if (p.level >= MAX_LEVEL) p.exp = 0;
     if (leveled) {
-      this.applyStats(p, true);
+      this.applyStats(p, c.mods, true);
       const id = client?.sessionId ?? "";
       this.broadcast(Msg.LevelUp, { id, level: p.level });
       if (p.level === JOB_CHANGE_LEVEL && p.job === "wanderer")
         client?.send(Msg.Notice, { text: "ถึงเลเวล 10 แล้ว! กดปุ่ม \"เปลี่ยนอาชีพ\" เพื่อเป็นสไควร์" });
-      const c = id ? this.ctl.get(id) : undefined;
-      if (c) this.save(p, c).catch(() => {});
+      this.save(p, c).catch(() => {});
     }
   }
 
@@ -343,7 +382,8 @@ export class WorldRoom extends Room<WorldState> {
     c.repathAt = 0;
   }
 
-  private startCooldown(client: Client, c: PlayerCtl, skill: string, ms: number) {
+  private startCooldown(client: Client, c: PlayerCtl, skill: string, baseMs: number) {
+    const ms = Math.round(baseMs * (1 - c.mods.cdrPct / 100));
     c.cooldowns.set(skill, this.clock.currentTime + ms);
     const ev: CooldownEvent = { skill, ms };
     client.send(Msg.Cooldown, ev);
@@ -365,9 +405,37 @@ export class WorldRoom extends Room<WorldState> {
     if (!pc || pc.p.job !== "wanderer") return;
     if (pc.p.level < JOB_CHANGE_LEVEL) return client.send(Msg.Notice, { text: `ต้องถึงเลเวล ${JOB_CHANGE_LEVEL} ก่อน` });
     pc.p.job = "squire";
-    this.applyStats(pc.p, true);
+    this.applyStats(pc.p, pc.c.mods, true);
     this.broadcastSystem(`${pc.p.name} ได้เป็น${JOB_NAMES.squire}แล้ว!`);
     this.save(pc.p, pc.c).catch(() => {});
+  }
+
+  private handleLearnPassive(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const id = (msg as { id?: unknown })?.id;
+    if (!pc || typeof id !== "string") return;
+    const { p, c } = pc;
+    if (c.nodes.size >= passivePointsEarned(p.level)) return client.send(Msg.Notice, { text: "ไม่มีแต้มต้นไม้เหลือ" });
+    if (!canReach(id, c.nodes, p.job)) return;
+    c.nodes.add(id);
+    this.nodesChanged(client, p, c);
+  }
+
+  private handleRefundPassive(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const id = (msg as { id?: unknown })?.id;
+    if (!pc || pc.p.dead || typeof id !== "string") return;
+    const { p, c } = pc;
+    if (!c.nodes.has(id)) return;
+    if (this.clock.currentTime - c.lastCombatAt < OUT_OF_COMBAT_MS && c.lastCombatAt > 0)
+      return client.send(Msg.Notice, { text: "ล้างแต้มระหว่างต่อสู้ไม่ได้" });
+    if (!canRefund(id, c.nodes, p.job)) return client.send(Msg.Notice, { text: "โหนดนี้เป็นทางผ่านของโหนดอื่น ล้างโหนดปลายทางก่อน" });
+    const cost = refundCost(p.level);
+    if (c.gold < cost) return client.send(Msg.Notice, { text: `เหรียญไม่พอ ต้องใช้ ${cost} เหรียญ` });
+    c.gold -= cost;
+    c.nodes.delete(id);
+    this.nodesChanged(client, p, c);
+    client.send(Msg.Notice, { text: `ล้างโหนด ${PASSIVES.get(id)?.name ?? ""} แล้ว เสีย ${cost} เหรียญ` });
   }
 
   private handleRespawn(client: Client) {
@@ -423,11 +491,17 @@ export class WorldRoom extends Room<WorldState> {
     const c = this.ctl.get(playerId);
     if (!p || !c || p.dead) return;
     const now = this.clock.currentTime;
+    c.lastCombatAt = now;
+    if (Math.random() * 100 < c.mods.dodge) {
+      const ev: HitEvent = { from: monsterId, to: playerId, dmg: 0, miss: true };
+      this.broadcast(Msg.Hit, ev);
+      return;
+    }
     const crit = Math.random() < CRIT_CHANCE;
-    let dmg = hitDamage(atk, this.statsOf(p).def, 1, Math.random(), crit);
+    let dmg = hitDamage(atk, this.statsOf(p, c).def, 1, Math.random(), crit);
+    dmg = Math.max(1, Math.round(dmg * (1 - c.mods.dmgReduce / 100)));
     if (c.guardUntil > now) dmg = Math.max(1, Math.round(dmg * (1 - c.guardReduce)));
     p.hp = Math.max(0, p.hp - dmg);
-    c.lastCombatAt = now;
     const killed = p.hp <= 0;
     const ev: HitEvent = { from: monsterId, to: playerId, dmg, crit, killed };
     this.broadcast(Msg.Hit, ev);
@@ -456,9 +530,19 @@ export class WorldRoom extends Room<WorldState> {
     const mc = this.monsterSys.ctl.get(monsterId);
     if (!m || !mc) return;
     faceTowards(p, m);
-    const crit = Math.random() < CRIT_CHANCE;
-    const dmg = hitDamage(this.statsOf(p).atk, mc.def_, power, Math.random(), crit);
+    const { mods } = c;
+    let chance = CRIT_CHANCE + mods.critChance / 100;
+    if (mods.firststrike) chance = c.struck.has(monsterId) ? chance * 0.5 : 1;
+    if (c.struck.size > 100) for (const s of c.struck) if (!this.state.monsters.has(s)) c.struck.delete(s);
+    c.struck.add(monsterId);
+    const crit = Math.random() < chance;
+    let boost = power;
+    if (skill) boost *= 1 + mods.skillDmgPct / 100;
+    if (p.hp < p.maxHp / 2) boost *= 1 + mods.lowHpDmgPct / 100;
+    const dmg = hitDamage(this.statsOf(p, c).atk, mc.def_, boost, Math.random(), crit);
     c.lastCombatAt = this.clock.currentTime;
+    // life steal counts only damage the monster could still take
+    if (mods.lifesteal > 0) p.hp = Math.min(p.maxHp, p.hp + Math.round((Math.min(dmg, m.hp) * mods.lifesteal) / 100));
     const level = m.level;
     const killed = this.monsterSys.takeDamage(monsterId, id, dmg, stunMs);
     const ev: HitEvent = { from: id, to: monsterId, dmg, crit, skill, killed };
@@ -467,7 +551,10 @@ export class WorldRoom extends Room<WorldState> {
       c.targetId = null;
       c.pendingSkill = null;
       const client = this.clients.find((cl) => cl.sessionId === id);
-      this.gainExp(client, p, killExp(mc.exp, level, p.level));
+      c.struck.delete(monsterId);
+      c.gold += killGold(mc.def);
+      this.sendPrivate(client);
+      this.gainExp(client, p, c, killExp(mc.exp, level, p.level));
       if (mc.def.boss) this.broadcastSystem(`${p.name} ปราบ${MONSTERS[m.kind]?.name ?? "บอส"}ได้แล้ว!`);
     }
   }
@@ -481,6 +568,8 @@ export class WorldRoom extends Room<WorldState> {
       if (!c || p.dead) return;
 
       if (p.guarding && c.guardUntil <= now) p.guarding = false;
+      const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100);
+      const swingMs = PLAYER_ATTACK_MS / (1 + c.mods.attackSpeedPct / 100);
 
       if (c.charge) {
         const m = this.state.monsters.get(c.charge.targetId);
@@ -504,7 +593,7 @@ export class WorldRoom extends Room<WorldState> {
           c.pendingSkill = null;
         } else if (dist(p, m) <= ATTACK_RANGE) {
           if (c.path.length > 1) c.path.length = 1; // finish this step, then stop
-          stepAlong(p, c.path, WALK_SPEED, dt);
+          stepAlong(p, c.path, speed, dt);
           if (!c.path.length) {
             faceTowards(p, m);
             const skill = c.pendingSkill;
@@ -514,10 +603,10 @@ export class WorldRoom extends Room<WorldState> {
               c.pendingSkill = null;
               const client = this.clients.find((cl) => cl.sessionId === id);
               if (client) this.startCooldown(client, c, skill, def.cooldownMs);
-              c.nextAttackAt = now + PLAYER_ATTACK_MS;
+              c.nextAttackAt = now + swingMs;
               this.playerHitsMonster(id, p, c, c.targetId, (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1), skill);
             } else if (now >= c.nextAttackAt) {
-              c.nextAttackAt = now + PLAYER_ATTACK_MS;
+              c.nextAttackAt = now + swingMs;
               this.playerHitsMonster(id, p, c, c.targetId, 1);
             }
           }
@@ -528,16 +617,16 @@ export class WorldRoom extends Room<WorldState> {
             if (rest) c.path = c.path.length ? [c.path[0], ...rest] : rest;
             else if (!c.path.length) c.targetId = null; // cannot reach it
           }
-          stepAlong(p, c.path, WALK_SPEED, dt);
+          stepAlong(p, c.path, speed, dt);
         }
       } else {
-        stepAlong(p, c.path, WALK_SPEED, dt);
+        stepAlong(p, c.path, speed, dt);
       }
 
-      // Regeneration: fast out of combat, a trickle in combat.
-      if (p.hp < p.maxHp) {
+      // Regeneration: fast out of combat, a trickle in combat (none with the bloodthirst keystone).
+      if (p.hp < p.maxHp && !c.mods.bloodthirst) {
         const rate = now - c.lastCombatAt > OUT_OF_COMBAT_MS ? 0.04 : 0.003;
-        c.regen += p.maxHp * rate * dt;
+        c.regen += p.maxHp * rate * (1 + c.mods.regenPct / 100) * dt;
         const whole = Math.floor(c.regen);
         if (whole > 0) {
           c.regen -= whole;

@@ -11,6 +11,12 @@ export const Msg = {
   LearnSkill: "learn_skill",
   /** client -> server: become a Squire at level 10 */
   ChangeJob: "change_job",
+  /** client -> server: learn a passive node {id} */
+  LearnPassive: "learn_passive",
+  /** client -> server: give a passive node back for coins {id} */
+  RefundPassive: "refund_passive",
+  /** client -> server: the game screen is ready, send me my private data */
+  Sync: "sync",
   /** client -> server: get up after dying */
   Respawn: "respawn",
   /** client -> server: say something in chat */
@@ -26,6 +32,8 @@ export const Msg = {
   LevelUp: "level_up",
   /** server -> client: EXP you gained */
   ExpGain: "exp_gain",
+  /** server -> client: things only you may see (coins, passive nodes) */
+  Private: "private",
   /** server -> client: a skill went on cooldown */
   Cooldown: "cooldown",
 } as const;
@@ -63,6 +71,13 @@ export interface HitEvent {
   crit?: boolean;
   skill?: string;
   killed?: boolean;
+  /** the target dodged (dmg is 0) */
+  miss?: boolean;
+}
+
+export interface PrivateData {
+  gold: number;
+  nodes: string[];
 }
 
 export interface CooldownEvent {

@@ -2,13 +2,14 @@ import { getStateCallbacks, Room } from "colyseus.js";
 import Phaser from "phaser";
 import { TILE_H } from "../../../shared/constants";
 import { buildBrindleVillage, GameMap, isHouseAnchor, isWalkable, Prop } from "../../../shared/map";
-import { ChatLine, CooldownEvent, HitEvent, Msg } from "../../../shared/protocol";
+import { ChatLine, CooldownEvent, HitEvent, Msg, PrivateData } from "../../../shared/protocol";
 import { SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
 import { initHud, setOnline, skillForKey, startCooldown, updateMe } from "../hud";
 import { toScreen, toTile } from "../iso";
 import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
+import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
 import { PlayerView } from "../PlayerView";
 import { groundKey, makeTextures } from "../textures";
 
@@ -29,6 +30,7 @@ export class WorldScene extends Phaser.Scene {
   private dragStart?: { x: number; y: number; scrollX: number; scrollY: number };
   private targetId: string | null = null;
   private me: any;
+  private gold: number | null = null;
 
   constructor() {
     super("world");
@@ -54,8 +56,13 @@ export class WorldScene extends Phaser.Scene {
       changeJob: () => this.room.send(Msg.ChangeJob),
       respawn: () => this.room.send(Msg.Respawn),
     });
+    initPassiveTree({
+      learn: (id) => this.room.send(Msg.LearnPassive, { id }),
+      refund: (id) => this.room.send(Msg.RefundPassive, { id }),
+    });
     this.bindRoom();
     this.bindInput();
+    this.room.send(Msg.Sync);
     // handy in the browser console and for automated tests; the server checks everything anyway
     (window as any).__hv = { scene: this, room: this.room };
   }
@@ -161,6 +168,13 @@ export class WorldScene extends Phaser.Scene {
       const v = this.views.get(this.room.sessionId);
       if (v) this.floatText(v.headPoint().x, v.headPoint().y - 14, `+${e.amount} EXP`, "#d7b6ff", 13);
     });
+    this.room.onMessage(Msg.Private, (d: PrivateData) => {
+      const gained = this.gold === null ? 0 : d.gold - this.gold;
+      this.gold = d.gold;
+      setTreePrivate(d.gold, d.nodes);
+      const v = this.views.get(this.room.sessionId);
+      if (gained > 0 && v) this.floatText(v.headPoint().x, v.headPoint().y - 30, `+${gained} เหรียญ`, "#ffe08a", 13);
+    });
     this.room.onMessage(Msg.LevelUp, (e: { id: string; level: number }) => {
       const v = this.views.get(e.id);
       if (!v) return;
@@ -177,6 +191,7 @@ export class WorldScene extends Phaser.Scene {
   private refreshMe() {
     const p = this.me;
     if (!p) return;
+    setTreeCharacter(p.level, p.job);
     updateMe({
       name: p.name,
       level: p.level,
@@ -218,6 +233,10 @@ export class WorldScene extends Phaser.Scene {
     const targetPlayer = this.views.get(h.to);
     if (targetPlayer) {
       const p = targetPlayer.headPoint();
+      if (h.miss) {
+        this.floatText(p.x, p.y, "หลบ!", "#9fe8ff", 14);
+        return;
+      }
       this.floatText(p.x, p.y, `-${h.dmg}`, h.to === myId ? "#ff5a5a" : "#ff9b9b", h.crit ? 18 : 14);
     }
   }

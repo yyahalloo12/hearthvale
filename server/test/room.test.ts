@@ -1,4 +1,4 @@
-import { Server } from "@colyseus/core";
+import { matchMaker, Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { Client, Room } from "colyseus.js";
 import assert from "node:assert/strict";
@@ -120,4 +120,87 @@ test("killing a hen gives EXP, and EXP is still there after logging in again", a
   await until(() => b.state.players?.get(b.sessionId) !== undefined);
   assert.equal(b.state.players.get(b.sessionId).exp, exp);
   await b.leave();
+});
+
+test("passive nodes: learn, spend points, pay to give back, and save", async () => {
+  const c = new Client(`ws://localhost:${PORT}`);
+  let a: Room<any> = await c.joinOrCreate("world", { name: "Weaver", password: "weave", create: true });
+  let priv: any = null;
+  const notices: string[] = [];
+  a.onMessage(Msg.Private, (d: any) => (priv = d));
+  a.onMessage(Msg.Notice, (n: any) => notices.push(n.text));
+  a.send(Msg.Sync);
+  await until(() => priv !== null);
+  assert.deepEqual(priv, { gold: 0, nodes: [] });
+
+  // not next to a starting point: ignored. Level 1 has one point.
+  a.send(Msg.LearnPassive, { id: "r3" });
+  a.send(Msg.LearnPassive, { id: "c_str" });
+  await until(() => priv.nodes.length === 1);
+  assert.deepEqual(priv.nodes, ["c_str"]);
+  a.send(Msg.LearnPassive, { id: "r3" });
+  await until(() => notices.length === 1);
+
+  // no coins: refused
+  a.send(Msg.RefundPassive, { id: "c_str" });
+  await until(() => notices.length === 2);
+  assert.equal(priv.nodes.length, 1);
+
+  const room = matchMaker.getLocalRoomById(a.roomId) as unknown as WorldRoom;
+  const me = room.state.players.get(a.sessionId)!;
+  room.ctl.get(a.sessionId)!.gold = 1000;
+  me.level = 5;
+  const before = me.maxHp;
+  a.send(Msg.LearnPassive, { id: "r3" });
+  a.send(Msg.LearnPassive, { id: "r2" });
+  await until(() => priv.nodes.length === 3);
+  assert.ok(me.maxHp > before);
+
+  // r3 holds up r2: refused; r2 itself can go, for 50 coins at level 5
+  a.send(Msg.RefundPassive, { id: "r3" });
+  a.send(Msg.RefundPassive, { id: "r2" });
+  await until(() => priv.nodes.length === 2);
+  assert.deepEqual(priv.nodes, ["c_str", "r3"]);
+  assert.equal(priv.gold, 950);
+  await a.leave();
+
+  a = await c.joinOrCreate("world", { name: "Weaver", password: "weave", create: false });
+  let back: any = null;
+  a.onMessage(Msg.Private, (d: any) => (back = d));
+  a.send(Msg.Sync);
+  await until(() => back !== null);
+  assert.deepEqual(back, { gold: 950, nodes: ["c_str", "r3"] });
+  await a.leave();
+});
+
+test("first strike always crits the first hit, life steal heals, kills drop coins", async () => {
+  const c = new Client(`ws://localhost:${PORT}`);
+  const a: Room<any> = await c.joinOrCreate("world", { name: "Striker", password: "strike", create: true });
+  await until(() => a.state.players?.size >= 1 && a.state.monsters?.size > 0);
+  const room = matchMaker.getLocalRoomById(a.roomId) as unknown as WorldRoom;
+  const ctl = room.ctl.get(a.sessionId)!;
+  ctl.mods = { ...ctl.mods, firststrike: true, bloodthirst: true, lifesteal: 50 };
+  const hits: any[] = [];
+  let priv: any = null;
+  let hpAfterFirst = 0;
+  const p = room.state.players.get(a.sessionId)!;
+  a.onMessage(Msg.Hit, (h: any) => {
+    if (h.from !== a.sessionId) return;
+    if (!hits.length) hpAfterFirst = p.hp;
+    hits.push(h);
+  });
+  a.onMessage(Msg.Private, (d: any) => (priv = d));
+  const id = [...room.state.monsters.entries()].find(([, m]) => m.kind === "rat")![0];
+  const m = room.state.monsters.get(id)!;
+  p.x = Math.round(m.x);
+  p.y = Math.round(m.y);
+  p.hp = 20;
+  m.hp = 25;
+  a.send(Msg.Attack, { id });
+  await until(() => hits.length >= 1, 5000);
+  assert.equal(hits[0].crit, true);
+  assert.ok(hpAfterFirst > 20, "life steal healed (nothing else could: bloodthirst stops regeneration)");
+  await until(() => hits.some((h) => h.killed), 12000);
+  await until(() => priv?.gold >= 5);
+  await a.leave();
 });

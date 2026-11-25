@@ -33,7 +33,33 @@
       <div id="hud-job"></div>
       <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
       <div class="bar exp"><div id="exp-fill"></div><span id="exp-text"></span></div>
+      <div id="hud-gold"></div>
       <div id="hud-meta"><span id="map-name"></span> · <span id="online"></span></div>
+    </div>
+
+    <button id="tree-open" hidden>ต้นไม้พาสซีฟ (P)<span id="tree-badge" hidden></span></button>
+
+    <div id="tree" class="panel" role="dialog" aria-label="ต้นไม้พาสซีฟ" hidden>
+      <div class="tree-head">
+        <h2>ผืนทอแห่งชะตา</h2>
+        <span id="tree-points"></span>
+        <span id="tree-gold"></span>
+        <button id="tree-centre">ดูทั้งผืน</button>
+        <button id="tree-close" aria-label="ปิด">✕</button>
+      </div>
+      <div class="tree-body">
+        <div id="tree-canvas">
+          <svg><g id="tree-nodes"></g></svg>
+          <div id="tree-tip" hidden></div>
+        </div>
+        <div id="tree-side">
+          <div id="tree-selected"></div>
+          <h3>โบนัสรวม</h3>
+          <div id="tree-total"></div>
+          <h3>ค่าพลัง</h3>
+          <div id="tree-help"></div>
+        </div>
+      </div>
     </div>
 
     <div id="skillbar" hidden>

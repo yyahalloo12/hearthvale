@@ -4,6 +4,7 @@
  */
 import monstersJson from "./data/monsters.json";
 import skillsJson from "./data/skills.json";
+import type { Mods } from "./passives";
 
 export type Job = "wanderer" | "squire";
 export const JOB_NAMES: Record<Job, string> = { wanderer: "ผู้พเนจร", squire: "สไควร์" };
@@ -26,6 +27,8 @@ export interface MonsterDef {
   atk: number;
   def: number;
   exp: number;
+  /** coins dropped: [least, most] */
+  gold: [number, number];
   speed: number;
   attackMs: number;
   aggroRange: number;
@@ -65,12 +68,17 @@ export function expToNext(level: number): number {
   return Math.round(20 * Math.pow(level, 1.6));
 }
 
-export function playerStats(level: number, job: Job): Stats {
+export function playerStats(level: number, job: Job, mods?: Mods): Stats {
   const l = level - 1;
   const s = { maxHp: 80 + 12 * l, atk: 10 + 2.2 * l, def: 3 + l };
   if (job === "squire") {
     s.maxHp *= 1.2;
     s.def *= 1.1;
+  }
+  if (mods) {
+    s.maxHp *= 1 + mods.hpPct / 100;
+    s.atk *= 1 + mods.atkPct / 100;
+    s.def *= 1 + mods.defPct / 100;
   }
   return { maxHp: Math.round(s.maxHp), atk: Math.round(s.atk), def: Math.round(s.def) };
 }
@@ -93,6 +101,12 @@ export function hitDamage(atk: number, def: number, power = 1, roll = 0.5, crit 
 }
 
 export const CRIT_CHANCE = 0.05;
+
+/** Coins from a kill. `roll` is 0..1 (random). */
+export function killGold(def: MonsterDef, roll = Math.random()): number {
+  const [lo, hi] = def.gold;
+  return lo + Math.floor(roll * (hi - lo + 1));
+}
 
 /** EXP from a kill, cut down when the player is far above the monster. */
 export function killExp(baseExp: number, monsterLevel: number, playerLevel: number): number {
