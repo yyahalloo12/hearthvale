@@ -11,20 +11,43 @@
 
     <div id="login" class="panel">
       <h1>Tales of Hearthvale</h1>
-      <p class="sub">ผู้ผูกด้ายคนใหม่ ตั้งชื่อของคุณ</p>
+      <p class="sub">ผู้ผูกด้ายแห่งหมู่บ้านบรินเดิล</p>
       <form id="login-form" autocomplete="off">
         <label for="name">ชื่อตัวละคร</label>
         <input id="name" maxlength="16" placeholder="เช่น Ploy" required />
-        <label>สีเสื้อ</label>
+        <label for="password">รหัสผ่าน</label>
+        <input id="password" type="password" maxlength="64" placeholder="อย่างน้อย 4 ตัว" required autocomplete="current-password" />
+        <label>สีเสื้อ <span class="hint">(ใช้ตอนสร้างตัวละครใหม่)</span></label>
         <div id="colors"></div>
         <button type="submit" id="enter">เข้าสู่โลก</button>
+        <button type="button" id="create" class="secondary">สร้างตัวละครใหม่</button>
         <p id="login-error" class="error" role="alert"></p>
       </form>
     </div>
 
-    <div id="hud" hidden>
-      <div id="map-name"></div>
-      <div id="online"></div>
+    <div id="hud" class="panel" hidden>
+      <div class="hud-top">
+        <span id="hud-name"></span>
+        <span id="hud-level"></span>
+      </div>
+      <div id="hud-job"></div>
+      <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+      <div class="bar exp"><div id="exp-fill"></div><span id="exp-text"></span></div>
+      <div id="hud-meta"><span id="map-name"></span> · <span id="online"></span></div>
+    </div>
+
+    <div id="skillbar" hidden>
+      <button id="job-change" hidden>เปลี่ยนอาชีพเป็นสไควร์</button>
+      <div id="skill-points"></div>
+      <div id="skills"></div>
+    </div>
+
+    <div id="death" hidden>
+      <div class="panel death-box">
+        <h2>คุณหมดสติ</h2>
+        <p>ฟื้นขึ้นที่ลานกลางหมู่บ้าน</p>
+        <button id="respawn" disabled>ฟื้นคืนชีพ</button>
+      </div>
     </div>
 
     <div id="chat" hidden>

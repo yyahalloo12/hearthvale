@@ -32,6 +32,8 @@ export interface GameMap {
   tiles: Tile[][]; // [y][x]
   props: Prop[][]; // [y][x]
   spawn: { x: number; y: number };
+  /** Monsters never chase anyone standing inside this circle (the village). */
+  safe: { x: number; y: number; r: number };
 }
 
 /** Small deterministic random generator (mulberry32). */
@@ -121,7 +123,7 @@ export function buildBrindleVillage(): GameMap {
       else if (Math.hypot(x - cx, y - cy) > 6 && rand() < 0.02) props[y][x] = Prop.Bush;
     }
   // Roads stay open to the map edge except the outermost tree ring.
-  return { name: "Brindle Village", width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 } };
+  return { name: "Brindle Village", width: W, height: H, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 } };
 }
 
 /** The "main" prop tile of a 2x2 house is its top-left tile. */
@@ -137,4 +139,8 @@ export function isWalkable(map: GameMap, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= map.width || y >= map.height) return false;
   if (map.tiles[y][x] === Tile.Water) return false;
   return map.props[y][x] === Prop.None;
+}
+
+export function isSafe(map: GameMap, x: number, y: number) {
+  return Math.hypot(x - map.safe.x, y - map.safe.y) < map.safe.r;
 }

@@ -20,6 +20,10 @@ export class PlayerView {
   private label: Phaser.GameObjects.Text;
   private bubble?: Phaser.GameObjects.Container;
   private bubbleTimer?: Phaser.Time.TimerEvent;
+  private hpBar: Phaser.GameObjects.Graphics;
+  private shield: Phaser.GameObjects.Image;
+  private figure: Phaser.GameObjects.Container;
+  private dead = false;
 
   /** Displayed position in tile units. */
   x: number;
@@ -42,7 +46,7 @@ export class PlayerView {
     this.hair = scene.add.image(0, -9, "c-hair");
     this.head = scene.add.container(0, -36, [face, this.eyes, this.hair, this.hairBack]);
     this.label = scene.add
-      .text(0, -64, name, {
+      .text(0, -66, name, {
         fontFamily: "Tahoma, sans-serif",
         fontSize: "13px",
         color: isMe ? "#fff3a0" : "#ffffff",
@@ -51,7 +55,10 @@ export class PlayerView {
       })
       .setOrigin(0.5, 1);
 
-    this.root = scene.add.container(0, 0, [shadow, this.body, this.head, this.label]);
+    this.hpBar = scene.add.graphics();
+    this.shield = scene.add.image(12, -14, "shield").setVisible(false);
+    this.figure = scene.add.container(0, 0, [this.body, this.head, this.shield]);
+    this.root = scene.add.container(0, 0, [shadow, this.figure, this.label, this.hpBar]);
     this.setFacing(0);
     this.place();
   }
@@ -77,6 +84,40 @@ export class PlayerView {
     this.eyes.fillCircle(9 + s, 7, 3);
   }
 
+  setHp(hp: number, max: number) {
+    this.hpBar.clear();
+    const w = 36;
+    this.hpBar.fillStyle(0x000000, 0.7);
+    this.hpBar.fillRect(-w / 2 - 1, -63, w + 2, 6);
+    this.hpBar.fillStyle(hp / max > 0.3 ? 0x5bd15b : 0xe85c5c);
+    this.hpBar.fillRect(-w / 2, -62, (w * Math.max(0, hp)) / max, 4);
+  }
+
+  setGuarding(on: boolean) {
+    this.shield.setVisible(on && !this.dead);
+  }
+
+  setDead(on: boolean) {
+    if (on === this.dead) return;
+    this.dead = on;
+    this.figure.setAngle(on ? -90 : 0).setPosition(on ? -14 : 0, on ? -6 : 0);
+    this.figure.setAlpha(on ? 0.7 : 1);
+    if (on) this.shield.setVisible(false);
+  }
+
+  /** Quick lunge towards where we face (attack animation). */
+  lunge() {
+    if (this.dead) return;
+    const dirs = [[0, 1], [-1, 0.5], [-1, 0], [-1, -0.5], [0, -1], [1, -0.5], [1, 0], [1, 0.5]];
+    const [dx, dy] = dirs[this.facing] ?? [0, 0];
+    this.scene.tweens.add({ targets: this.figure, x: dx * 7, y: dy * 5, duration: 70, yoyo: true });
+  }
+
+  /** Point (world pixels) where hit numbers should appear. */
+  headPoint() {
+    return { x: this.root.x, y: this.root.y - 56 };
+  }
+
   say(text: string) {
     this.bubble?.destroy();
     this.bubbleTimer?.remove();
@@ -98,7 +139,7 @@ export class PlayerView {
     bg.strokeRoundedRect(-w / 2, -h - 2, w, h, 6);
     bg.fillTriangle(-5, -2, 5, -2, 0, 5);
     t.setPosition(0, -6);
-    this.bubble = this.scene.add.container(0, -82, [bg, t]);
+    this.bubble = this.scene.add.container(0, -84, [bg, t]);
     this.root.add(this.bubble);
     this.bubbleTimer = this.scene.time.delayedCall(5000, () => {
       this.bubble?.destroy();
@@ -120,7 +161,7 @@ export class PlayerView {
     // little hop while walking
     if (this.moving) this.walkTime += dtMs;
     else this.walkTime = 0;
-    const bob = this.moving ? Math.abs(Math.sin(this.walkTime / 90)) * 3 : 0;
+    const bob = this.moving && !this.dead ? Math.abs(Math.sin(this.walkTime / 90)) * 3 : 0;
     this.body.y = -10 - bob;
     this.head.y = -36 - bob;
     this.place();

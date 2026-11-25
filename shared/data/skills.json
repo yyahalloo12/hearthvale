@@ -1,0 +1,37 @@
+{
+  "heavy_strike": {
+    "name": "ฟันหนัก",
+    "job": "squire",
+    "key": "1",
+    "maxLevel": 5,
+    "cooldownMs": 5000,
+    "range": 1.6,
+    "desc": "ฟันแรงใส่เป้าหมาย ดาเมจ 180% + 20% ต่อขั้น",
+    "power": 1.8,
+    "powerPerLevel": 0.2
+  },
+  "guard": {
+    "name": "ตั้งการ์ด",
+    "job": "squire",
+    "key": "2",
+    "maxLevel": 5,
+    "cooldownMs": 20000,
+    "range": 0,
+    "desc": "ยกโล่ 6 วินาที รับดาเมจน้อยลง 30% + 6% ต่อขั้น",
+    "durationMs": 6000,
+    "reduce": 0.3,
+    "reducePerLevel": 0.06
+  },
+  "charge": {
+    "name": "พุ่งชน",
+    "job": "squire",
+    "key": "3",
+    "maxLevel": 5,
+    "cooldownMs": 12000,
+    "range": 6,
+    "desc": "พุ่งเข้าหาเป้าหมายไกลสุด 6 ช่อง ทำให้มึน 1 วินาที + 0.2 วินาทีต่อขั้น",
+    "power": 1.0,
+    "stunMs": 1000,
+    "stunPerLevelMs": 200
+  }
+}

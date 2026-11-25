@@ -17,6 +17,10 @@ export const NAME_MAX = 16;
 export const CHAT_MAX = 120;
 /** Minimum milliseconds between two chat messages from one player. */
 export const CHAT_COOLDOWN_MS = 600;
+export const PASSWORD_MIN = 4;
+export const PASSWORD_MAX = 64;
+/** Seconds between automatic saves of everyone online. */
+export const AUTOSAVE_MS = 30_000;
 
 /** Tunic colours a new wanderer can pick on the login screen. */
 export const TUNIC_COLORS = [

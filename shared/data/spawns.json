@@ -1,0 +1,8 @@
+[
+  {"kind": "hen", "x": 10, "y": 10, "radius": 5, "count": 6, "respawnMs": 8000},
+  {"kind": "hen", "x": 22, "y": 8, "radius": 4, "count": 4, "respawnMs": 8000},
+  {"kind": "rat", "x": 36, "y": 38, "radius": 6, "count": 6, "respawnMs": 12000},
+  {"kind": "rat", "x": 41, "y": 22, "radius": 4, "count": 4, "respawnMs": 12000},
+  {"kind": "scarecrow", "x": 26, "y": 41, "radius": 4, "count": 6, "respawnMs": 20000},
+  {"kind": "henqueen", "x": 10, "y": 38, "radius": 2, "count": 1, "respawnMs": 300000}
+]

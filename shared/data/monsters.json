@@ -1,0 +1,51 @@
+{
+  "hen": {
+    "name": "ไก่แจ้หงอนไฟ",
+    "level": [1, 3],
+    "hp": 32,
+    "atk": 6,
+    "def": 0,
+    "exp": 9,
+    "speed": 2.2,
+    "attackMs": 1500,
+    "aggroRange": 0,
+    "leash": 9
+  },
+  "rat": {
+    "name": "หนูนาอ้วน",
+    "level": [3, 6],
+    "hp": 60,
+    "atk": 10,
+    "def": 2,
+    "exp": 22,
+    "speed": 2.0,
+    "attackMs": 1400,
+    "aggroRange": 0,
+    "leash": 9
+  },
+  "scarecrow": {
+    "name": "หุ่นไล่กาซน",
+    "level": [6, 9],
+    "hp": 120,
+    "atk": 15,
+    "def": 5,
+    "exp": 55,
+    "speed": 2.4,
+    "attackMs": 1600,
+    "aggroRange": 4,
+    "leash": 10
+  },
+  "henqueen": {
+    "name": "แม่ไก่พิโรธ",
+    "level": [12, 12],
+    "hp": 900,
+    "atk": 30,
+    "def": 9,
+    "exp": 650,
+    "speed": 2.6,
+    "attackMs": 1300,
+    "aggroRange": 3,
+    "leash": 8,
+    "boss": true
+  }
+}

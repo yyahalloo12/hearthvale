@@ -3,7 +3,9 @@ import { test } from "node:test";
 import { buildBrindleVillage, isWalkable } from "../../shared/map";
 import { cleanChat, cleanName } from "../../shared/names";
 import { findPath } from "../../shared/pathfinding";
-import { facingFor } from "../src/rooms/WorldRoom";
+import { facingFor } from "../src/game/movement";
+import spawns from "../../shared/data/spawns.json";
+import { expToNext, hitDamage, killExp, MONSTERS, playerStats, SKILLS } from "../../shared/stats";
 
 test("map is the same every time and spawn is walkable", () => {
   const a = buildBrindleVillage();
@@ -53,4 +55,33 @@ test("facing points the way the character walks on screen", () => {
   assert.equal(facingFor(-1, 1), 2); // screen left
   assert.equal(facingFor(-1, -1), 4); // screen up
   assert.equal(facingFor(1, -1), 6); // screen right
+});
+
+test("every spawn area has walkable ground and a known monster", () => {
+  const map = buildBrindleVillage();
+  for (const s of spawns) {
+    assert.ok(MONSTERS[s.kind], s.kind);
+    let ok = 0;
+    for (let y = s.y - s.radius; y <= s.y + s.radius; y++)
+      for (let x = s.x - s.radius; x <= s.x + s.radius; x++) if (isWalkable(map, x, y)) ok++;
+    assert.ok(ok >= s.count, `spawn ${s.kind}@${s.x},${s.y} has room`);
+    // and can be reached from the village
+    const tile = (() => {
+      for (let y = s.y - s.radius; y <= s.y + s.radius; y++)
+        for (let x = s.x - s.radius; x <= s.x + s.radius; x++) if (isWalkable(map, x, y)) return { x, y };
+    })()!;
+    assert.ok(findPath(map, map.spawn, tile, 200), `spawn ${s.kind} reachable`);
+  }
+});
+
+test("formulas behave", () => {
+  assert.equal(expToNext(1), 20);
+  assert.ok(expToNext(10) > expToNext(9));
+  assert.equal(expToNext(60), 0);
+  assert.ok(playerStats(10, "squire").maxHp > playerStats(10, "wanderer").maxHp);
+  assert.equal(hitDamage(1, 100), 1, "always at least 1 damage");
+  assert.ok(hitDamage(20, 0, 1, 0.5, true) > hitDamage(20, 0, 1, 0.5, false));
+  assert.ok(killExp(10, 1, 20) < 10, "far-too-easy kills give less");
+  assert.equal(killExp(10, 5, 5), 10);
+  for (const s of Object.values(SKILLS)) assert.equal(s.job, "squire");
 });

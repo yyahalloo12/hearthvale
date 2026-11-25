@@ -1,6 +1,6 @@
 import type { Room } from "colyseus.js";
 import Phaser from "phaser";
-import { CHAT_MAX, TUNIC_COLORS } from "../../shared/constants";
+import { CHAT_MAX, PASSWORD_MIN, TUNIC_COLORS } from "../../shared/constants";
 import { cleanName } from "../../shared/names";
 import { JoinOptions, Msg } from "../../shared/protocol";
 import { client } from "./net";
@@ -31,21 +31,31 @@ try {
   /* storage may be blocked */
 }
 nameInput.focus();
+if (nameInput.value) $("password").focus();
 
-$("login-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
+const passInput = $<HTMLInputElement>("password");
+
+async function enterWorld(create: boolean) {
   const err = $("login-error");
   const enter = $<HTMLButtonElement>("enter");
+  const createBtn = $<HTMLButtonElement>("create");
   const name = cleanName(nameInput.value);
   if (!name) {
     err.textContent = "ชื่อต้องยาว 2–16 ตัว ใช้ตัวอักษร ตัวเลข ช่องว่าง _ หรือ - ได้";
     return;
   }
+  const password = passInput.value;
+  if (password.length < PASSWORD_MIN) {
+    err.textContent = `รหัสผ่านต้องยาวอย่างน้อย ${PASSWORD_MIN} ตัว`;
+    return;
+  }
   err.textContent = "";
-  enter.disabled = true;
-  enter.textContent = "กำลังเข้าสู่โลก...";
+  enter.disabled = createBtn.disabled = true;
+  const busy = create ? createBtn : enter;
+  const label = busy.textContent;
+  busy.textContent = "กำลังเข้าสู่โลก...";
   try {
-    const opts: JoinOptions = { name, color: chosenColor };
+    const opts: JoinOptions = { name, password, create, color: chosenColor };
     const room = await client.joinOrCreate("world", opts);
     try {
       localStorage.setItem("hv-name", name);
@@ -54,19 +64,22 @@ $("login-form").addEventListener("submit", async (e) => {
     }
     startGame(room);
   } catch (ex: any) {
-    const msg = ex?.message && /[฀-๿]/.test(ex.message) ? ex.message : "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ เปิดเซิร์ฟเวอร์อยู่หรือเปล่า?";
+    const msg = ex?.message && /[\u0E00-\u0E7F]/.test(ex.message) ? ex.message : "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ เปิดเซิร์ฟเวอร์อยู่หรือเปล่า?";
     err.textContent = msg;
-    enter.disabled = false;
-    enter.textContent = "เข้าสู่โลก";
+    enter.disabled = createBtn.disabled = false;
+    busy.textContent = label;
   }
+}
+
+$("login-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  enterWorld(false);
 });
+$("create").addEventListener("click", () => enterWorld(true));
 
 // ---- In game ------------------------------------------------------------
 function startGame(room: Room) {
   $("login").remove();
-  $("hud").hidden = false;
-  $("chat").hidden = false;
-  $("map-name").textContent = "หมู่บ้านบรินเดิล";
 
   new Phaser.Game({
     type: Phaser.AUTO,

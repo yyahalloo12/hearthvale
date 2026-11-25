@@ -7,6 +7,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WorldRoom } from "./rooms/WorldRoom";
 
+// Node prints "SQLite is an experimental feature" once; it works fine, so hide just that note.
+const defaultWarningListeners = process.listeners("warning");
+process.removeAllListeners("warning");
+process.on("warning", (w) => {
+  if (w.name === "ExperimentalWarning" && /SQLite/i.test(w.message)) return;
+  for (const l of defaultWarningListeners) l(w);
+});
+
 const PORT = Number(process.env.PORT ?? 2567);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(here, "../../client/dist");
