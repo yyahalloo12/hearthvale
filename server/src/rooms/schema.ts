@@ -16,6 +16,13 @@ export class Player extends Schema {
   @type("string") job = "wanderer";
   @type("int32") hp = 1;
   @type("int32") maxHp = 1;
+  /** 0 for jobs without mana */
+  @type("int32") mp = 0;
+  @type("int32") maxMp = 0;
+  @type("boolean") blessed = false;
+  @type("boolean") manaShield = false;
+  @type("boolean") slowed = false;
+  @type("boolean") marked = false;
   @type("boolean") dead = false;
   @type("boolean") guarding = false;
   /** Item ids of what others can see on you ("" = nothing). */
@@ -42,6 +49,8 @@ export class Monster extends Schema {
   @type("int32") hp = 1;
   @type("int32") maxHp = 1;
   @type("boolean") stunned = false;
+  @type("boolean") slowed = false;
+  @type("boolean") marked = false;
 }
 
 export class Gate extends Schema {

@@ -11,7 +11,7 @@ export const Msg = {
   Skill: "skill",
   /** client -> server: spend a skill point {skill} */
   LearnSkill: "learn_skill",
-  /** client -> server: become a Squire at level 10 */
+  /** client -> server: pick a job at level 10 {job} */
   ChangeJob: "change_job",
   /** client -> server: learn a passive node {id} */
   LearnPassive: "learn_passive",
@@ -144,6 +144,8 @@ export interface HitEvent {
   killed?: boolean;
   /** the target dodged (dmg is 0) */
   miss?: boolean;
+  /** healing instead of damage */
+  heal?: boolean;
 }
 
 export interface PrivateData {

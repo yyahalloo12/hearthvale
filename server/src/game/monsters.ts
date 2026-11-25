@@ -32,6 +32,10 @@ export interface MonsterCtl {
   nextThinkAt: number;
   repathAt: number;
   stunUntil: number;
+  slowUntil: number;
+  slow: number;
+  markUntil: number;
+  mark: number;
   atk: number;
   def_: number;
   exp: number;
@@ -90,6 +94,10 @@ export class MonsterSystem {
       nextThinkAt: this.host.now() + 1000 + Math.random() * 4000,
       repathAt: 0,
       stunUntil: 0,
+      slowUntil: 0,
+      slow: 0,
+      markUntil: 0,
+      mark: 0,
       atk: st.atk,
       def_: st.def,
       exp: st.exp,
@@ -130,6 +138,20 @@ export class MonsterSystem {
       if (isWalkable(this.host.map, x, y)) return { x, y };
     }
     return null;
+  }
+
+  /** Monsters around a point turn on this player. Returns how many. */
+  taunt(playerId: string, x: number, y: number, radius: number): number {
+    let n = 0;
+    for (const c of this.ctl.values()) {
+      const m = this.host.monsters.get(c.id);
+      if (!m || c.state === "return" || Math.hypot(m.x - x, m.y - y) > radius) continue;
+      c.state = "chase";
+      c.targetId = playerId;
+      c.repathAt = 0;
+      n++;
+    }
+    return n;
   }
 
   /** A player hit this monster. Returns true when it died. */
@@ -191,6 +213,11 @@ export class MonsterSystem {
         continue;
       }
       if (m.stunned) m.stunned = false;
+      const slowed = c.slowUntil > now;
+      if (m.slowed !== slowed) m.slowed = slowed;
+      const marked = c.markUntil > now;
+      if (m.marked !== marked) m.marked = marked;
+      const speed = c.def.speed * (slowed ? 1 - c.slow : 1);
 
       if (c.state === "idle") {
         if (c.def.aggroRange > 0) {
@@ -210,7 +237,7 @@ export class MonsterSystem {
             if (far && to && c.path.length) c.home = to;
             c.nextThinkAt = now + (far ? 1500 : 3000) + Math.random() * 5000;
           }
-          stepAlong(m, c.path, c.def.speed * 0.5, dt);
+          stepAlong(m, c.path, speed * 0.5, dt);
           // slow regen while calm
           if (m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + Math.ceil(m.maxHp * 0.02 * dt));
           continue;
@@ -226,7 +253,7 @@ export class MonsterSystem {
           if (d <= ATTACK_RANGE) {
             // finish the current step, then fight
             if (c.path.length > 1) c.path.length = 1;
-            stepAlong(m, c.path, c.def.speed, dt);
+            stepAlong(m, c.path, speed, dt);
             if (!c.path.length) {
               faceTowards(m, p);
               if (now >= c.nextAttackAt) {
@@ -242,7 +269,7 @@ export class MonsterSystem {
               const rest = findPath(this.host.map, from, goal, 30);
               if (rest) c.path = c.path.length ? [c.path[0], ...rest] : rest;
             }
-            stepAlong(m, c.path, c.def.speed, dt);
+            stepAlong(m, c.path, speed, dt);
           }
           continue;
         }

@@ -301,3 +301,16 @@ button.secondary:disabled { opacity: 0.6; cursor: wait; }
 #market button.wide.sell { background: #b0553f; }
 #market input[type="checkbox"] { width: 20px; height: 20px; }
 #stall-new { width: 100%; margin-top: 10px; font-size: 14px; padding: 8px; background: #fffaf0; border: 2px solid var(--wood); border-radius: 4px; cursor: pointer; }
+
+/* ---- step 7: jobs, mana, crafts ---- */
+.bar.mp > div { background: linear-gradient(#6fa8f0, #3a68c4); }
+.bar[hidden] { display: none; }
+#job-change { display: grid; grid-template-columns: repeat(2, 190px); gap: 6px; padding: 8px; background: var(--paper); border: 3px solid var(--wood); border-radius: 6px; animation: none; }
+#job-change[hidden] { display: none; }
+#job-change .job-title { grid-column: 1 / -1; text-align: center; font-weight: bold; color: var(--wood-dark); font-size: 14px; }
+#job-change button { display: flex; flex-direction: column; gap: 2px; font-size: 14px; padding: 7px; color: var(--ink); background: #fffaf0; border: 2px solid var(--wood); border-radius: 4px; cursor: pointer; }
+#job-change button:hover { background: #ffe9c4; }
+#job-change span { font-size: 12px; opacity: 0.8; }
+#craft-tabs { display: flex; gap: 4px; margin-top: 10px; }
+#craft-tabs button { flex: 1; font-size: 13px; padding: 6px; background: #fffaf0; border: 2px solid var(--wood); border-radius: 4px; cursor: pointer; }
+#craft-tabs button[aria-pressed="true"] { background: var(--accent); color: #fff; font-weight: bold; }

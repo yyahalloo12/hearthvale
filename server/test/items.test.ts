@@ -78,11 +78,11 @@ test("wearing gear changes stats, and swapping keeps both items", () => {
   addItem(inv.bag, BAG_SIZE, "armor_2", 1);
   addItem(inv.bag, BAG_SIZE, "ore_1", 1);
   const [sword, axe, armor2, ore] = inv.bag.map((s) => s.uid);
-  assert.ok(equipItem(inv, armor2, 5), "level too low");
-  assert.ok(equipItem(inv, ore, 60), "cannot wear a rock");
-  assert.ok(equipItem(inv, "nope", 60));
-  assert.equal(equipItem(inv, sword, 1), null);
-  assert.equal(equipItem(inv, axe, 1), null);
+  assert.ok(equipItem(inv, armor2, 5, "squire"), "level too low");
+  assert.ok(equipItem(inv, ore, 60, "squire"), "cannot wear a rock");
+  assert.ok(equipItem(inv, "nope", 60, "squire"));
+  assert.equal(equipItem(inv, sword, 1, "squire"), null);
+  assert.equal(equipItem(inv, axe, 1, "squire"), null);
   assert.equal(inv.equip.weapon?.id, "axe_1");
   assert.ok(inv.bag.some((s) => s.uid === sword));
   const worn = equipTotals(inv.equip);
@@ -94,12 +94,12 @@ test("wearing gear changes stats, and swapping keeps both items", () => {
   assert.equal(unequipItem(inv, "weapon"), null);
   assert.ok(!("weapon" in inv.equip));
   // a full bag cannot take the weapon back
-  assert.equal(equipItem(inv, axe, 1), null);
+  assert.equal(equipItem(inv, axe, 1, "squire"), null);
   while (inv.bag.length < BAG_SIZE) addItem(inv.bag, BAG_SIZE, "pickaxe", 1);
   assert.ok(unequipItem(inv, "weapon"));
   assert.equal(inv.equip.weapon?.id, "axe_1");
   // but swapping still works with a full bag
-  assert.equal(equipItem(inv, sword, 1), null);
+  assert.equal(equipItem(inv, sword, 1, "squire"), null);
   assert.equal(inv.bag.length, BAG_SIZE);
 });
 
@@ -167,7 +167,7 @@ test("both ores, wood and the two stations can be reached", () => {
       const r = resourceAt(map, x, y);
       if (r && (reach[r.item] ?? 0) < 8 && beside(x, y)) reach[r.item] = (reach[r.item] ?? 0) + 1;
     }
-  assert.deepEqual(reach, { wood_1: 8, ore_1: 8, ore_2: 8 });
+  assert.deepEqual(reach, { wood_1: 8, ore_1: 8, ore_2: 8, herb_1: 8 });
   for (const kind of ["smith", "storage"] as const) {
     const at = findStation(map, kind)!;
     assert.ok(at && beside(at.x, at.y), kind);

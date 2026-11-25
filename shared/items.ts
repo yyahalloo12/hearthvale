@@ -7,6 +7,7 @@ import itemsJson from "./data/items.json";
 import recipesJson from "./data/recipes.json";
 import { GameMap, Prop } from "./map";
 import type { Mods, NumMod } from "./passives";
+import type { Job } from "./stats";
 
 export type Slot = "weapon" | "head" | "body" | "feet";
 export const SLOTS: Slot[] = ["weapon", "head", "body", "feet"];
@@ -30,7 +31,9 @@ export interface ItemDef {
   buy?: number;
   desc?: string;
   slot?: Slot;
-  look?: "sword" | "axe" | "helm";
+  look?: "sword" | "axe" | "bow" | "staff" | "helm" | "cap" | "hat";
+  /** who may use it (everyone when left out) */
+  jobs?: Job[];
   level?: number;
   atk?: number;
   def?: number;
@@ -39,8 +42,15 @@ export interface ItemDef {
 }
 export const ITEMS = itemsJson as unknown as Record<string, ItemDef>;
 
+export type CraftKind = "smith" | "wood" | "tailor";
+export const CRAFT_NAMES: Record<CraftKind, string> = { smith: "ตีเหล็ก", wood: "งานไม้", tailor: "หนังและผ้า" };
+/** Where each crafting skill is kept in the inventory. */
+export const CRAFT_SKILL: Record<CraftKind, "smithing" | "woodwork" | "tailoring"> = { smith: "smithing", wood: "woodwork", tailor: "tailoring" };
+
 export interface Recipe {
   item: string;
+  /** blacksmith when left out */
+  craft?: CraftKind;
   minSkill: number;
   maxSkill: number;
   needs: Record<string, number>;
@@ -65,12 +75,14 @@ export interface Inventory {
   bag: ItemStack[];
   equip: Partial<Record<Slot, ItemStack>>;
   storage: ItemStack[];
-  /** blacksmith skill, 0-100 */
+  /** crafting skills, 0-100 */
   smithing: number;
+  woodwork: number;
+  tailoring: number;
 }
 
 export function emptyInventory(): Inventory {
-  return { bag: [], equip: {}, storage: [], smithing: 0 };
+  return { bag: [], equip: {}, storage: [], smithing: 0, woodwork: 0, tailoring: 0 };
 }
 
 const newUid = () => globalThis.crypto.randomUUID();
@@ -158,12 +170,17 @@ export function takeStack(list: ItemStack[], uid: string, qty: number): ItemStac
   return { ...s, uid: newUid(), qty };
 }
 
+export function canUse(def: ItemDef, job: Job): boolean {
+  return !def.jobs || def.jobs.includes(job);
+}
+
 /** Puts gear on (swapping what was there back into the bag). Returns an error text or null. */
-export function equipItem(inv: Inventory, uid: string, level: number): string | null {
+export function equipItem(inv: Inventory, uid: string, level: number, job: Job): string | null {
   const i = inv.bag.findIndex((s) => s.uid === uid);
   const def = i >= 0 ? ITEMS[inv.bag[i].id] : undefined;
   if (!def?.slot) return "สวมใส่ของชิ้นนี้ไม่ได้";
   if (level < (def.level ?? 1)) return `ต้องเลเวล ${def.level} ขึ้นไป`;
+  if (!canUse(def, job)) return "อาชีพของคุณใช้ของชิ้นนี้ไม่ได้";
   const [s] = inv.bag.splice(i, 1);
   const old = inv.equip[def.slot];
   if (old) inv.bag.push(old);
@@ -275,22 +292,25 @@ export function craft(
   useCrystal: boolean,
   maker: string,
   rnd = Math.random,
-): { error: string } | { made: ItemStack; skillUp: boolean } {
+): { error: string } | { made: ItemStack; skillUp: boolean; kind: CraftKind } {
   const r = RECIPES.find((x) => x.item === itemId);
   if (!r) return { error: "ไม่มีสูตรนี้" };
-  if (inv.smithing < r.minSkill) return { error: `ต้องมีฝีมือช่างตีเหล็ก ${r.minSkill}` };
+  const kind = r.craft ?? "smith";
+  const key = CRAFT_SKILL[kind];
+  const skill = inv[key];
+  if (skill < r.minSkill) return { error: `ต้องมีฝีมือ${CRAFT_NAMES[kind]} ${r.minSkill}` };
   const bag = inv.bag.map((s) => ({ ...s }));
   for (const [id, n] of Object.entries(r.needs))
     if (!takeItems(bag, id, n)) return { error: `${ITEMS[id].name}ไม่พอ` };
   if (useCrystal && !takeItems(bag, CRYSTAL, 1)) return { error: `${ITEMS[CRYSTAL].name}ไม่พอ` };
   if (bag.length >= BAG_SIZE) return { error: "กระเป๋าเต็ม" };
-  const quality = rollQuality(inv.smithing, useCrystal, rnd());
+  const quality = rollQuality(skill, useCrystal, rnd());
   const made: ItemStack = { uid: newUid(), id: itemId, qty: 1, quality, affixes: rollAffixes(quality, ITEMS[itemId].tier, rnd), maker };
   bag.push(made);
   inv.bag = bag;
-  const skillUp = rnd() < skillGainChance(inv.smithing, r);
-  if (skillUp) inv.smithing++;
-  return { made, skillUp };
+  const skillUp = rnd() < skillGainChance(skill, r);
+  if (skillUp) inv[key]++;
+  return { made, skillUp, kind };
 }
 
 // ---- drops --------------------------------------------------------------------
@@ -330,14 +350,17 @@ const IRON: Resource = { name: "หินแร่เหล็ก", item: "ore_2
 const MIST: Resource = { name: "หินแร่หมอก", item: "ore_3", tool: "pickaxe", qty: [1, 3], respawnMs: 90_000 };
 const PALEWOOD: Resource = { name: "ต้นไม้ไร้สี", item: "wood_3", tool: "hatchet", qty: [1, 2], respawnMs: 90_000 };
 const MOSSWOOD: Resource = { name: "ต้นมอส", item: "wood_2", tool: "hatchet", qty: [1, 3], respawnMs: 60_000 };
+const HERB: Resource = { name: "พุ่มใบหอม", item: "herb_1", tool: "sickle", qty: [1, 3], respawnMs: 45_000 };
+const GLOWSHROOM: Resource = { name: "เห็ดเรือง", item: "herb_2", tool: "sickle", qty: [1, 3], respawnMs: 60_000 };
 const OAK: Resource = { name: "ต้นโอ๊ก", item: "wood_1", tool: "hatchet", qty: [1, 3], respawnMs: 45_000 };
 
 /** What can be gathered on this tile, if anything. Iron lies in the south, with the scarecrows. */
 export function resourceAt(map: GameMap, x: number, y: number): Resource | null {
   const prop = map.props[y]?.[x];
   if (map.id === "hollow") return prop === Prop.Tree ? PALEWOOD : prop === Prop.Rock ? MIST : null;
-  if (map.id === "mossfen") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? IRON : null;
+  if (map.id === "mossfen") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? IRON : prop === Prop.Bush ? GLOWSHROOM : null;
   if (prop === Prop.Tree) return OAK;
+  if (prop === Prop.Bush) return HERB;
   if (prop === Prop.Rock) return y >= 30 ? IRON : COPPER;
   return null;
 }
@@ -386,7 +409,7 @@ export function cleanInventory(saved: unknown): Inventory {
     const s = cleanStack(v.equip?.[slot]);
     if (ok(s) && ITEMS[s.id].slot === slot) inv.equip[slot] = s;
   }
-  inv.smithing = Math.max(0, Math.min(100, Math.floor(Number(v.smithing) || 0)));
+  for (const k of ["smithing", "woodwork", "tailoring"] as const) inv[k] = Math.max(0, Math.min(100, Math.floor(Number(v[k]) || 0)));
   return inv;
 }
 

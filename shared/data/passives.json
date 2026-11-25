@@ -51,9 +51,16 @@
     {"id":"f2","name":"หายใจลึก","size":"small","area":"fai","x":-3.75,"y":-2.62,"mods":{"regenPct":10}},
     {"id":"f3","name":"พรคุ้มภัย","size":"small","area":"fai","x":-2.62,"y":-3.75,"mods":{"dmgReduce":1.5}},
     {"id":"f4","name":"ศรัทธา","size":"small","area":"fai","x":-3.82,"y":-3.82,"mods":{"fai":5}},
-    {"id":"fn1","name":"ศรัทธาไม่คลอน","size":"notable","area":"fai","x":-4.53,"y":-4.53,"mods":{"dmgReduce":5,"regenPct":25}}
+    {"id":"fn1","name":"ศรัทธาไม่คลอน","size":"notable","area":"fai","x":-4.53,"y":-4.53,"mods":{"dmgReduce":5,"regenPct":25}},
+    {"id":"start_archer","name":"ประตูนักธนู","size":"root","area":"agi","x":5.52,"y":5.09,"mods":{},"job":"archer"},
+    {"id":"start_weaver","name":"ประตูนักทอเวท","size":"root","area":"int","x":5.3,"y":-5.3,"mods":{},"job":"weaver"},
+    {"id":"start_acolyte","name":"ประตูอาโคไลต์","size":"root","area":"fai","x":-5.3,"y":-5.3,"mods":{},"job":"acolyte"}
   ],
   "edges": [
+    ["start_archer","an1"],
+    ["start_archer","k_first"],
+    ["start_weaver","in1"],
+    ["start_acolyte","fn1"],
     ["start","c_str"],
     ["start","c_agi"],
     ["start","c_int"],

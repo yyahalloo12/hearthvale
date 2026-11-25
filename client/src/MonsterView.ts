@@ -10,6 +10,8 @@ export class MonsterView {
   private hpBar: Phaser.GameObjects.Graphics;
   private ring: Phaser.GameObjects.Image;
   private stunStars: Phaser.GameObjects.Text;
+  private mark: Phaser.GameObjects.Text;
+  private slowed = false;
   readonly size: { h: number; r: number };
   x: number;
   y: number;
@@ -48,7 +50,11 @@ export class MonsterView {
       .text(0, -this.size.h - 22, "✦ ✦", { fontSize: "12px", color: "#ffe14d", stroke: "#000", strokeThickness: 2 })
       .setOrigin(0.5, 1)
       .setVisible(false);
-    this.root = scene.add.container(0, 0, [this.ring, shadow, this.sprite, label, this.hpBar, this.stunStars]);
+    this.mark = scene.add
+      .text(0, -this.size.h - 20, "◎", { fontSize: "18px", color: "#ff6a6a", stroke: "#000", strokeThickness: 3 })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
+    this.root = scene.add.container(0, 0, [this.ring, shadow, this.sprite, label, this.hpBar, this.stunStars, this.mark]);
     this.place();
   }
 
@@ -73,6 +79,14 @@ export class MonsterView {
     this.ring.setVisible(on);
   }
 
+  /** Cold (slowed) monsters turn blue; marked ones show a target sign. */
+  setEffects(slowed: boolean, marked: boolean) {
+    this.slowed = slowed;
+    if (slowed) this.sprite.setTint(0x9fd0ff);
+    else this.sprite.clearTint();
+    this.mark.setVisible(marked);
+  }
+
   setStunned(on: boolean) {
     this.stunStars.setVisible(on);
   }
@@ -84,7 +98,7 @@ export class MonsterView {
 
   flash() {
     this.sprite.setTintFill(0xffffff);
-    this.scene.time.delayedCall(70, () => this.sprite.clearTint());
+    this.scene.time.delayedCall(70, () => (this.slowed ? this.sprite.setTint(0x9fd0ff) : this.sprite.clearTint()));
   }
 
   /** Point (world pixels) where hit numbers should appear. */

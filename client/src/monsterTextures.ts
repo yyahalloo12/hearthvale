@@ -16,6 +16,11 @@ export function makeMonsterTextures(scene: Phaser.Scene) {
     g.strokeEllipse(28, 14, 50, 22);
   });
 
+  make(scene, "aura", 56, 28, (g) => {
+    g.lineStyle(3, 0xffffff, 0.95);
+    g.strokeEllipse(28, 14, 50, 22);
+  });
+
   make(scene, "shield", 22, 26, (g) => {
     g.fillStyle(0x4a90d9);
     g.lineStyle(2, 0xffe08a);

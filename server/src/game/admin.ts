@@ -1,6 +1,6 @@
 import type { ZoneId } from "../../../shared/map";
 import { ITEMS, QUALITY_NAMES } from "../../../shared/items";
-import { Job, MAX_LEVEL, MONSTERS } from "../../../shared/stats";
+import { Job, JOB_NAMES, jobId, MAX_LEVEL, MONSTERS } from "../../../shared/stats";
 
 /**
  * Game master commands, typed in chat ("/help"). Only accounts with the admin
@@ -38,7 +38,7 @@ export interface AdminHost {
 
 export const ADMIN_HELP = [
   "คำสั่ง GM (ใส่ @ชื่อ ต่อท้ายเพื่อใช้กับผู้เล่นคนอื่นในแผนที่เดียวกัน)",
-  "/level 20 · /exp 500 · /gold 1000 · /job squire · /smith 100 · /resettree",
+  "/level 20 · /exp 500 · /gold 1000 · /job archer · /smith 100 · /resettree",
   "/give ore_1 50 · /give sword_2 1 3 (เลขท้าย = คุณภาพ 0-3) · /items ค้นรหัสไอเทม",
   "/heal · /god (อมตะ) · /speed 3 · /kill @ชื่อ",
   "/tp 24 24 · /goto @ชื่อ · /bring @ชื่อ · /village · /forest · /hollow",
@@ -122,11 +122,11 @@ export function runAdminCommand(host: AdminHost, me: string, text: string): stri
       const n = num(args[0], 0, 100);
       if (n === null) return ["ใช้แบบนี้: /smith 100"];
       host.setSmithing(id, n);
-      return [`ฝีมือช่างตีเหล็กของ ${who} เป็น ${n}`];
+      return [`ฝีมือช่างทุกสายของ ${who} เป็น ${n}`];
     }
     case "job":
-      if (args[0] !== "squire" && args[0] !== "wanderer") return ["ใช้แบบนี้: /job squire หรือ /job wanderer"];
-      host.setJob(id, args[0]);
+      if (jobId(args[0]) !== args[0]) return [`ใช้แบบนี้: /job ${Object.keys(JOB_NAMES).join(" | ")}`];
+      host.setJob(id, jobId(args[0]));
       return [`เปลี่ยนอาชีพของ ${who} แล้ว`];
     case "resettree":
       host.resetTree(id);

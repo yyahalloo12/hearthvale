@@ -1,4 +1,4 @@
-import { expToNext, Job, JOB_CHANGE_LEVEL, JOB_NAMES, MAX_LEVEL, RESPAWN_DELAY_MS, skillPointsEarned, SKILLS } from "../../shared/stats";
+import { expToNext, Job, JOB_CHANGE_LEVEL, JOB_CHOICES, JOB_NAMES, MAX_LEVEL, RESPAWN_DELAY_MS, skillPointsEarned, SKILLS } from "../../shared/stats";
 
 import { GLOW_AT } from "../../shared/hollow";
 
@@ -13,6 +13,8 @@ export interface MeView {
   job: string;
   hp: number;
   maxHp: number;
+  mp: number;
+  maxMp: number;
   dead: boolean;
   skills: Map<string, number>;
 }
@@ -20,7 +22,7 @@ export interface MeView {
 export interface HudActions {
   useSkill(id: string): void;
   learnSkill(id: string): void;
-  changeJob(): void;
+  changeJob(job: Job): void;
   respawn(): void;
 }
 
@@ -34,7 +36,15 @@ export function initHud(a: HudActions) {
   $("hud").hidden = false;
   $("skillbar").hidden = false;
   $("chat").hidden = false;
-  $("job-change").onclick = () => actions.changeJob();
+  const jobs = $("job-change");
+  jobs.replaceChildren(Object.assign(document.createElement("div"), { className: "job-title", textContent: "เลือกอาชีพ (เปลี่ยนทีหลังไม่ได้)" }));
+  for (const { job, text } of JOB_CHOICES) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.append(Object.assign(document.createElement("b"), { textContent: JOB_NAMES[job] }), Object.assign(document.createElement("span"), { textContent: text }));
+    b.onclick = () => actions.changeJob(job);
+    jobs.append(b);
+  }
   $("respawn").onclick = () => actions.respawn();
   if (!started) requestAnimationFrame(drawCooldowns);
   started = true;
@@ -94,6 +104,11 @@ export function updateMe(me: MeView) {
   const hpPct = (Math.max(0, me.hp) / me.maxHp) * 100;
   $("hp-fill").style.width = `${hpPct}%`;
   $("hp-text").textContent = `HP ${Math.max(0, me.hp)} / ${me.maxHp}`;
+  $("mp-bar").hidden = me.maxMp <= 0;
+  if (me.maxMp > 0) {
+    $("mp-fill").style.width = `${(me.mp / me.maxMp) * 100}%`;
+    $("mp-text").textContent = `MP ${me.mp} / ${me.maxMp}`;
+  }
   const need = expToNext(me.level);
   $("exp-fill").style.width = me.level >= MAX_LEVEL ? "100%" : `${(me.exp / need) * 100}%`;
   $("exp-text").textContent = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${me.exp} / ${need} (${((me.exp / need) * 100).toFixed(1)}%)`;
@@ -124,20 +139,21 @@ export function updateMe(me: MeView) {
 function renderSkills(me: MeView, points: number) {
   const box = $("skills");
   box.replaceChildren();
-  const squire = me.job === "squire";
-  $("skill-points").textContent = squire
+  const hasJob = me.job !== "wanderer";
+  $("skill-points").textContent = hasJob
     ? points > 0
       ? `แต้มสกิลเหลือ ${points} (กด + เพื่ออัปสกิล)`
       : ""
     : me.level < JOB_CHANGE_LEVEL
-      ? `สกิลสไควร์จะเปิดเมื่อเปลี่ยนอาชีพที่ Lv ${JOB_CHANGE_LEVEL}`
+      ? `เลือกอาชีพและใช้สกิลได้ที่ Lv ${JOB_CHANGE_LEVEL}`
       : "";
   for (const [id, def] of Object.entries(SKILLS)) {
+    if (def.job !== me.job) continue;
     const lvl = me.skills.get(id) ?? 0;
     const slot = document.createElement("div");
-    slot.className = "skill" + (!squire || lvl === 0 ? " locked" : "");
+    slot.className = "skill" + (lvl === 0 ? " locked" : "");
     slot.dataset.skill = id;
-    slot.title = `${def.name} (ขั้น ${lvl}/${def.maxLevel})\n${def.desc}\nคูลดาวน์ ${def.cooldownMs / 1000} วินาที`;
+    slot.title = `${def.name} (ขั้น ${lvl}/${def.maxLevel})\n${def.desc}\nคูลดาวน์ ${def.cooldownMs / 1000} วินาที${def.mp ? ` · มานา ${def.mp}` : ""}`;
     const key = document.createElement("span");
     key.className = "key";
     key.textContent = def.key;
@@ -150,7 +166,7 @@ function renderSkills(me: MeView, points: number) {
     cd.className = "cd";
     slot.append(key, name, lv, cd);
     slot.onclick = () => lvl > 0 && actions.useSkill(id);
-    if (squire && points > 0 && lvl < def.maxLevel) {
+    if (points > 0 && lvl < def.maxLevel) {
       const plus = document.createElement("button");
       plus.className = "learn";
       plus.textContent = "+";
@@ -166,6 +182,6 @@ function renderSkills(me: MeView, points: number) {
 }
 
 /** Skill id bound to a number key, if any. */
-export function skillForKey(key: string): string | undefined {
-  return Object.entries(SKILLS).find(([, d]) => d.key === key)?.[0];
+export function skillForKey(key: string, job: string): string | undefined {
+  return Object.entries(SKILLS).find(([, d]) => d.key === key && d.job === job)?.[0];
 }

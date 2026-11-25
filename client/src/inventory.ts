@@ -1,6 +1,10 @@
 import {
   BAG_SIZE,
+  canUse,
   countItem,
+  CRAFT_NAMES,
+  CRAFT_SKILL,
+  CraftKind,
   CRYSTAL,
   emptyInventory,
   Inventory,
@@ -20,6 +24,7 @@ import {
   STORAGE_SIZE,
 } from "../../shared/items";
 import { describeMods } from "../../shared/passives";
+import { Job, JOB_NAMES } from "../../shared/stats";
 import { itemIcon } from "./icons";
 
 /** Bag and gear (key I), the blacksmith window and the storage chest. */
@@ -40,6 +45,8 @@ let actions: ItemActions;
 let inv: Inventory = emptyInventory();
 let gold = 0;
 let level = 1;
+let job: Job = "wanderer";
+let craftKind: CraftKind = "smith";
 let station: StationKind | null = null;
 /** what the details box shows */
 let selected: { where: "bag" | "storage" | "equip"; uid: string } | null = null;
@@ -71,9 +78,10 @@ export function setInventory(i: Inventory, g: number) {
   render();
 }
 
-export function setItemLevel(l: number) {
-  if (l === level) return;
+export function setItemLevel(l: number, j: Job) {
+  if (l === level && j === job) return;
   level = l;
+  job = j;
   render();
 }
 
@@ -115,6 +123,7 @@ export function itemLines(s: ItemStack): string[] {
   const out: string[] = [];
   if (d.slot) {
     out.push(`${SLOT_NAMES[d.slot]} · Tier ${d.tier}${(d.level ?? 1) > 1 ? ` · ต้อง Lv ${d.level}` : ""}`);
+    if (d.jobs) out.push(`ใช้ได้: ${d.jobs.map((j) => JOB_NAMES[j]).join(" ")}`);
     const f = itemFlat(s);
     if (f.atk) out.push(`พลังโจมตี +${f.atk}`);
     if (f.def) out.push(`ป้องกัน +${f.def}`);
@@ -208,7 +217,7 @@ function renderDetails() {
   if (selected.where === "equip") row.append(actionButton("ถอด", () => actions.unequip(d.slot!)));
   if (selected.where === "bag" && d.slot) {
     const b = actionButton("สวมใส่", () => actions.equip(s.uid));
-    b.disabled = level < (d.level ?? 1);
+    b.disabled = level < (d.level ?? 1) || !canUse(d, job);
     row.append(b);
   }
   if (selected.where === "bag" && station === "storage") row.append(actionButton("ฝากเข้าคลัง", () => actions.deposit(s.uid)));
@@ -230,31 +239,43 @@ function recipeRow(r: Recipe) {
   const nums = [f.atk && `โจมตี +${f.atk}`, f.def && `ป้องกัน +${f.def}`, f.hp && `เลือด +${f.hp}`].filter(Boolean).join(" · ");
   mid.append(el("div", "rnum", `${nums}${(d.level ?? 1) > 1 ? ` · ต้อง Lv ${d.level}` : ""}`));
   const needs = el("div", "needs");
-  let ok = inv.smithing >= r.minSkill;
+  const skill = inv[CRAFT_SKILL[r.craft ?? "smith"]];
+  let ok = skill >= r.minSkill;
   for (const [id, n] of Object.entries(r.needs)) {
     const have = countItem(inv.bag, id);
     if (have < n) ok = false;
     needs.append(el("span", have < n ? "lack" : "", `${ITEMS[id].name} ${have}/${n}`));
   }
-  if (inv.smithing < r.minSkill) needs.append(el("span", "lack", `ฝีมือ ${r.minSkill}`));
+  if (skill < r.minSkill) needs.append(el("span", "lack", `ฝีมือ ${r.minSkill}`));
   mid.append(needs);
   const crystal = ($("use-crystal") as HTMLInputElement).checked;
   if (crystal && countItem(inv.bag, CRYSTAL) < 1) ok = false;
-  const b = actionButton("ตี", () => actions.craft(r.item, crystal));
+  const b = actionButton("ทำ", () => actions.craft(r.item, crystal));
   b.disabled = !ok;
   row.append(mid, b);
   return row;
 }
 
 function renderSmith() {
-  $("station-title").textContent = "ช่างตีเหล็ก";
+  $("station-title").textContent = "ช่างฝีมือ";
+  $("craft-tabs").replaceChildren(
+    ...(Object.keys(CRAFT_NAMES) as CraftKind[]).map((k) => {
+      const b = actionButton(CRAFT_NAMES[k], () => {
+        craftKind = k;
+        render();
+      });
+      b.setAttribute("aria-pressed", String(k === craftKind));
+      return b;
+    }),
+  );
+  const skill = inv[CRAFT_SKILL[craftKind]];
   $("smith-only").hidden = false;
   $("storage-grid").hidden = true;
   const crystal = ($("use-crystal") as HTMLInputElement).checked;
-  const [good, great, master] = qualityChances(inv.smithing, crystal).map((c) => Math.round(c * 100));
-  $("smith-skill").textContent = `ฝีมือ ${inv.smithing}/100 · โอกาสระดับดี ${good}% ชั้นเยี่ยม ${great}% ผลงานชิ้นเอก ${master}%`;
+  const [good, great, master] = qualityChances(skill, crystal).map((c) => Math.round(c * 100));
+  $("smith-skill").textContent = `ฝีมือ${CRAFT_NAMES[craftKind]} ${skill}/100 · โอกาสระดับดี ${good}% ชั้นเยี่ยม ${great}% ผลงานชิ้นเอก ${master}%`;
   $("crystal-have").textContent = `ใส่${ITEMS[CRYSTAL].name} 1 ก้อน (มี ${countItem(inv.bag, CRYSTAL)})`;
-  $("recipes").replaceChildren(...RECIPES.map(recipeRow));
+  $("recipes").replaceChildren(...RECIPES.filter((r) => (r.craft ?? "smith") === craftKind).map(recipeRow));
   $("shop").replaceChildren(
     ...Object.entries(ITEMS)
       .filter(([, d]) => d.buy)

@@ -12,6 +12,7 @@ import {
   refundCost,
   rootsFor,
 } from "../../shared/passives";
+import { JOB_NAMES, jobId } from "../../shared/stats";
 
 /**
  * The passive tree window (key P). Draws the whole tree as SVG: drag to move,
@@ -201,7 +202,7 @@ function bindPanZoom() {
 function linesOf(n: PassiveNode): string[] {
   const out = describeMods(n.mods);
   if (n.desc) out.push(n.desc);
-  if (n.size === "root") out.push(n.job === "wanderer" ? "ทุกคนเริ่มจากตรงนี้ได้" : "สไควร์เริ่มจากตรงนี้ได้ด้วย");
+  if (n.size === "root") out.push(n.job === "wanderer" ? "ทุกคนเริ่มจากตรงนี้ได้" : `${JOB_NAMES[jobId(n.job)]}เริ่มจากตรงนี้ได้ด้วย`);
   return out;
 }
 

@@ -7,8 +7,26 @@ import skillsJson from "./data/skills.json";
 import type { DropDef, FlatStats } from "./items";
 import type { Mods } from "./passives";
 
-export type Job = "wanderer" | "squire";
-export const JOB_NAMES: Record<Job, string> = { wanderer: "ผู้พเนจร", squire: "สไควร์" };
+export type Job = "wanderer" | "squire" | "archer" | "weaver" | "acolyte";
+export const JOB_NAMES: Record<Job, string> = { wanderer: "ผู้พเนจร", squire: "สไควร์", archer: "นักธนู", weaver: "นักทอเวท", acolyte: "อาโคไลต์" };
+/** Jobs that can be picked at level 10, with one line about each. */
+export const JOB_CHOICES: { job: Job; text: string; gift?: string }[] = [
+  { job: "squire", text: "ประชิด เลือดและเกราะสูง" },
+  { job: "archer", text: "ยิงไกล คริติคอล ถอยหนีเก่ง", gift: "bow_1" },
+  { job: "weaver", text: "เวทแรง โจมตีหลายตัว ใช้มานา", gift: "staff_1" },
+  { job: "acolyte", text: "รักษา คุ้มกัน และชุบชีวิต ใช้มานา", gift: "staff_1" },
+];
+/** A job id from anywhere; unknown ones mean wanderer. */
+export function jobId(v: unknown): Job {
+  return typeof v === "string" && Object.hasOwn(JOB_NAMES, v) ? (v as Job) : "wanderer";
+}
+const JOB_STATS: Record<Job, { hp: number; atk: number; def: number; mp: number }> = {
+  wanderer: { hp: 1, atk: 1, def: 1, mp: 0 },
+  squire: { hp: 1.2, atk: 1, def: 1.1, mp: 0 },
+  archer: { hp: 1, atk: 1.03, def: 0.95, mp: 0 },
+  weaver: { hp: 0.88, atk: 1.08, def: 0.85, mp: 1.5 },
+  acolyte: { hp: 1.05, atk: 0.95, def: 1, mp: 1.25 },
+};
 
 export const MAX_LEVEL = 60;
 export const JOB_CHANGE_LEVEL = 10;
@@ -41,10 +59,37 @@ export interface MonsterDef {
 }
 export const MONSTERS = monstersJson as unknown as Record<string, MonsterDef>;
 
+export type SkillKind =
+  | "strike"
+  | "guard"
+  | "charge"
+  | "taunt"
+  | "pierce"
+  | "backstep"
+  | "mark"
+  | "splash"
+  | "slow"
+  | "chain"
+  | "manashield"
+  | "heal"
+  | "bless"
+  | "revive";
+/** Skills aimed at an enemy; the others work at once, on you or on friends. */
+export const ENEMY_SKILLS: ReadonlySet<SkillKind> = new Set(["strike", "charge", "pierce", "mark", "splash", "slow", "chain"]);
+
 export interface SkillDef {
   name: string;
   job: Job;
   key: string;
+  kind: SkillKind;
+  mp?: number;
+  hits?: number;
+  amount?: number;
+  amountPerLevel?: number;
+  radius?: number;
+  radiusPerLevel?: number;
+  durationPerLevel?: number;
+  cooldownPerLevel?: number;
   maxLevel: number;
   cooldownMs: number;
   range: number;
@@ -57,7 +102,7 @@ export interface SkillDef {
   stunMs?: number;
   stunPerLevelMs?: number;
 }
-export const SKILLS = skillsJson as Record<string, SkillDef>;
+export const SKILLS = skillsJson as unknown as Record<string, SkillDef>;
 export type SkillId = keyof typeof skillsJson;
 
 export interface Stats {
@@ -66,19 +111,29 @@ export interface Stats {
   def: number;
 }
 
+export interface PlayerStats extends Stats {
+  maxMp: number;
+}
+
+/** Reach of a normal attack. Bows and staffs work from afar. */
+export function attackRange(look?: string): number {
+  return look === "bow" ? 5.5 : look === "staff" ? 5 : ATTACK_RANGE;
+}
+
 /** EXP needed to go from `level` to the next one. */
 export function expToNext(level: number): number {
   if (level >= MAX_LEVEL) return 0;
   return Math.round(20 * Math.pow(level, 1.6));
 }
 
-export function playerStats(level: number, job: Job, mods?: Mods, gear?: FlatStats): Stats {
+export function playerStats(level: number, job: Job, mods?: Mods, gear?: FlatStats): PlayerStats {
   const l = level - 1;
   const s = { maxHp: 80 + 12 * l, atk: 10 + 2.2 * l, def: 3 + l };
-  if (job === "squire") {
-    s.maxHp *= 1.2;
-    s.def *= 1.1;
-  }
+  const j = JOB_STATS[job];
+  s.maxHp *= j.hp;
+  s.atk *= j.atk;
+  s.def *= j.def;
+  const maxMp = j.mp ? Math.round((50 + 5 * l) * j.mp + (mods?.int ?? 0)) : 0;
   if (gear) {
     s.maxHp += gear.hp;
     s.atk += gear.atk;
@@ -89,7 +144,7 @@ export function playerStats(level: number, job: Job, mods?: Mods, gear?: FlatSta
     s.atk *= 1 + mods.atkPct / 100;
     s.def *= 1 + mods.defPct / 100;
   }
-  return { maxHp: Math.round(s.maxHp), atk: Math.round(s.atk), def: Math.round(s.def) };
+  return { maxHp: Math.round(s.maxHp), atk: Math.round(s.atk), def: Math.round(s.def), maxMp };
 }
 
 /** Monsters get 15% stronger for each level above the lowest of their kind. */
@@ -104,8 +159,8 @@ export function monsterStats(def: MonsterDef, level: number): Stats & { exp: num
 }
 
 /** Damage of one hit. `roll` is 0..1 (random), so tests can pass a fixed value. */
-export function hitDamage(atk: number, def: number, power = 1, roll = 0.5, crit = false): number {
-  const base = atk * power * (0.9 + roll * 0.2) - def * 0.5;
+export function hitDamage(atk: number, def: number, power = 1, roll = 0.5, crit = false, defIgnore = 0): number {
+  const base = atk * power * (0.9 + roll * 0.2) - def * 0.5 * (1 - defIgnore);
   return Math.max(1, Math.round(base * (crit ? 1.5 : 1)));
 }
 

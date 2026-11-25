@@ -37,7 +37,7 @@ GRIP = toon("grip", 0x5A3B22)
 
 root = pivot("root", (0, 0, 0))
 body = pivot("body", (0, 0, 0), root)
-groups = {"base": [], "hair": [], "tunic": [], "helm": [], "sword": [], "axe": []}
+groups = {"base": [], "hair": [], "tunic": [], "helm": [], "sword": [], "axe": [], "bow": [], "staff": []}
 
 
 def put(group, ob):
@@ -134,6 +134,25 @@ for w in (sword, axe):
     w.rotation_euler = (math.radians(28), math.radians(-38), 0)
 
 
+bow = pivot("bow", (0, 0, 0), hand)
+for i in range(9):
+    a = math.radians(-80 + i * 20)
+    b = math.radians(-80 + (i + 1) * 20)
+    if i == 8:
+        break
+    x0, z0 = -0.2 + 0.3 * math.cos(a), 0.46 * math.sin(a)
+    x1, z1 = -0.2 + 0.3 * math.cos(b), 0.46 * math.sin(b)
+    put("bow", cone("limb", ((x0 + x1) / 2, 0, (z0 + z1) / 2), 0.034, 0.034, math.hypot(x1 - x0, z1 - z0) + 0.03, METAL, bow, outline=0.022, rot=(0, math.atan2(x1 - x0, z1 - z0), 0), bevel=0))
+put("bow", cone("string", (-0.148, 0, 0), 0.008, 0.008, 0.9, flat("string", 0xF6ECD2), bow, outline=0, bevel=0))
+put("bow", ball("gripball", (0.1, 0, 0), (0.05, 0.05, 0.1), METAL, bow, outline=0.02))
+staff = pivot("staff", (0, 0, 0), hand)
+put("staff", cone("shaft", (0, 0, 0.16), 0.036, 0.034, 1.25, METAL, staff, outline=0.022))
+put("staff", ring("crook", (0, 0, 0.88), 0.13, 0.035, METAL, staff, outline=0.02, rot=(math.radians(90), 0, 0)))
+put("staff", ball("orb", (0, 0, 0.88), 0.085, toon("orb", 0x8FD3FF, dark=0.8, light=1.2), staff, outline=0.016))
+bow.rotation_euler = (math.radians(20), math.radians(-10), math.radians(30))
+staff.rotation_euler = (math.radians(14), math.radians(-12), 0)
+
+
 # ---- poses --------------------------------------------------------------------------
 def pose(kind, t):
     """t goes 0..1 through the animation."""
@@ -197,6 +216,8 @@ LAYERS = {
     "helm": (("helm",), ("base", "tunic")),
     "sword": (("sword",), ("base", "hair", "tunic")),
     "axe": (("axe",), ("base", "hair", "tunic")),
+    "bow": (("bow",), ("base", "hair", "tunic")),
+    "staff": (("staff",), ("base", "hair", "tunic")),
 }
 
 os.makedirs(OUT, exist_ok=True)

@@ -29,8 +29,11 @@ import {
   addItem,
   addStack,
   BAG_SIZE,
+  canUse,
   cleanInventory,
   craft,
+  CRAFT_NAMES,
+  CRAFT_SKILL,
   equipItem,
   equipTotals,
   findStation,
@@ -77,13 +80,17 @@ import { findPath, Point } from "../../../shared/pathfinding";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PrivateData, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../../shared/protocol";
 import {
   ATTACK_RANGE,
+  attackRange,
   CRIT_CHANCE,
   DEATH_EXP_LOSS,
   expToNext,
+  ENEMY_SKILLS,
   hitDamage,
   Job,
   JOB_CHANGE_LEVEL,
+  JOB_CHOICES,
   JOB_NAMES,
+  jobId,
   killExp,
   killGold,
   MAX_LEVEL,
@@ -92,6 +99,7 @@ import {
   PLAYER_ATTACK_MS,
   playerStats,
   RESPAWN_DELAY_MS,
+  SkillDef,
   SkillId,
   skillPointsEarned,
   SKILLS,
@@ -136,6 +144,17 @@ interface PlayerCtl {
   cooldowns: Map<string, number>;
   guardUntil: number;
   guardReduce: number;
+  blessUntil: number;
+  bless: number;
+  manaShieldUntil: number;
+  manaShield: number;
+  slowUntil: number;
+  slow: number;
+  markUntil: number;
+  mark: number;
+  /** leaping back: moves fast along the path and cannot act */
+  leaping: boolean;
+  mpRegen: number;
   charge: { targetId: string; power: number; stunMs: number } | null;
   deadAt: number;
   /** fractional HP regenerated but not yet applied */
@@ -205,7 +224,7 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(Msg.Attack, (client, msg) => this.handleAttack(client, msg));
     this.onMessage(Msg.Skill, (client, msg) => this.handleSkill(client, msg));
     this.onMessage(Msg.LearnSkill, (client, msg) => this.handleLearn(client, msg));
-    this.onMessage(Msg.ChangeJob, (client) => this.handleChangeJob(client));
+    this.onMessage(Msg.ChangeJob, (client, msg) => this.handleChangeJob(client, msg));
     this.onMessage(Msg.LearnPassive, (client, msg) => this.handleLearnPassive(client, msg));
     this.onMessage(Msg.RefundPassive, (client, msg) => this.handleRefundPassive(client, msg));
     this.onMessage(Msg.Board, (client) => this.atBoard(client, () => {}));
@@ -318,7 +337,7 @@ export class WorldRoom extends Room<WorldState> {
     p.color = c.color;
     p.level = Math.min(MAX_LEVEL, Math.max(1, c.level));
     p.exp = c.exp;
-    p.job = c.job === "squire" ? "squire" : "wanderer";
+    p.job = jobId(c.job);
     try {
       const skills = JSON.parse(c.skills) as Record<string, number>;
       for (const [k, v] of Object.entries(skills)) if (SKILLS[k] && v > 0) p.skills.set(k, Math.min(v, SKILLS[k].maxLevel));
@@ -370,6 +389,16 @@ export class WorldRoom extends Room<WorldState> {
       cooldowns: new Map(),
       guardUntil: 0,
       guardReduce: 0,
+      blessUntil: 0,
+      bless: 0,
+      manaShieldUntil: 0,
+      manaShield: 0,
+      slowUntil: 0,
+      slow: 0,
+      markUntil: 0,
+      mark: 0,
+      leaping: false,
+      mpRegen: 0,
       charge: null,
       deadAt: 0,
       regen: 0,
@@ -628,6 +657,8 @@ export class WorldRoom extends Room<WorldState> {
     const s = playerStats(p.level, p.job as Job, c.mods, c.gear);
     p.maxHp = s.maxHp;
     p.hp = heal ? s.maxHp : Math.min(p.hp, s.maxHp);
+    p.maxMp = s.maxMp;
+    p.mp = heal ? s.maxMp : Math.min(p.mp, s.maxMp);
   }
 
   private statsOf(p: Player, c: PlayerCtl) {
@@ -684,7 +715,7 @@ export class WorldRoom extends Room<WorldState> {
       const id = client?.sessionId ?? "";
       this.broadcast(Msg.LevelUp, { id, level: p.level });
       if (p.level === JOB_CHANGE_LEVEL && p.job === "wanderer")
-        client?.send(Msg.Notice, { text: "ถึงเลเวล 10 แล้ว! กดปุ่ม \"เปลี่ยนอาชีพ\" เพื่อเป็นสไควร์" });
+        client?.send(Msg.Notice, { text: "ถึงเลเวล 10 แล้ว! เลือกอาชีพได้ที่ปุ่มด้านล่าง" });
       this.save(p, c).catch(() => {});
     }
   }
@@ -699,7 +730,7 @@ export class WorldRoom extends Room<WorldState> {
 
   private handleMove(client: Client, msg: unknown) {
     const pc = this.get(client);
-    if (!pc || pc.p.dead || pc.c.charge || typeof msg !== "object" || msg === null) return;
+    if (!pc || pc.p.dead || pc.c.charge || pc.c.leaping || typeof msg !== "object" || msg === null) return;
     const gx = Math.floor(Number((msg as Point).x));
     const gy = Math.floor(Number((msg as Point).y));
     if (!Number.isFinite(gx) || !Number.isFinite(gy) || this.sitting(client, pc.c)) return;
@@ -736,11 +767,8 @@ export class WorldRoom extends Room<WorldState> {
     const now = this.clock.currentTime;
     if ((c.cooldowns.get(skill) ?? 0) > now) return client.send(Msg.Notice, { text: `${def.name} ยังไม่พร้อม` });
 
-    if (skill === "guard") {
-      c.guardUntil = now + (def.durationMs ?? 6000);
-      c.guardReduce = (def.reduce ?? 0.3) + (def.reducePerLevel ?? 0) * (lvl - 1);
-      p.guarding = true;
-      this.startCooldown(client, c, skill, def.cooldownMs);
+    if (!ENEMY_SKILLS.has(def.kind)) {
+      this.castNow(client, p, c, skill, (msg as any)?.target);
       return;
     }
 
@@ -749,7 +777,7 @@ export class WorldRoom extends Room<WorldState> {
     if (!m || !targetId) return client.send(Msg.Notice, { text: "เลือกเป้าหมายก่อน (คลิกที่มอนสเตอร์)" });
     this.stopInteract(client, c);
 
-    if (skill === "charge") {
+    if (def.kind === "charge") {
       if (dist(p, m) > def.range + 0.5) return client.send(Msg.Notice, { text: "เป้าหมายไกลเกินไป" });
       const path = findPath(this.map, planFrom(p, c.path), { x: Math.round(m.x), y: Math.round(m.y) }, 12);
       if (!path) return client.send(Msg.Notice, { text: "พุ่งไปไม่ได้ มีสิ่งกีดขวาง" });
@@ -764,7 +792,8 @@ export class WorldRoom extends Room<WorldState> {
       return;
     }
 
-    // heavy_strike: walk into range, then strike (see tick)
+    if (p.mp < (def.mp ?? 0)) return client.send(Msg.Notice, { text: "มานาไม่พอ" });
+    // walk into range, then use it (see tick)
     c.targetId = targetId;
     c.pendingSkill = skill;
     c.repathAt = 0;
@@ -788,14 +817,260 @@ export class WorldRoom extends Room<WorldState> {
     pc.p.skills.set(skill as string, lvl + 1);
   }
 
-  private handleChangeJob(client: Client) {
+  /** Puts a weapon the new job cannot use back into the bag. False when the bag is full. */
+  private putAwayWeapon(p: Player, c: PlayerCtl, job: Job): boolean {
+    const w = c.inv.equip.weapon;
+    if (!w || canUse(ITEMS[w.id], job)) return true;
+    return unequipItem(c.inv, "weapon") === null;
+  }
+
+  private handleChangeJob(client: Client, msg: unknown) {
     const pc = this.get(client);
-    if (!pc || pc.p.job !== "wanderer") return;
-    if (pc.p.level < JOB_CHANGE_LEVEL) return client.send(Msg.Notice, { text: `ต้องถึงเลเวล ${JOB_CHANGE_LEVEL} ก่อน` });
-    pc.p.job = "squire";
-    this.applyStats(pc.p, pc.c, true);
-    this.broadcastSystem(`${pc.p.name} ได้เป็น${JOB_NAMES.squire}แล้ว!`);
-    this.save(pc.p, pc.c).catch(() => {});
+    if (!pc || pc.p.job !== "wanderer" || pc.p.dead) return;
+    const { p, c } = pc;
+    const choice = JOB_CHOICES.find((j) => j.job === (msg as { job?: unknown } | null)?.job);
+    if (!choice) return;
+    if (p.level < JOB_CHANGE_LEVEL) return client.send(Msg.Notice, { text: `ต้องถึงเลเวล ${JOB_CHANGE_LEVEL} ก่อน` });
+    if (choice.gift && c.inv.bag.length + (c.inv.equip.weapon ? 1 : 0) >= BAG_SIZE)
+      return client.send(Msg.Notice, { text: "กระเป๋าเต็ม ทำที่ว่างก่อนเปลี่ยนอาชีพ" });
+    if (!this.putAwayWeapon(p, c, choice.job)) return client.send(Msg.Notice, { text: "กระเป๋าเต็ม ทำที่ว่างก่อนเปลี่ยนอาชีพ" });
+    p.job = choice.job;
+    if (choice.gift) {
+      // a first weapon to start with
+      addItem(c.inv.bag, BAG_SIZE, choice.gift, 1);
+      const gift = c.inv.bag.find((s) => s.id === choice.gift);
+      if (gift && !c.inv.equip.weapon) equipItem(c.inv, gift.uid, p.level, choice.job);
+    }
+    this.buildChanged(client, p, c);
+    this.applyStats(p, c, true);
+    this.broadcastSystem(`${p.name} ได้เป็น${JOB_NAMES[choice.job]}แล้ว!`);
+  }
+
+  // ---- skills ---------------------------------------------------------------
+
+  /** Checks and takes the mana, and starts the cooldown. */
+  private payFor(client: Client, p: Player, c: PlayerCtl, skill: SkillId): boolean {
+    const def = SKILLS[skill];
+    const cost = def.mp ?? 0;
+    if (p.mp < cost) {
+      client.send(Msg.Notice, { text: "มานาไม่พอ" });
+      return false;
+    }
+    p.mp -= cost;
+    const lvl = p.skills.get(skill) ?? 1;
+    this.startCooldown(client, c, skill, def.cooldownMs + (def.cooldownPerLevel ?? 0) * (lvl - 1));
+    return true;
+  }
+
+  private amountOf(def: SkillDef, lvl: number) {
+    return (def.amount ?? 0) + (def.amountPerLevel ?? 0) * (lvl - 1);
+  }
+
+  /** Enemies of this player around a point (monsters, and other players in the Hollow). */
+  private enemiesNear(me: string, x: number, y: number, radius: number, except: string): [string, { x: number; y: number }][] {
+    const out: [string, { x: number; y: number }][] = [];
+    this.state.monsters.forEach((m, id) => {
+      if (id !== except && Math.hypot(m.x - x, m.y - y) <= radius) out.push([id, m]);
+    });
+    if (this.map.pvp)
+      this.state.players.forEach((t, id) => {
+        if (id !== except && Math.hypot(t.x - x, t.y - y) <= radius && this.targetOf(me, id)) out.push([id, t]);
+      });
+    return out.sort((a, b) => Math.hypot(a[1].x - x, a[1].y - y) - Math.hypot(b[1].x - x, b[1].y - y));
+  }
+
+  /** A skill lands on an enemy that is in range. */
+  private castAt(id: string, p: Player, c: PlayerCtl, targetId: string, skill: SkillId) {
+    const def = SKILLS[skill];
+    const lvl = p.skills.get(skill) ?? 1;
+    const power = (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1);
+    const now = this.clock.currentTime;
+    const t = this.targetOf(id, targetId);
+    if (!t) return;
+    const at = { x: t.x, y: t.y };
+    switch (def.kind) {
+      case "pierce": {
+        // everything close to the line of fire, however far the target is
+        const len = Math.max(0.01, dist(p, at));
+        const ux = (at.x - p.x) / len;
+        const uy = (at.y - p.y) / len;
+        const from = { x: p.x, y: p.y };
+        for (const [eid, e] of this.enemiesNear(id, from.x, from.y, def.range + 1, "")) {
+          const along = (e.x - from.x) * ux + (e.y - from.y) * uy;
+          const off = Math.abs((e.x - from.x) * uy - (e.y - from.y) * ux);
+          if (eid === targetId || (along > 0 && off <= 0.9)) this.playerHits(id, p, c, eid, power, skill, 0, 0.5);
+        }
+        return;
+      }
+      case "mark": {
+        const until = now + (def.durationMs ?? 8000);
+        const mc = this.monsterSys.ctl.get(targetId);
+        const tc = this.ctl.get(targetId);
+        if (mc) Object.assign(mc, { markUntil: until, mark: this.amountOf(def, lvl) });
+        else if (tc) Object.assign(tc, { markUntil: until, mark: this.amountOf(def, lvl) });
+        if (mc) this.monsterSys.takeDamage(targetId, id, 0);
+        c.lastCombatAt = now;
+        c.shieldUntil = 0;
+        return;
+      }
+      case "splash":
+        this.playerHits(id, p, c, targetId, power, skill);
+        for (const [eid] of this.enemiesNear(id, at.x, at.y, def.radius ?? 1.8, targetId)) this.playerHits(id, p, c, eid, power * 0.6, skill);
+        return;
+      case "slow": {
+        this.playerHits(id, p, c, targetId, power, skill);
+        const until = now + (def.durationMs ?? 3000) + (def.durationPerLevel ?? 0) * (lvl - 1);
+        const tc = this.monsterSys.ctl.get(targetId) ?? this.ctl.get(targetId);
+        if (tc) Object.assign(tc, { slowUntil: until, slow: def.amount ?? 0.4 });
+        return;
+      }
+      case "chain": {
+        let from = at;
+        const done = new Set([targetId]);
+        this.playerHits(id, p, c, targetId, power, skill);
+        const jumps = 2 + Math.floor((lvl - 1) / 2);
+        for (let i = 1, k = 0.75; i <= jumps; i++, k *= 0.75) {
+          const next = this.enemiesNear(id, from.x, from.y, def.radius ?? 3, "").find(([eid]) => !done.has(eid));
+          if (!next) break;
+          done.add(next[0]);
+          from = { x: next[1].x, y: next[1].y };
+          this.playerHits(id, p, c, next[0], power * k, skill);
+        }
+        return;
+      }
+      default:
+        for (let i = 0; i < (def.hits ?? 1); i++) if (this.targetOf(id, targetId)) this.playerHits(id, p, c, targetId, power, skill);
+    }
+  }
+
+  /** Skills that work at once, on yourself or on friends. */
+  private castNow(client: Client, p: Player, c: PlayerCtl, skill: SkillId, target: unknown) {
+    const def = SKILLS[skill];
+    const lvl = p.skills.get(skill) ?? 1;
+    const now = this.clock.currentTime;
+    const id = client.sessionId;
+    const until = now + (def.durationMs ?? 6000) + (def.durationPerLevel ?? 0) * (lvl - 1);
+    if (p.mp < (def.mp ?? 0)) return client.send(Msg.Notice, { text: "มานาไม่พอ" });
+    switch (def.kind) {
+      case "guard":
+        this.payFor(client, p, c, skill);
+        c.guardUntil = until;
+        c.guardReduce = (def.reduce ?? 0.3) + (def.reducePerLevel ?? 0) * (lvl - 1);
+        p.guarding = true;
+        return;
+      case "taunt":
+        this.payFor(client, p, c, skill);
+        this.monsterSys.taunt(id, p.x, p.y, (def.radius ?? 4) + (def.radiusPerLevel ?? 0) * (lvl - 1));
+        c.lastCombatAt = now;
+        c.shieldUntil = 0;
+        return;
+      case "manashield":
+        this.payFor(client, p, c, skill);
+        c.manaShieldUntil = until;
+        c.manaShield = this.amountOf(def, lvl);
+        p.manaShield = true;
+        return;
+      case "bless": {
+        this.payFor(client, p, c, skill);
+        this.state.players.forEach((t, tid) => {
+          const tc = this.ctl.get(tid);
+          if (!tc || t.dead || tc.leaving || (tid !== id && (this.map.pvp || dist(p, t) > (def.radius ?? 5)))) return;
+          tc.blessUntil = until;
+          tc.bless = this.amountOf(def, lvl);
+          t.blessed = true;
+        });
+        return;
+      }
+      case "backstep": {
+        const e = c.targetId ? this.targetOf(id, c.targetId) : undefined;
+        const FACE = [[1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1], [1, 0]];
+        const look = e ? { x: e.x - p.x, y: e.y - p.y } : { x: FACE[p.facing][0], y: FACE[p.facing][1] };
+        const len = Math.hypot(look.x, look.y) || 1;
+        for (let d = 3; d >= 1; d--) {
+          const spot = { x: Math.round(p.x - (look.x / len) * d), y: Math.round(p.y - (look.y / len) * d) };
+          const path = findPath(this.map, planFrom(p, c.path), spot, d + 2);
+          if (!path || !path.length) continue;
+          this.payFor(client, p, c, skill);
+          this.stopInteract(client, c);
+          c.path = c.path.length ? [c.path[0], ...path] : path;
+          c.leaping = true;
+          c.targetId = null;
+          c.pendingSkill = null;
+          return;
+        }
+        return client.send(Msg.Notice, { text: "ไม่มีที่ให้ถอย" });
+      }
+      case "heal": {
+        // in the Hollow there are no friends (parties come later)
+        const tid = typeof target === "string" && !this.map.pvp && this.state.players.has(target) ? target : id;
+        const t = this.state.players.get(tid)!;
+        const tc = this.ctl.get(tid);
+        if (!tc || tc.leaving || t.dead) return client.send(Msg.Notice, { text: "รักษาคนที่ล้มไม่ได้" });
+        if (dist(p, t) > def.range + 0.5) return client.send(Msg.Notice, { text: "เป้าหมายไกลเกินไป" });
+        this.payFor(client, p, c, skill);
+        const power = (def.power ?? 1.6) + (def.powerPerLevel ?? 0) * (lvl - 1);
+        const amount = Math.round(this.statsOf(p, c).atk * power * (1 + c.mods.skillDmgPct / 100) * (0.95 + Math.random() * 0.1));
+        const got = Math.min(amount, t.maxHp - t.hp);
+        t.hp += got;
+        if (tid !== id) faceTowards(p, t);
+        this.broadcast(Msg.Hit, { from: id, to: tid, dmg: got, skill, heal: true } satisfies HitEvent);
+        return;
+      }
+      case "revive": {
+        let best: [string, Player] | null = null;
+        this.state.players.forEach((t, tid) => {
+          const tc = this.ctl.get(tid);
+          if (t.dead && tc && !tc.leaving && this.clientOf(tid) && dist(p, t) <= def.range && (!best || dist(p, t) < dist(p, best[1]))) best = [tid, t];
+        });
+        if (!best) return client.send(Msg.Notice, { text: "ไม่มีใครล้มอยู่ใกล้ๆ" });
+        this.payFor(client, p, c, skill);
+        const [tid, t] = best as [string, Player];
+        t.dead = false;
+        t.hp = Math.max(1, Math.round(t.maxHp * this.amountOf(def, lvl)));
+        const tc = this.ctl.get(tid)!;
+        tc.path = [];
+        tc.shieldUntil = this.map.pvp ? now + PROTECT_MS : 0;
+        this.broadcast(Msg.Hit, { from: id, to: tid, dmg: t.hp, skill, heal: true } satisfies HitEvent);
+        this.clientOf(tid)?.send(Msg.Notice, { text: `${p.name} ชุบชีวิตคุณ` });
+        return;
+      }
+    }
+  }
+
+  /** Damage after everything that protects this player. May use up mana. */
+  private taken(p: Player, c: PlayerCtl, dmg: number, now: number): number {
+    dmg *= 1 - c.mods.dmgReduce / 100;
+    if (c.guardUntil > now) dmg *= 1 - c.guardReduce;
+    if (c.blessUntil > now) dmg *= 1 - c.bless;
+    dmg = Math.max(1, Math.round(dmg));
+    if (c.manaShieldUntil > now && p.mp > 0) {
+      const mana = Math.min(p.mp, Math.ceil((dmg * c.manaShield) / 2));
+      p.mp -= mana;
+      dmg = Math.max(0, dmg - mana * 2);
+    }
+    return dmg;
+  }
+
+  /** Effects that run out, and mana coming back. */
+  private tickEffects(p: Player, c: PlayerCtl, now: number, dt: number) {
+    if (p.guarding && c.guardUntil <= now) p.guarding = false;
+    if (p.blessed && c.blessUntil <= now) p.blessed = false;
+    if (p.manaShield && (c.manaShieldUntil <= now || p.mp <= 0)) {
+      c.manaShieldUntil = 0;
+      p.manaShield = false;
+    }
+    const slowed = c.slowUntil > now;
+    if (p.slowed !== slowed) p.slowed = slowed;
+    const marked = c.markUntil > now;
+    if (p.marked !== marked) p.marked = marked;
+    if (p.mp < p.maxMp) {
+      c.mpRegen += p.maxMp * (now - c.lastCombatAt > OUT_OF_COMBAT_MS ? 0.04 : 0.015) * dt;
+      const whole = Math.floor(c.mpRegen);
+      if (whole > 0) {
+        c.mpRegen -= whole;
+        p.mp = Math.min(p.maxMp, p.mp + whole);
+      }
+    }
   }
 
   // ---- gathering, items and crafting ---------------------------------------
@@ -920,7 +1195,7 @@ export class WorldRoom extends Room<WorldState> {
     const pc = this.get(client);
     const uid = (msg as { uid?: unknown } | null)?.uid;
     if (!pc || pc.p.dead || typeof uid !== "string") return;
-    const err = equipItem(pc.c.inv, uid, pc.p.level);
+    const err = equipItem(pc.c.inv, uid, pc.p.level, pc.p.job as Job);
     if (err) return client.send(Msg.Notice, { text: err });
     this.buildChanged(client, pc.p, pc.c);
   }
@@ -941,8 +1216,8 @@ export class WorldRoom extends Room<WorldState> {
     if (!pc) return;
     const r = craft(pc.c.inv, item, (msg as { crystal?: unknown }).crystal === true, pc.p.name);
     if ("error" in r) return client.send(Msg.Notice, { text: r.error });
-    client.send(Msg.Notice, { text: `ตีได้ ${stackName(r.made)}${r.skillUp ? ` ฝีมือช่างเพิ่มเป็น ${pc.c.inv.smithing}` : ""}` });
-    if (r.made.quality === 3) this.broadcastSystem(`${pc.p.name} ตี${ITEMS[r.made.id].name}ได้เป็นผลงานชิ้นเอก!`);
+    client.send(Msg.Notice, { text: `ทำได้ ${stackName(r.made)}${r.skillUp ? ` ฝีมือ${CRAFT_NAMES[r.kind]}เพิ่มเป็น ${pc.c.inv[CRAFT_SKILL[r.kind]]}` : ""}` });
+    if (r.made.quality === 3) this.broadcastSystem(`${pc.p.name} ทำ${ITEMS[r.made.id].name}ได้เป็นผลงานชิ้นเอก!`);
     this.itemsChanged(client, pc.p, pc.c);
   }
 
@@ -1442,12 +1717,15 @@ export class WorldRoom extends Room<WorldState> {
       });
       return left;
     },
-    setSmithing: (id, skill) => this.adminEdit(id, (_p, c) => (c.inv.smithing = skill)),
+    setSmithing: (id, skill) => this.adminEdit(id, (_p, c) => (c.inv.smithing = c.inv.woodwork = c.inv.tailoring = skill)),
     setJob: (id, job) =>
       this.adminEdit(id, (p, c) => {
+        this.putAwayWeapon(p, c, job);
         p.job = job;
         p.skills.clear();
         c.nodes = cleanNodes([...c.nodes], p.level, job);
+        this.showGear(p, c.inv);
+        this.applyStats(p, c, true);
       }),
     resetTree: (id) => this.adminEdit(id, (_p, c) => c.nodes.clear()),
     heal: (id) => {
@@ -1559,8 +1837,7 @@ export class WorldRoom extends Room<WorldState> {
     }
     const crit = Math.random() < CRIT_CHANCE;
     let dmg = hitDamage(atk, this.statsOf(p, c).def, 1, Math.random(), crit);
-    dmg = Math.max(1, Math.round(dmg * (1 - c.mods.dmgReduce / 100)));
-    if (c.guardUntil > now) dmg = Math.max(1, Math.round(dmg * (1 - c.guardReduce)));
+    dmg = this.taken(p, c, dmg, now);
     p.hp = Math.max(0, p.hp - dmg);
     const killed = p.hp <= 0;
     const ev: HitEvent = { from: monsterId, to: playerId, dmg, crit, killed };
@@ -1572,6 +1849,9 @@ export class WorldRoom extends Room<WorldState> {
     p.dead = true;
     p.moving = false;
     p.guarding = false;
+    c.leaping = false;
+    c.blessUntil = c.manaShieldUntil = c.slowUntil = c.markUntil = c.guardUntil = 0;
+    p.blessed = p.manaShield = p.slowed = p.marked = false;
     c.path = [];
     c.targetId = null;
     c.pendingSkill = null;
@@ -1617,12 +1897,12 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   /** A player lands a hit on whatever it is. */
-  private playerHits(id: string, p: Player, c: PlayerCtl, targetId: string, power: number, skill?: string, stunMs = 0) {
-    if (this.state.monsters.has(targetId)) this.playerHitsMonster(id, p, c, targetId, power, skill, stunMs);
-    else this.playerHitsPlayer(id, p, c, targetId, power, skill, stunMs);
+  private playerHits(id: string, p: Player, c: PlayerCtl, targetId: string, power: number, skill?: string, stunMs = 0, defIgnore = 0) {
+    if (this.state.monsters.has(targetId)) this.playerHitsMonster(id, p, c, targetId, power, skill, stunMs, defIgnore);
+    else this.playerHitsPlayer(id, p, c, targetId, power, skill, stunMs, defIgnore);
   }
 
-  private playerHitsPlayer(id: string, p: Player, c: PlayerCtl, targetId: string, power: number, skill?: string, stunMs = 0) {
+  private playerHitsPlayer(id: string, p: Player, c: PlayerCtl, targetId: string, power: number, skill?: string, stunMs = 0, defIgnore = 0) {
     if (!this.targetOf(id, targetId)) return;
     const t = this.state.players.get(targetId)!;
     const tc = this.ctl.get(targetId)!;
@@ -1635,10 +1915,8 @@ export class WorldRoom extends Room<WorldState> {
       return;
     }
     const crit = Math.random() < this.critChance(c, targetId);
-    let dmg = hitDamage(this.statsOf(p, c).atk, this.statsOf(t, tc).def, this.boosted(p, c, power, skill), Math.random(), crit);
-    dmg *= PVP_DAMAGE * (1 - tc.mods.dmgReduce / 100);
-    if (tc.guardUntil > now) dmg *= 1 - tc.guardReduce;
-    dmg = Math.max(1, Math.round(dmg));
+    let dmg = hitDamage(this.statsOf(p, c).atk, this.statsOf(t, tc).def, this.boosted(p, c, power, skill), Math.random(), crit, defIgnore);
+    dmg = this.taken(t, tc, dmg * PVP_DAMAGE * (tc.markUntil > now ? 1 + tc.mark : 1), now);
     this.lifesteal(p, c, Math.min(dmg, t.hp));
     t.hp = Math.max(0, t.hp - dmg);
     if (stunMs > 0) tc.stunUntil = Math.max(tc.stunUntil, now + stunMs / 2);
@@ -1653,13 +1931,14 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   /** A player lands a hit on a monster. */
-  private playerHitsMonster(id: string, p: Player, c: PlayerCtl, monsterId: string, power: number, skill?: string, stunMs = 0) {
+  private playerHitsMonster(id: string, p: Player, c: PlayerCtl, monsterId: string, power: number, skill?: string, stunMs = 0, defIgnore = 0) {
     const m = this.state.monsters.get(monsterId);
     const mc = this.monsterSys.ctl.get(monsterId);
     if (!m || !mc) return;
     faceTowards(p, m);
     const crit = Math.random() < this.critChance(c, monsterId);
-    const dmg = hitDamage(this.statsOf(p, c).atk, mc.def_, this.boosted(p, c, power, skill), Math.random(), crit);
+    let dmg = hitDamage(this.statsOf(p, c).atk, mc.def_, this.boosted(p, c, power, skill), Math.random(), crit, defIgnore);
+    if (mc.markUntil > this.clock.currentTime) dmg = Math.round(dmg * (1 + mc.mark));
     c.lastCombatAt = this.clock.currentTime;
     c.shieldUntil = 0;
     // life steal counts only damage the monster could still take
@@ -1716,11 +1995,16 @@ export class WorldRoom extends Room<WorldState> {
         return;
       }
 
-      if (p.guarding && c.guardUntil <= now) p.guarding = false;
-      const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100) * c.speedTimes;
+      this.tickEffects(p, c, now, dt);
+      const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100) * c.speedTimes * (c.slowUntil > now ? 1 - c.slow : 1);
+      const weaponRange = attackRange(ITEMS[c.inv.equip.weapon?.id ?? ""]?.look);
+      const reach = c.pendingSkill ? SKILLS[c.pendingSkill].range : weaponRange;
       const swingMs = PLAYER_ATTACK_MS / (1 + c.mods.attackSpeedPct / 100);
 
-      if (c.charge) {
+      if (c.leaping) {
+        stepAlong(p, c.path, WALK_SPEED * 4, dt);
+        if (!c.path.length) c.leaping = false;
+      } else if (c.charge) {
         const m = this.targetOf(id, c.charge.targetId);
         if (!m) {
           c.charge = null;
@@ -1740,20 +2024,19 @@ export class WorldRoom extends Room<WorldState> {
         if (!m) {
           c.targetId = null;
           c.pendingSkill = null;
-        } else if (dist(p, m) <= ATTACK_RANGE) {
+        } else if (dist(p, m) <= reach) {
           if (c.path.length > 1) c.path.length = 1; // finish this step, then stop
           stepAlong(p, c.path, speed, dt);
           if (!c.path.length) {
             faceTowards(p, m);
             const skill = c.pendingSkill;
-            if (skill && (c.cooldowns.get(skill) ?? 0) <= now) {
-              const def = SKILLS[skill];
-              const lvl = p.skills.get(skill) ?? 1;
+            if (skill) {
               c.pendingSkill = null;
-              const client = this.clients.find((cl) => cl.sessionId === id);
-              if (client) this.startCooldown(client, c, skill, def.cooldownMs);
-              c.nextAttackAt = now + swingMs;
-              this.playerHits(id, p, c, c.targetId, (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1), skill);
+              const client = this.clientOf(id);
+              if (client && (c.cooldowns.get(skill) ?? 0) <= now && this.payFor(client, p, c, skill)) {
+                c.nextAttackAt = now + swingMs;
+                this.castAt(id, p, c, c.targetId, skill);
+              }
             } else if (now >= c.nextAttackAt) {
               c.nextAttackAt = now + swingMs;
               this.playerHits(id, p, c, c.targetId, 1);

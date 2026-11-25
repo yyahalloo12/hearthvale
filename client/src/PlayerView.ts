@@ -4,6 +4,8 @@ import { toScreen } from "./iso";
 import { PLAYER_LAYERS, PLAYER_SHEET } from "./sprites";
 
 /** Metal colour by tier. */
+/** Wood colour of bows and staffs by tier. */
+const WOOD_TINT = [0xffffff, 0xc08a58, 0x8fb06a, 0xb9b3c4, 0xd9a0e0, 0xffd23a, 0xff6f6f];
 export const TIER_TINT = [0xffffff, 0xd88a4e, 0xc3ccd6, 0x8fd3ff, 0xd9a0e0, 0xffd23a, 0xff6f6f];
 
 const ATTACK_MS = 340;
@@ -23,6 +25,7 @@ export class PlayerView {
   private hpBar: Phaser.GameObjects.Graphics;
   private shield: Phaser.GameObjects.Image;
   private glow: Phaser.GameObjects.Image;
+  private mark: Phaser.GameObjects.Text;
   private figure: Phaser.GameObjects.Container;
   private dead = false;
 
@@ -42,7 +45,7 @@ export class PlayerView {
     this.y = this.targetY = y;
 
     const shadow = scene.add.image(0, 0, "c-shadow");
-    this.glow = scene.add.image(0, -22, "target-ring").setTint(0xff5ad2).setScale(1.1, 2.2).setAlpha(0.8).setVisible(false);
+    this.glow = scene.add.image(0, -22, "aura").setTint(0xff5ad2).setScale(1.1, 2.2).setAlpha(0.8).setVisible(false);
     for (const l of PLAYER_LAYERS)
       this.layers[l] = scene.add
         .image(0, 0, `player-${l}`, 0)
@@ -60,10 +63,11 @@ export class PlayerView {
       })
       .setOrigin(0.5, 1);
 
+    this.mark = scene.add.text(0, -90, "◎", { fontSize: "18px", color: "#ff6a6a", stroke: "#000", strokeThickness: 3 }).setOrigin(0.5, 1).setVisible(false);
     this.hpBar = scene.add.graphics();
     this.shield = scene.add.image(12, -14, "shield").setVisible(false);
     this.figure = scene.add.container(0, 0, [...PLAYER_LAYERS.map((l) => this.layers[l]), this.shield]);
-    this.root = scene.add.container(0, 0, [shadow, this.glow, this.figure, this.label, this.hpBar]);
+    this.root = scene.add.container(0, 0, [shadow, this.glow, this.figure, this.label, this.hpBar, this.mark]);
     this.animate(0);
     this.place();
   }
@@ -86,9 +90,10 @@ export class PlayerView {
     const w = ITEMS[weapon];
     const tint = (tier?: number) => TIER_TINT[tier ?? 0] ?? 0xffffff;
     this.layers.axe.setVisible(w?.look === "axe").setTint(tint(w?.tier));
-    this.layers.sword.setVisible(!!w && w.look !== "axe").setTint(tint(w?.tier));
+    this.layers.sword.setVisible(w?.look === "sword").setTint(tint(w?.tier));
+    for (const l of ["bow", "staff"] as const) this.layers[l].setVisible(w?.look === l).setTint(WOOD_TINT[w?.tier ?? 0] ?? 0xffffff);
     const h = ITEMS[helm];
-    this.layers.helm.setVisible(!!h).setTint(tint(h?.tier));
+    this.layers.helm.setVisible(h?.look === "helm").setTint(tint(h?.tier));
   }
 
   /** Faded name and body: logged out but still standing here. */
@@ -96,7 +101,18 @@ export class PlayerView {
     this.root.setAlpha(offline ? 0.55 : 1);
     this.label.setText(`${gm ? "★ " : ""}${this.name}${offline ? " (ออฟไลน์)" : ""}`);
     this.figure.setAlpha(this.dead ? 0.7 : shielded ? 0.55 : 1);
-    this.glow.setVisible(glowing);
+    this.glow.setVisible(glowing || this.aura !== null);
+    this.glow.setTint(glowing ? 0xff5ad2 : (this.aura ?? 0xffffff));
+  }
+
+  /** Colour round the body while a spell protects it. */
+  private aura: number | null = null;
+
+  setEffects(blessed: boolean, manaShield: boolean, slowed: boolean, marked: boolean) {
+    this.aura = manaShield ? 0x5ab0ff : blessed ? 0xffe27a : null;
+    if (slowed) this.layers.base.setTint(0x9fd0ff);
+    else this.layers.base.clearTint();
+    this.mark.setVisible(marked);
   }
 
   /** Red name while we are attacking this player. */

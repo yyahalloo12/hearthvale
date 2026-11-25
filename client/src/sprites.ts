@@ -21,7 +21,7 @@ export const PLAYER_SHEET = {
 };
 /** The scenery atlas is drawn at twice its size on screen. */
 export const SCENERY_SCALE = 0.5;
-export const PLAYER_LAYERS = ["base", "tunic", "helm", "sword", "axe"] as const;
+export const PLAYER_LAYERS = ["base", "tunic", "helm", "sword", "axe", "bow", "staff"] as const;
 
 export interface MonsterSheet {
   w: number;

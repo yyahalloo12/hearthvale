@@ -7,7 +7,7 @@ import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
 import { GameMap, isHouseAnchor, isWalkable, Prop, ZoneId } from "../../../shared/map";
 import { buildZone, ZONE_NAMES } from "../../../shared/zones";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
-import { SKILLS } from "../../../shared/stats";
+import { ENEMY_SKILLS, Job, SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
 import { askEnterHollow, initHud, setCorruption, setOnline, setZone, skillForKey, startCooldown, updateMe } from "../hud";
 import { closeStation, initInventory, openStation, openStationKind, setInventory, setItemLevel, showGathering } from "../inventory";
@@ -21,7 +21,7 @@ import { PlayerView, TIER_TINT } from "../PlayerView";
 import { loadSprites, PLAYER_SHEET, SCENERY_SCALE } from "../sprites";
 import { groundDetail, groundKey, houseFrame, makeTextures, PROP_SHADOW, propFrame } from "../textures";
 
-const STATION_LABEL = { smith: "ช่างตีเหล็ก", storage: "คลังเก็บของ", portal: "ทางเข้า Hollow", board: "กระดานประมูล" } as const;
+const STATION_LABEL = { smith: "ช่างฝีมือ", storage: "คลังเก็บของ", portal: "ทางเข้า Hollow", board: "กระดานประมูล" } as const;
 
 export class WorldScene extends Phaser.Scene {
   private room!: Room;
@@ -72,7 +72,7 @@ export class WorldScene extends Phaser.Scene {
     initHud({
       useSkill: (id) => this.useSkill(id),
       learnSkill: (id) => this.room.send(Msg.LearnSkill, { skill: id }),
-      changeJob: () => this.room.send(Msg.ChangeJob),
+      changeJob: (job) => this.room.send(Msg.ChangeJob, { job }),
       respawn: () => this.room.send(Msg.Respawn),
     });
     setZone(ZONE_NAMES[this.zone], this.map.pvp);
@@ -173,6 +173,7 @@ export class WorldScene extends Phaser.Scene {
       view.setHp(player.hp, player.maxHp);
       view.setDead(player.dead);
       view.setGear(player.weapon, player.helm);
+      view.setEffects(player.blessed, player.manaShield, player.slowed, player.marked);
       view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
       this.views.set(id, view);
       if (isMe) {
@@ -190,7 +191,8 @@ export class WorldScene extends Phaser.Scene {
         view.setDead(player.dead);
         view.setGuarding(player.guarding);
         view.setGear(player.weapon, player.helm);
-        view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
+        view.setEffects(player.blessed, player.manaShield, player.slowed, player.marked);
+      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
         if (this.targetId === id && player.dead) this.setTarget(null);
         if (isMe) {
           if (!player.moving) this.marker.setVisible(false);
@@ -222,6 +224,7 @@ export class WorldScene extends Phaser.Scene {
         view.setFacing(m.facing);
         view.setHp(m.hp, m.maxHp);
         view.setStunned(m.stunned);
+        view.setEffects(m.slowed, m.marked);
       });
     });
 
@@ -317,7 +320,7 @@ export class WorldScene extends Phaser.Scene {
     const layer = (l: string) => this.add.image(0, 0, `player-${l}`, 0).setOrigin(0.5, PLAYER_SHEET.originY).setScale(PLAYER_SHEET.scale);
     const parts = [layer("base"), layer("tunic").setTint(s.color)];
     const helm = ITEMS[s.helm];
-    if (helm) parts.push(layer("helm").setTint(TIER_TINT[helm.tier] ?? 0xffffff));
+    if (helm?.look === "helm") parts.push(layer("helm").setTint(TIER_TINT[helm.tier] ?? 0xffffff));
     const keeper = this.add.container(0, 0, parts).setAlpha(0.85);
     const stand = this.scenery(0, 0, `stall${(s.x + s.y) % 3}`);
     const text = (y: number, t: string, color: string, size: number) =>
@@ -359,7 +362,7 @@ export class WorldScene extends Phaser.Scene {
     const p = this.me;
     if (!p) return;
     setTreeCharacter(p.level, p.job);
-    setItemLevel(p.level);
+    setItemLevel(p.level, p.job as Job);
     const mode = marketMode();
     if (mode === "board" || mode === "stall") {
       const at = mode === "board" ? findStation(this.map, "board") : this.stalls.get(visitedStall() ?? "");
@@ -377,6 +380,8 @@ export class WorldScene extends Phaser.Scene {
       job: p.job,
       hp: p.hp,
       maxHp: p.maxHp,
+      mp: p.mp,
+      maxMp: p.maxMp,
       dead: p.dead,
       skills: new Map(p.skills.entries()),
     });
@@ -385,13 +390,71 @@ export class WorldScene extends Phaser.Scene {
   // ---- effects --------------------------------------------------------------
 
   private showHit(h: HitEvent) {
+    if (h.heal) {
+      const v = this.views.get(h.to);
+      if (v) {
+        const p = v.headPoint();
+        this.floatText(p.x, p.y, `+${h.dmg}`, "#8df08d", 17);
+        this.sparkle(v.root.x, v.root.y - 24, 0x8df08d);
+      }
+      return;
+    }
+    const flight = this.shoot(h);
+    if (flight > 0) {
+      // the number shows when the arrow or spell arrives
+      this.views.get(h.from)?.lunge();
+      const target = this.monsters.get(h.to);
+      this.time.delayedCall(flight, () => this.landHit(h, false, target));
+      if (h.killed) this.monsters.get(h.to)?.setTargeted(false);
+      return;
+    }
+    this.landHit(h, true);
+  }
+
+  private sparkle(x: number, y: number, color: number) {
+    for (let i = 0; i < 8; i++) {
+      const s = this.add.image(x, y, "sparkle").setTint(color).setDepth(99999);
+      const a = (i / 8) * Math.PI * 2;
+      this.tweens.add({ targets: s, x: x + Math.cos(a) * 24, y: y + Math.sin(a) * 18 - 14, alpha: 0, duration: 600, onComplete: () => s.destroy() });
+    }
+  }
+
+  /** Draws an arrow or spell flying to its target. Returns how long it takes (0 = a blow at close range). */
+  private shoot(h: HitEvent): number {
+    const a = this.views.get(h.from);
+    const t = this.monsters.get(h.to) ?? this.views.get(h.to);
+    if (!a || !t || Math.hypot(a.x - t.x, a.y - t.y) < 2.2) return 0;
+    const job = (this.room.state as any).players.get(h.from)?.job;
+    const COLORS: Record<string, number> = { fireball: 0xff8a2a, ice_lance: 0x9fe0ff, chain_lightning: 0xfff07a, holy_light: 0xffe9a0, pierce_arrow: 0xffd23a };
+    const from = { x: a.root.x, y: a.root.y - 30 };
+    const c = t.center();
+    const ms = Math.min(260, 60 + Math.hypot(c.x - from.x, c.y - from.y) * 0.6);
+    const color = COLORS[h.skill ?? ""] ?? (job === "archer" ? 0xf6ecd2 : 0xc8a8ff);
+    const shot =
+      job === "archer"
+        ? this.add.rectangle(from.x, from.y, 24, 3, color).setStrokeStyle(1, 0x4a2c17)
+        : this.add.circle(from.x, from.y, h.skill === "fireball" ? 9 : 6, color).setStrokeStyle(2, 0xffffff, 0.8);
+    shot.setDepth(99998).setRotation(Math.atan2(c.y - from.y, c.x - from.x));
+    this.tweens.add({
+      targets: shot,
+      x: c.x,
+      y: c.y,
+      duration: ms,
+      onComplete: () => {
+        shot.destroy();
+        if (job !== "archer") this.sparkle(c.x, c.y, color);
+      },
+    });
+    return ms;
+  }
+
+  private landHit(h: HitEvent, lunge: boolean, targetMonster = this.monsters.get(h.to)) {
     const attackerPlayer = this.views.get(h.from);
-    attackerPlayer?.lunge();
+    if (lunge) attackerPlayer?.lunge();
     this.monsters.get(h.from)?.attack();
     const myId = this.room.sessionId;
-    const targetMonster = this.monsters.get(h.to);
     if (targetMonster) {
-      targetMonster.flash();
+      if (!targetMonster.dying) targetMonster.flash();
       const p = targetMonster.head();
       const mine = h.from === myId;
       const skillName = h.skill ? SKILLS[h.skill]?.name : "";
@@ -405,7 +468,7 @@ export class WorldScene extends Phaser.Scene {
       if (h.killed) {
         this.monsters.delete(h.to);
         if (this.targetId === h.to) this.targetId = null;
-        targetMonster.die();
+        if (!targetMonster.dying) targetMonster.die();
       }
       return;
     }
@@ -484,7 +547,8 @@ export class WorldScene extends Phaser.Scene {
 
   /** Another player under the pointer (only where players can fight). */
   private pickPlayer(wx: number, wy: number): string | null {
-    if (!this.map.pvp) return null;
+    // in peaceful maps only a healer can pick friends, so others can still walk past people
+    if (!this.map.pvp && this.me?.job !== "acolyte") return null;
     for (const [id, v] of this.views) {
       if (id === this.room.sessionId || (this.room.state as any).players.get(id)?.dead) continue;
       const c = v.center();
@@ -517,7 +581,8 @@ export class WorldScene extends Phaser.Scene {
     if (!this.me || this.me.dead) return;
     const def = SKILLS[id];
     if (!def) return;
-    if (def.range > 0 && !this.targetId) {
+    const enemy = this.targetId !== null && (this.monsters.has(this.targetId) || this.map.pvp);
+    if (ENEMY_SKILLS.has(def.kind) && !enemy) {
       addChatLine({ from: "", name: "", text: "เลือกเป้าหมายก่อน (คลิกที่มอนสเตอร์)" }, "notice");
       return;
     }
@@ -553,7 +618,8 @@ export class WorldScene extends Phaser.Scene {
       const monsterId = this.pickMonster(pointer.worldX, pointer.worldY) ?? this.pickPlayer(pointer.worldX, pointer.worldY);
       if (monsterId) {
         this.setTarget(monsterId);
-        this.room.send(Msg.Attack, { id: monsterId });
+        // choosing a friend to heal is not an attack
+        if (this.map.pvp || this.monsters.has(monsterId)) this.room.send(Msg.Attack, { id: monsterId });
         this.marker.setVisible(false);
         return;
       }
@@ -582,7 +648,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.onKey = (e) => {
       if (/^(INPUT|SELECT)$/.test(document.activeElement?.tagName ?? "")) return;
-      const skill = skillForKey(e.key);
+      const skill = skillForKey(e.key, this.me?.job ?? "");
       if (skill) this.useSkill(skill);
     };
     window.addEventListener("keydown", this.onKey);

@@ -83,5 +83,5 @@ test("formulas behave", () => {
   assert.ok(hitDamage(20, 0, 1, 0.5, true) > hitDamage(20, 0, 1, 0.5, false));
   assert.ok(killExp(10, 1, 20) < 10, "far-too-easy kills give less");
   assert.equal(killExp(10, 5, 5), 10);
-  for (const s of Object.values(SKILLS)) assert.equal(s.job, "squire");
+  for (const s of Object.values(SKILLS)) assert.ok(s.maxLevel === 5 && s.cooldownMs > 0);
 });

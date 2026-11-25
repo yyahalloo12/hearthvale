@@ -32,6 +32,7 @@
       </div>
       <div id="hud-job"></div>
       <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+      <div class="bar mp" id="mp-bar" hidden><div id="mp-fill"></div><span id="mp-text"></span></div>
       <div class="bar exp"><div id="exp-fill"></div><span id="exp-text"></span></div>
       <div id="hud-gold"></div>
       <div id="corruption-row" hidden>
@@ -86,7 +87,7 @@
         <div id="smith-only">
           <div id="smith-skill"></div>
           <label class="crystal"><input type="checkbox" id="use-crystal" /> <span id="crystal-have"></span></label>
-          <h3>ตีของ</h3>
+          <div id="craft-tabs"></div>
           <div id="recipes"></div>
           <h3>ซื้อเครื่องมือ</h3>
           <div id="shop"></div>
@@ -115,7 +116,7 @@
     <div id="castbar" hidden><div id="cast-fill"></div><span id="cast-text"></span></div>
 
     <div id="skillbar" hidden>
-      <button id="job-change" hidden>เปลี่ยนอาชีพเป็นสไควร์</button>
+      <div id="job-change" hidden></div>
       <div id="skill-points"></div>
       <div id="skills"></div>
     </div>
