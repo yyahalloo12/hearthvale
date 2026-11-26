@@ -200,7 +200,8 @@ export function updateMe(me: MeView) {
   $("exp-fill").style.width = me.level >= MAX_LEVEL ? "100%" : `${(me.exp / need) * 100}%`;
   $("exp-text").textContent = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${((me.exp / need) * 100).toFixed(1)}%`;
   document.querySelector<HTMLElement>("#plate .bar.exp")!.title = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${me.exp} / ${need}`;
-  $("bar-exp-fill").style.width = $("exp-fill").style.width;
+  $("xp-fill").style.width = $("exp-fill").style.width;
+  $("xp-text").textContent = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `Lv ${me.level} · EXP ${me.exp.toLocaleString("th-TH")} / ${need.toLocaleString("th-TH")} (${((me.exp / need) * 100).toFixed(1)}%)`;
   const buffKey = me.buffs.map((b) => b.icon).join("");
   if ($("buffs").dataset.key !== buffKey) {
     $("buffs").dataset.key = buffKey;
@@ -244,8 +245,18 @@ function renderSkills(me: MeView, points: number) {
     : me.level < JOB_CHANGE_LEVEL
       ? `เลือกอาชีพและใช้สกิลได้ที่ Lv ${JOB_CHANGE_LEVEL}`
       : "";
-  for (const [id, def] of Object.entries(SKILLS)) {
-    if (!jobHas(me.job, def.job)) continue;
+  // ten slots, keys 1 to 0; empty ones keep their place
+  const byKey = new Map(Object.entries(SKILLS).filter(([, d]) => jobHas(me.job, d.job)).map(([id, d]) => [d.key, id] as const));
+  for (const slotKey of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]) {
+    const id = byKey.get(slotKey);
+    if (!id) {
+      const empty = document.createElement("div");
+      empty.className = "skill empty";
+      empty.append(Object.assign(document.createElement("span"), { className: "key", textContent: slotKey }));
+      box.append(empty);
+      continue;
+    }
+    const def = SKILLS[id];
     const lvl = me.skills.get(id) ?? 0;
     const slot = document.createElement("div");
     slot.className = "skill" + (lvl === 0 ? " locked" : "");

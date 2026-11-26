@@ -52,9 +52,51 @@
     </div>
 
     <div id="mapbox" hidden>
-      <div id="minimap-ring"><canvas id="minimap" width="176" height="176" aria-label="แผนที่ย่อ"></canvas><span class="compass">N</span></div>
-      <div id="zone-banner"><span id="map-name"></span></div>
+      <div id="zone-banner"><span id="map-name"></span> <small id="map-xy"></small></div>
+      <div id="minimap-ring">
+        <canvas id="minimap" width="176" height="176" aria-label="แผนที่ย่อ"></canvas><span class="compass">N</span>
+        <button id="mm-in" class="mmbtn" title="ซูมเข้า">+</button>
+        <button id="mm-out" class="mmbtn" title="ซูมออก">−</button>
+        <button id="map-big" class="mapbtn" title="แผนที่โลก (M)">แผนที่</button>
+      </div>
       <div id="chips"><span class="chip" id="daytime" hidden></span><span class="chip" id="hud-gold"></span><span class="chip" id="online"></span></div>
+    </div>
+
+    <nav id="side-menu" aria-label="เมนู">
+      <button id="settings-open" class="mbtn" hidden title="ตั้งค่าและปุ่มลัด">⚙️</button>
+      <button id="party-open" class="mbtn" hidden title="ปาร์ตี้ (O)">👥<b>O</b></button>
+      <button id="map-open" class="mbtn" hidden title="แผนที่โลก (M)">🗺️<b>M</b></button>
+      <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)">🌳<span id="tree-badge" hidden></span><b>P</b></button>
+      <button id="char-open" class="mbtn" hidden title="ตัวละคร (C)">🧙<b>C</b></button>
+      <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)">🎒<b>I</b></button>
+    </nav>
+
+    <div id="xp-strip" title="EXP"><div id="xp-fill"></div><span id="xp-text"></span></div>
+
+    <div id="charwin" class="panel" role="dialog" aria-label="ตัวละคร" hidden>
+      <div class="win-head"><h2 id="char-title"></h2><button id="char-close" aria-label="ปิด">✕</button></div>
+      <div class="char-body">
+        <div class="char-gear">
+          <div id="char-left" class="ccol"></div>
+          <div class="char-stage"><img id="char-doll" alt="" /></div>
+          <div id="char-right" class="ccol"></div>
+        </div>
+        <div class="char-side">
+          <h3>รายละเอียด</h3>
+          <div id="char-details"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="worldmap" class="panel" role="dialog" aria-label="แผนที่โลก" hidden>
+      <div class="win-head"><h2 id="wm-title">แผนที่</h2><button id="wm-me">ตำแหน่งฉัน</button><button id="wm-out">−</button><button id="wm-in">+</button><button id="worldmap-close" aria-label="ปิด">✕</button></div>
+      <canvas id="worldmap-canvas"></canvas>
+      <div class="wm-hint">คลิกที่ไหนก็ได้เพื่อเดินไป · ลากเพื่อเลื่อน · ล้อเมาส์เพื่อซูม</div>
+    </div>
+
+    <div id="settings" class="panel" role="dialog" aria-label="ตั้งค่า" hidden>
+      <div class="win-head"><h2>ตั้งค่า</h2><button id="settings-close" aria-label="ปิด">✕</button></div>
+      <div id="settings-list" class="win-body"></div>
     </div>
 
     <div id="events" class="parch" hidden>
@@ -160,13 +202,8 @@
       <div id="bar-row">
         <div id="action-bar" class="frame">
           <div id="skills"></div>
-          <div class="bar exp" id="bar-exp"><div id="bar-exp-fill"></div></div>
         </div>
-        <div id="menu">
-          <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)">🎒<b>กระเป๋า I</b></button>
-          <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)">🌳<span id="tree-badge" hidden></span><b>พาสซีฟ P</b></button>
-          <button id="party-open" class="mbtn" hidden title="ปาร์ตี้ (O)">👥<b>ปาร์ตี้ O</b></button>
-        </div>
+
       </div>
     </div>
 

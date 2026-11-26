@@ -192,7 +192,7 @@ test("first strike always crits the first hit, life steal heals, kills drop coin
     hits.push(h);
   });
   a.onMessage(Msg.Private, (d: any) => (priv = d));
-  const id = [...room.state.monsters.entries()].find(([, m]) => m.kind === "rat" && m.x > 37 && m.y < 28)![0]; // far from the village and the scarecrows
+  const id = [...room.state.monsters.entries()].find(([, m]) => m.kind === "rat" && m.x > 60 && m.y < 36)![0]; // the rats in the north-east, away from the scarecrows
   const m = room.state.monsters.get(id)!;
   p.x = Math.round(m.x);
   p.y = Math.round(m.y);

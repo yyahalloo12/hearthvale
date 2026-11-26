@@ -1,5 +1,16 @@
 import { GLOW_AT } from "../../shared/hollow";
 import { GameMap, lookOf, Prop, Tile } from "../../shared/map";
+import { setting, setSetting } from "./settings";
+
+let zoomButtons = false;
+/** + and - beside the round map. */
+export function bindMinimapZoom() {
+  if (zoomButtons) return;
+  zoomButtons = true;
+  const step = (f: number) => setSetting("mmZoom", Math.max(1, Math.min(6, Math.round(setting("mmZoom") * f * 10) / 10)));
+  (document.getElementById("mm-in") as HTMLElement).onclick = () => step(1.3);
+  (document.getElementById("mm-out") as HTMLElement).onclick = () => step(1 / 1.3);
+}
 import { RARITY_COLORS } from "../../shared/rift";
 
 /** Small map in the corner. In the Hollow it also shows the exits and anyone who glows. */
@@ -23,6 +34,10 @@ const COLORS: Record<number, string> = {
 };
 
 let base: HTMLCanvasElement | null = null;
+/** The whole map drawn once, for the world map too. */
+export function minimapBase() {
+  return base;
+}
 let current: GameMap | null = null;
 
 export function setMinimap(map: GameMap) {
@@ -67,7 +82,7 @@ export function drawMinimap(state: any, myId: string, friends: Set<string> = new
   g.clearRect(0, 0, S, S);
   // turned 45 degrees, like the world on screen, and centred on you
   const centre = state.players?.get(myId) ?? { x: current.width / 2, y: current.height / 2 };
-  const k = 2.6;
+  const k = setting("mmZoom");
   g.fillStyle = current.pvp ? "#211d2a" : current.id === "mossfen" ? "#1f4a36" : "#2c5a34";
   g.fillRect(0, 0, S, S);
   g.translate(S / 2, S / 2);

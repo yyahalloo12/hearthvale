@@ -17,6 +17,7 @@ const DIRS: [number, number, number][] = [
  * start, or null when there is no path within `maxSteps`.
  */
 export function findPath(map: GameMap, start: Point, goal: Point, maxSteps = 80): Point[] | null {
+  const limit = maxSteps > 80 ? 40000 : 6000;
   if (!isWalkable(map, goal.x, goal.y)) return null;
   if (start.x === goal.x && start.y === goal.y) return [];
 
@@ -75,7 +76,7 @@ export function findPath(map: GameMap, start: Point, goal: Point, maxSteps = 80)
     if (k === gk) break;
     if (closed.has(k)) continue;
     closed.add(k);
-    if (++expanded > 6000) return null;
+    if (++expanded > limit) return null;
     const x = k % W;
     const y = (k - x) / W;
     const gc = g.get(k)!;

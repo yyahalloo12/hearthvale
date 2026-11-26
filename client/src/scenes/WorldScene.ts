@@ -19,11 +19,14 @@ import { closeStation, initInventory, openStation, openStationKind, setInventory
 import { place, setIsoMap, toTile } from "../iso";
 import { FALLEN, Land } from "../land";
 import { closeMarket, initMarket, marketMode, openBoard, setBoard, setMarketInventory, setStall, visitedStall } from "../market";
-import { drawMinimap, setMinimap } from "../minimap";
+import { bindMinimapZoom, drawMinimap, setMinimap } from "../minimap";
 import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
 import { initParty, partySessions, setParty } from "../party";
+import { initSettings, onSettings, setting } from "../settings";
+import { initCharWin, setCharacter, setCharPortrait, setCharPrivate } from "../charwin";
+import { clearGoal, initWorldMap, setWorldMap } from "../worldmap";
 import { PartyData } from "../../../shared/protocol";
 import { PlayerView, TIER_TINT } from "../PlayerView";
 import { loadSprites, PLAYER_SHEET, SCENERY_SCALE } from "../sprites";
@@ -89,7 +92,7 @@ export class WorldScene extends Phaser.Scene {
     );
     this.drawExits();
     this.drawQuiet();
-    document.getElementById("mist")!.hidden = this.zone !== "mossfen";
+    document.getElementById("mist")!.hidden = this.zone !== "mossfen" || !setting("mist");
     this.veils = [];
     this.gone.clear();
     this.warning = null;
@@ -134,6 +137,21 @@ export class WorldScene extends Phaser.Scene {
       stallBuy: (id, uid, qty) => this.room.send(Msg.StallBuy, { id, uid, qty }),
     });
     initParty((a) => this.room.send(Msg.PartyAct, a));
+    initSettings();
+    bindMinimapZoom();
+    initCharWin((slot) => this.room.send(Msg.Unequip, { slot }));
+    initWorldMap((x, y) => {
+      this.setTarget(null);
+      this.room.send(Msg.MoveFar, { x, y });
+    }, partySessions);
+    setWorldMap(this.map, this.room.state, this.room.sessionId);
+    this.offSettings?.();
+    this.offSettings = onSettings((s) => {
+      for (const m of this.monsters.values()) m.nameLabel?.setVisible(s.monsterNames);
+      document.getElementById("mist")!.hidden = this.zone !== "mossfen" || !s.mist;
+      drawMinimap(this.room.state, this.room.sessionId, partySessions());
+    });
+    this.events.once("shutdown", () => this.offSettings?.());
     this.bindRoom();
     this.bindInput();
     this.room.send(Msg.Sync);
@@ -211,7 +229,7 @@ export class WorldScene extends Phaser.Scene {
     if (id.startsWith("gate")) {
       this.gone.get(id)?.destroy();
       this.gone.delete(id);
-      if (!closed) return this.cameras.main.shake(200, 0.004);
+      if (!closed) return void (setting("shake") && this.cameras.main.shake(200, 0.004));
       const g = this.add.graphics().setDepth(-9989);
       for (const k of this.map.regions[id]) {
         const p = place(k % this.map.width, Math.floor(k / this.map.width));
@@ -251,7 +269,7 @@ export class WorldScene extends Phaser.Scene {
     const k = this.map.regions[id]?.[0];
     const me = this.me;
     if (k === undefined || !me) return;
-    if (Math.hypot((k % this.map.width) - me.x, Math.floor(k / this.map.width) - me.y) < 16) this.cameras.main.shake(ms, power);
+    if (Math.hypot((k % this.map.width) - me.x, Math.floor(k / this.map.width) - me.y) < 16 && setting("shake")) this.cameras.main.shake(ms, power);
   }
 
   /** Ground that is about to fall glows red and trembles. */
@@ -332,6 +350,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private portraitAt = 0;
+  private offSettings?: () => void;
   /** A picture of our own character for the round frame, taken now and then. */
   private takePortrait(time: number) {
     const v = this.views.get(this.room.sessionId);
@@ -342,12 +361,15 @@ export class WorldScene extends Phaser.Scene {
     const y = Math.round((v.root.y - cam.worldView.y) * cam.zoom) - 78;
     if (x < 0 || y < 0 || x + 96 > this.scale.width || y + 96 > this.scale.height) return;
     this.game.renderer.snapshotArea(x, y, 96, 96, (img) => {
-      if (img instanceof HTMLImageElement) setPortrait(img.src);
+      if (img instanceof HTMLImageElement) {
+        setPortrait(img.src);
+        setCharPortrait(img.src);
+      }
     });
   }
 
   private showDaylight() {
-    const dark = this.map.pvp || this.map.rift ? 0 : darkness();
+    const dark = this.map.pvp || this.map.rift || !setting("night") ? 0 : darkness();
     document.getElementById("night")!.style.opacity = String(dark * 0.5);
     this.showEvents();
     this.showTarget();
@@ -521,6 +543,7 @@ export class WorldScene extends Phaser.Scene {
       const gained = this.gold === null ? 0 : d.gold - this.gold;
       this.gold = d.gold;
       setTreePrivate(d.gold, d.nodes);
+      setCharPrivate(d.inv, d.nodes);
       setInventory(d.inv, d.gold);
       setMarketInventory(d.inv, d.gold);
       const v = this.views.get(this.room.sessionId);
@@ -598,6 +621,11 @@ export class WorldScene extends Phaser.Scene {
       const at = findStation(this.map, kind);
       if (p.dead || !at || Math.hypot(p.x - at.x, p.y - at.y) > STATION_RANGE) closeStation();
     }
+    setCharacter(p.name, p.level, p.job);
+    const zx = document.getElementById("map-xy")!;
+    const xy = `(${Math.round(p.x)}, ${Math.round(p.y)})`;
+    if (zx.textContent !== xy) zx.textContent = xy;
+    if (!p.moving) clearGoal();
     updateMe({
       name: p.name,
       level: p.level,
@@ -720,6 +748,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private floatText(x: number, y: number, text: string, color: string, size: number) {
+    if (!setting("numbers") && /^[+-]\d+$/.test(text)) return;
     const t = this.add
       .text(x + Phaser.Math.Between(-8, 8), y, text, {
         fontFamily: "Tahoma, sans-serif",

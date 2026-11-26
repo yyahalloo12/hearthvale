@@ -299,6 +299,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.clock.setInterval(() => this.saveAll(), AUTOSAVE_MS);
 
     this.onMessage(Msg.Move, (client, msg) => this.handleMove(client, msg));
+    this.onMessage(Msg.MoveFar, (client, msg) => this.handleMove(client, msg, 400));
     this.onMessage(Msg.Attack, (client, msg) => this.handleAttack(client, msg));
     this.onMessage(Msg.Skill, (client, msg) => this.handleSkill(client, msg));
     this.onMessage(Msg.LearnSkill, (client, msg) => this.handleLearn(client, msg));
@@ -966,7 +967,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     return p && c && !c.leaving ? { p, c } : null;
   };
 
-  private handleMove(client: Client, msg: unknown) {
+  private handleMove(client: Client, msg: unknown, far = MAX_PATH_STEPS) {
     const pc = this.get(client);
     if (!pc || pc.p.dead || pc.c.charge || pc.c.leaping || typeof msg !== "object" || msg === null) return;
     const gx = Math.floor(Number((msg as Point).x));
@@ -977,8 +978,14 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.stopInteract(client, pc.c);
     // Plan from the tile we are standing on, or the tile we are stepping into.
     const from = planFrom(pc.p, pc.c.path);
-    const rest = findPath(this.map, from, { x: gx, y: gy }, MAX_PATH_STEPS);
-    if (!rest) return; // unreachable or blocked: ignore the click
+    // far walks (from the world map) may end on the nearest open tile
+    let goal = { x: gx, y: gy };
+    if (far > MAX_PATH_STEPS && !this.standable(gx, gy)) goal = this.nearestStandable(gx, gy);
+    const rest = findPath(this.map, from, goal, far);
+    if (!rest) {
+      if (far > MAX_PATH_STEPS) client.send(Msg.Notice, { text: "หาทางไปที่นั่นไม่เจอ ลองเลือกจุดอื่น" });
+      return; // unreachable or blocked: ignore the click
+    }
     pc.c.path = pc.c.path.length ? [pc.c.path[0], ...rest] : rest;
   }
 

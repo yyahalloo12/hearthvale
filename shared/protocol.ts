@@ -5,6 +5,8 @@ import type { ZoneId } from "./map";
 export const Msg = {
   /** client -> server: walk to a tile */
   Move: "move",
+  /** client -> server: walk to a far tile picked on the world map */
+  MoveFar: "move_far",
   /** client -> server: attack a monster {id} */
   Attack: "attack",
   /** client -> server: use a skill {skill, target?} */

@@ -1,3 +1,4 @@
+import { setting } from "./settings";
 import Phaser from "phaser";
 import { MONSTERS } from "../../shared/stats";
 import { place } from "./iso";
@@ -27,6 +28,7 @@ export class MonsterView {
   private frame = -1;
 
   private baseTint: number | null = null;
+  nameLabel!: Phaser.GameObjects.Text;
   private plain() {
     if (this.baseTint !== null) this.sprite.setTint(this.baseTint);
     else this.sprite.clearTint();
@@ -52,7 +54,9 @@ export class MonsterView {
         stroke: "#000000",
         strokeThickness: 3,
       })
-      .setOrigin(0.5, 1);
+      .setOrigin(0.5, 1)
+      .setVisible(setting("monsterNames"));
+    this.nameLabel = label;
     this.hpBar = scene.add.graphics();
     this.stunStars = scene.add
       .text(0, -this.size.h - 22, "✦ ✦", { fontSize: "12px", color: "#ffe14d", stroke: "#000", strokeThickness: 2 })
