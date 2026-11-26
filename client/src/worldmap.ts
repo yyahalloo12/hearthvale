@@ -6,7 +6,7 @@ import { drawContinent, placeAt } from "./atlas";
 import type { ZoneId } from "../../shared/map";
 
 /**
- * The world map (key M): the whole map turned like the game, with zoom and
+ * The world map (key M): the whole map, square with north up, with zoom and
  * drag, everything worth finding marked, and a click to walk there.
  */
 
@@ -28,7 +28,7 @@ let fitted = { k: 1, ox: 0, oy: 0 };
 function setMode(world: boolean) {
   continent = world;
   $("worldmap").classList.toggle("continent", world);
-  const hint = document.getElementById("wm-hint");
+  const hint = document.querySelector<HTMLElement>(".wm-hint");
   if (hint) hint.hidden = world;
   $("wm-world").classList.toggle("on", world);
   $("wm-here").classList.toggle("on", !world);
@@ -123,20 +123,18 @@ export function toggleMap(open = $("worldmap").hidden) {
   }
 }
 
-// ---- turning tiles into canvas pixels: the map is turned 45 degrees like the game
+// ---- turning tiles into canvas pixels: square, north up
 
 function k() {
   return view.zoom;
 }
 function toScreen(x: number, y: number) {
   const s = k();
-  return { x: view.x + (x - y) * s * 0.7071, y: view.y + (x + y) * s * 0.7071 };
+  return { x: view.x + (x + 0.5) * s, y: view.y + (y + 0.5) * s };
 }
 function toTile(px: number, py: number) {
-  const s = k() * 0.7071;
-  const a = (px - view.x) / s;
-  const b = (py - view.y) / s;
-  return { x: Math.round((a + b) / 2), y: Math.round((b - a) / 2) };
+  const s = k();
+  return { x: Math.floor((px - view.x) / s), y: Math.floor((py - view.y) / s) };
 }
 
 function fit() {
@@ -145,8 +143,7 @@ function fit() {
   const box = c.getBoundingClientRect();
   c.width = box.width;
   c.height = box.height;
-  const span = (map.width + map.height) * 0.7071;
-  view.zoom = Math.min(box.width / span, box.height / span) * 0.95;
+  view.zoom = Math.min(box.width / map.width, box.height / map.height) * 0.95;
   view.x = 0;
   view.y = 0;
   const mid = toScreen(map.width / 2, map.height / 2);
@@ -200,7 +197,6 @@ function draw() {
   const s = k();
   g.save();
   g.translate(view.x, view.y);
-  g.rotate(Math.PI / 4);
   g.scale(s, s);
   g.imageSmoothingEnabled = false;
 

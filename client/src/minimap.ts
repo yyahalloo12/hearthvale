@@ -101,7 +101,7 @@ export function drawMinimap(state: any, myId: string, friends: Set<string> = new
   const S = c.width;
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, S, S);
-  // North stays up, with the player at the centre.
+  // square to the map grid, north up, centred on you
   const centre = state.players?.get(myId) ?? { x: current.width / 2, y: current.height / 2 };
   const k = setting("mmZoom");
   g.fillStyle = current.pvp ? "#211d2a" : current.id === "mossfen" ? "#1f4a36" : "#2c5a34";
