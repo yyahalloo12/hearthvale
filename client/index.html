@@ -99,6 +99,22 @@
       <div class="wm-hint" id="wm-hint">คลิกที่ไหนก็ได้เพื่อเดินไป · ลากเพื่อเลื่อน · ล้อเมาส์เพื่อซูม</div>
     </div>
 
+    <div id="arenawin" class="panel" aria-label="สนามประลอง" hidden>
+      <div class="win-head"><h2>⚔ สนามประลอง</h2></div>
+      <div class="win-body">
+        <div id="arena-rank"></div>
+        <div id="arena-record" class="hint"></div>
+        <p class="hint">ไม่เสียของ ไม่เสีย EXP แพ้แล้วเดินออกจากลานเลือดเต็ม · ดาเมจปรับตามพลังชีวิตให้สู้กันได้สูสี</p>
+        <div id="arena-state"></div>
+        <form id="arena-duel-form" autocomplete="off"><input id="arena-duel-name" maxlength="16" placeholder="ชื่อคนที่จะท้าดวล" /><button type="submit">ท้าดวล</button></form>
+        <h3>กำลังสู้กัน</h3>
+        <div id="arena-fights"></div>
+        <h3>อันดับในสนามตอนนี้</h3>
+        <div id="arena-top"></div>
+      </div>
+    </div>
+    <div id="arena-count" hidden></div>
+
     <div id="skillwin" class="panel" role="dialog" aria-label="สกิล" hidden>
       <div class="win-head"><h2>สกิล</h2><span id="skillwin-points"></span><button id="skillwin-close" aria-label="ปิด">✕</button></div>
       <div id="skillwin-body" class="win-body"></div>

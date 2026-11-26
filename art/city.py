@@ -516,7 +516,60 @@ def pigeon(fly):
             ball("wing", (0.07 * s, 0.02, 0.14), (0.04, 0.1, 0.05), toon("pwing", 0x7F8594), outline=0.008, parent=g, seg=8)
 
 
+# ---- the colosseum (5 x 5) -----------------------------------------------------------------
+def colosseum():
+    M = mats()
+    g = tile_space()
+    S = toon("colo", 0xE3D6BC, dark=0.72)
+    S2 = toon("colo2", 0xCDBE9F, dark=0.72)
+    R = 2.55
+    cone("plinth", (0, 0, 0.12), R + 0.25, R + 0.3, 0.24, M["rock"], g, seg=40, bevel=0.03)
+    # three storeys of arches, the top one narrower
+    z = 0.24
+    for storey, (h, r) in enumerate(((1.0, R), (0.9, R - 0.08), (0.7, R - 0.16))):
+        cone("ring", (0, 0, z + h / 2), r, r - 0.02, h, S if storey % 2 == 0 else S2, g, seg=40, bevel=0.02)
+        n = 16
+        for k in range(n):
+            a = k * math.tau / n
+            # arches only on the side we see (local +x and -y)
+            if math.cos(a) - math.sin(a) < -0.2:
+                continue
+            ax, ay = (r + 0.01) * math.cos(a), (r + 0.01) * math.sin(a)
+            box("arch", (ax, ay, z + h * 0.45), (0.06, 0.34, h * 0.62), M["dark"], g, outline=0, rot=(0, 0, a), bevel=0)
+            cone("archtop", (ax, ay, z + h * 0.76), 0.17, 0.17, 0.06, M["dark"], g, outline=0, rot=(0, math.radians(90), a), seg=16, bevel=0)
+            box("pillar", ((r + 0.04) * math.cos(a + math.pi / n), (r + 0.04) * math.sin(a + math.pi / n), z + h / 2), (0.1, 0.14, h), S2, g, outline=0.012, rot=(0, 0, a), bevel=0.01)
+        ring("cornice", (0, 0, z + h), r + 0.05, 0.05, S2, g, outline=0.012)
+        z += h
+    # the top edge, with banners on poles all the way round
+    for k in range(24):
+        a = k * math.tau / 24
+        box("crenel", ((R - 0.17) * math.cos(a), (R - 0.17) * math.sin(a), z + 0.1), (0.16, 0.2, 0.2), S, g, outline=0.012, rot=(0, 0, a), bevel=0.01)
+    for k in range(8):
+        a = k * math.tau / 8 + 0.2
+        x, y = (R - 0.2) * math.cos(a), (R - 0.2) * math.sin(a)
+        cone("bpole", (x, y, z + 0.5), 0.02, 0.02, 1.0, M["iron"], g, outline=0.008, bevel=0)
+        box("bflag", (x + 0.16, y, z + 0.88), (0.3, 0.02, 0.18), toon(f"cban{k % 2}", (0xC8453A, 0x3F6FB5)[k % 2], dark=0.72), g, outline=0.01, rot=(0, 0, a * 0.2), bevel=0)
+    # the sand floor and the seats inside, seen over the far wall
+    SEAT = toon("cseat", 0xB8A888, dark=0.7)
+    cone("seatsbase", (0, 0, z + 0.005), R - 0.12, R - 0.12, 0.02, SEAT, g, outline=0, seg=40, bevel=0)
+    for k in range(5):
+        ring("seatrow", (0, 0, z + 0.03), R - 0.35 - k * 0.2, 0.03, toon("cseatd", 0x8F8068), g, outline=0, scale=(1, 1, 0.4))
+    cone("sand", (0, 0, z + 0.04), R - 1.45, R - 1.45, 0.02, toon("csand", 0xF0D9A0, dark=0.8), g, outline=0.01, seg=40, bevel=0)
+    for x, y in ((-0.35, 0.1), (0.3, -0.2)):
+        ball("fighter", (x, y, z + 0.12), (0.06, 0.06, 0.1), toon("cfight", 0x5A3A22), g, outline=0.006, seg=8)
+    # the great gate on the road side (local +x)
+    box("gate", (R - 0.05, 0, 0.9), (0.4, 1.0, 1.4), S, g, outline=0.02, bevel=0.03)
+    box("gatehole", (R + 0.16, 0, 0.72), (0.04, 0.6, 0.95), M["dark"], g, outline=0, bevel=0)
+    cone("gatearch", (R + 0.16, 0, 1.2), 0.3, 0.3, 0.04, M["dark"], g, outline=0, rot=(0, math.radians(90), 0), seg=20, bevel=0)
+    for s in (-1, 1):
+        box("gban", (R + 0.17, 0.42 * s, 1.0), (0.02, 0.2, 0.7), M["red"], g, outline=0.01, bevel=0)
+        cone("torch", (R + 0.22, 0.6 * s, 0.9), 0.04, 0.04, 0.4, M["iron"], g, outline=0.01, bevel=0)
+        ball("flame", (R + 0.22, 0.6 * s, 1.15), 0.07, M["warm"], g, outline=0, seg=10)
+    box("sign", (R + 0.18, 0, 1.55), (0.03, 0.7, 0.22), M["gold"], g, outline=0.012, bevel=0)
+
+
 ITEMS = {
+    "colosseum": colosseum,
     "castle": castle,
     "clocktower": clocktower,
     "fountain": fountain,
@@ -560,6 +613,7 @@ ITEMS = {
 
 # canvas (width, height, look) for things too big for the usual 400 x 440
 SIZES = {
+    "colosseum": (760, 760, 1.8),
     "castle": (1300, 1360, 4.6),
     "clocktower": (400, 820, 4.0),
     "town0": (420, 600, 2.3),

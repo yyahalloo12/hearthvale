@@ -21,7 +21,7 @@ export interface SpawnDef {
   /** attacks anyone this close, whatever the kind usually does */
   aggro?: number;
 }
-export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, mossfen: mossfenSpawnsJson, hollow: hollowSpawnsJson, rift: [], ...REGION_SPAWNS };
+export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, mossfen: mossfenSpawnsJson, hollow: hollowSpawnsJson, rift: [], arena: [], ...REGION_SPAWNS };
 
 type AIState = "idle" | "chase" | "return";
 

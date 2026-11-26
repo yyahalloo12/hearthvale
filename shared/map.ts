@@ -61,7 +61,7 @@ export interface BigThing {
   frame: string;
 }
 
-export type ZoneId = "brindle" | "mossfen" | "hollow" | "rift" | "aldermere" | "copperhill" | "sunreach" | "thornmarsh" | "greywater";
+export type ZoneId = "brindle" | "mossfen" | "hollow" | "rift" | "aldermere" | "copperhill" | "sunreach" | "thornmarsh" | "greywater" | "arena";
 
 /** A spot that leads to another map when you walk onto it. */
 export interface MapExit {
@@ -109,6 +109,8 @@ export interface GameMap {
   bigs?: BigThing[];
   /** city-atlas frame for each Clutter or Stall tile, by y * width + x */
   decor?: Record<number, string>;
+  /** the colosseum: its fighting pits */
+  arena?: import("./arena").ArenaInfo;
 }
 
 /** Puts a big building on the map and blocks its tiles. */

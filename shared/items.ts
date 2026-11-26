@@ -450,7 +450,7 @@ export function resourceAt(map: GameMap, x: number, y: number): Resource | null 
   const prop = map.props[y]?.[x];
   if (map.id === "hollow") return prop === Prop.Tree ? PALEWOOD : prop === Prop.Rock ? MIST : null;
   if (map.id === "mossfen") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? IRON : prop === Prop.Bush ? GLOWSHROOM : null;
-  if (map.id === "aldermere") return null;
+  if (map.id === "aldermere" || map.id === "arena") return null;
   if (map.id === "copperhill") return prop === Prop.Tree ? OAK : prop === Prop.Rock ? (x + y) % 5 === 0 ? MIST : IRON : prop === Prop.Bush ? HERB : null;
   if (map.id === "sunreach") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? IRON : prop === Prop.Bush ? GLOWSHROOM : null;
   if (map.id === "thornmarsh") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? MIST : prop === Prop.Bush ? GLOWSHROOM : null;

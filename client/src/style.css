@@ -871,3 +871,21 @@ body.station-open #station, body.station-open #market { left: calc(50% + 8px) !i
   .inv-body { grid-template-columns: 56px 1fr; }
   .inv-hero { display: none; }
 }
+
+/* ---- colosseum ---- */
+#arenawin { position: absolute; left: 14px; top: 150px; width: 290px; max-height: calc(100% - 360px); z-index: 5; display: flex; flex-direction: column; font-size: 13px; }
+#arenawin[hidden] { display: none; }
+#arena-rank { font-weight: bold; font-size: 15px; color: #5a2a12; }
+#arena-state { display: grid; gap: 6px; margin: 8px 0; }
+#arena-state button { padding: 7px 10px; font-size: 13px; cursor: pointer; }
+.arena-vs { font-weight: bold; font-size: 15px; color: #8a2a1a; }
+.arena-timer { font-family: "HV Pixel", Tahoma, sans-serif; font-size: 20px; color: #3a2010; }
+.arena-invite { display: grid; gap: 6px; padding: 8px; background: #ffe9a8; border: 2px solid #24130c; }
+#arena-duel-form { display: flex; gap: 6px; }
+#arena-duel-form[hidden] { display: none; }
+#arena-duel-form input { flex: 1; min-width: 0; padding: 5px 8px; font-size: 13px; }
+#arena-duel-form button { padding: 5px 10px; }
+#arenawin h3 { margin: 10px 0 4px; font-size: 13px; }
+#arena-fights, #arena-top { display: grid; gap: 2px; font-size: 12px; }
+#arena-count { position: absolute; left: 50%; top: 32%; transform: translate(-50%, -50%); z-index: 9; pointer-events: none; font-family: "HV Pixel", Tahoma, sans-serif; font-size: 96px; color: #ffe7a3; text-shadow: 5px 5px 0 #24130c, -3px 0 0 #24130c, 0 -3px 0 #24130c, 3px 0 0 #24130c; }
+#arena-count[hidden] { display: none; }

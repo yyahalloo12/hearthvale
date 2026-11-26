@@ -29,6 +29,8 @@ export interface CharacterRow {
   quests: string; // JSON: story step, dailies, quest points
   /** outlaw points: above 0 the name is red (GDD 3.2) */
   karma: number;
+  /** JSON: colosseum honour, wins, losses, draws */
+  arena: string;
   /** 1 = game master (from the account; see setAdmin) */
   admin: number;
   x: number;
@@ -171,6 +173,7 @@ async function open(): Promise<DB> {
   if (!have.has("corruption")) db.exec("ALTER TABLE characters ADD COLUMN corruption REAL NOT NULL DEFAULT 0");
   if (!have.has("quests")) db.exec("ALTER TABLE characters ADD COLUMN quests TEXT NOT NULL DEFAULT '{}'");
   if (!have.has("karma")) db.exec("ALTER TABLE characters ADD COLUMN karma REAL NOT NULL DEFAULT 0");
+  if (!have.has("arena")) db.exec("ALTER TABLE characters ADD COLUMN arena TEXT NOT NULL DEFAULT '{}'");
   return db;
 }
 
@@ -214,7 +217,7 @@ export async function loadCharacter(accountId: number): Promise<CharacterRow | n
     .get(accountId) as unknown as CharacterRow) ?? null;
 }
 
-export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin" | "quests" | "karma"> & { quests?: string; karma?: number };
+export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin" | "quests" | "karma" | "arena"> & { quests?: string; karma?: number; arena?: string };
 
 export async function saveCharacter(c: CharacterSave) {
   // Written at once when the database is open, so an older save can never land on top of a newer one.
@@ -266,7 +269,7 @@ export async function loadBundles(zone: string, now = Date.now()): Promise<Bundl
 
 export function writeCharacter(d: DB, c: CharacterSave) {
   d.prepare(
-    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, quests = ?, karma = ?, updated_at = datetime('now')
+    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, quests = ?, karma = ?, arena = COALESCE(?, arena), updated_at = datetime('now')
      WHERE account_id = ?`,
-  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.zone, c.corruption, c.x, c.y, c.quests ?? "{}", c.karma ?? 0, c.account_id);
+  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.zone, c.corruption, c.x, c.y, c.quests ?? "{}", c.karma ?? 0, c.arena ?? null, c.account_id);
 }

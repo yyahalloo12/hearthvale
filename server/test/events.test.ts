@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { after, before, test } from "node:test";
 import { SWARM_EXP, WORLD_BOSS } from "../../shared/events";
-import { countItem } from "../../shared/items";
+import { countItem, NIGHT_BONUS } from "../../shared/items";
+import { isNight } from "../../shared/daylight";
 import { Msg, ROOM_OF } from "../../shared/protocol";
 import { ZONE_IDS } from "../../shared/zones";
 import { WorldRoom } from "../src/rooms/WorldRoom";
@@ -59,7 +60,8 @@ test("a swarm brings extra monsters worth more EXP, and they leave when it ends"
   p.exp = 0;
   w.monsterSys.ctl.get(id)!.exp = 100;
   (w as any).playerHitsMonster(a.r.sessionId, p, c, id, 1);
-  assert.equal(p.exp, 100 * SWARM_EXP);
+  // scarecrows give more at night as well
+  assert.equal(p.exp, 100 * SWARM_EXP * (m.kind === "scarecrow" && isNight() ? NIGHT_BONUS : 1));
   // the end: the rest go away
   w.state.eventUntil = Date.now() - 1;
   await until(() => !w.state.eventKind, 2000, "event end");

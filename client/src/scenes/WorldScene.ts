@@ -9,7 +9,7 @@ import { PORTAL_MAX, riftName, RiftInfo, RARITY_COLORS } from "../../../shared/r
 import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
 import { GameMap, isCalm, isWalkable, ZoneId } from "../../../shared/map";
 import { buildZone, ZONE_NAMES } from "../../../shared/zones";
-import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
+import { ArenaData, ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
 import { ENEMY_SKILLS, Job, SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
 import { askEnterHollow, initHud, MapEvent, setCorruption, setDaytime, setEvents, setOnline, setPortrait, setTargetInfo, setZone, skillForKey, startCooldown, updateMe } from "../hud";
@@ -27,6 +27,7 @@ import { initParty, partySessions, setParty } from "../party";
 import { initSettings, onSettings, setting } from "../settings";
 import { initQuests, questTracker, setQuests } from "../quests";
 import { initSkillWindow } from "../skillwin";
+import { initArena, setArena } from "../arena";
 import { heroImage, lookOf, portraitOf } from "../hero";
 import type { Inventory } from "../../../shared/items";
 import { initCharWin, setCharacter, setCharPortrait, setCharPrivate } from "../charwin";
@@ -147,6 +148,7 @@ export class WorldScene extends Phaser.Scene {
     initSettings();
     initQuests();
     initSkillWindow((id) => this.room.send(Msg.LearnSkill, { skill: id }));
+    initArena((a) => this.room.send(Msg.ArenaAct, a), !!this.map.arena);
     bindMinimapZoom();
     initCharWin((slot) => this.room.send(Msg.Unequip, { slot }));
     initWorldMap((x, y) => {
@@ -546,6 +548,7 @@ export class WorldScene extends Phaser.Scene {
       const v = this.views.get(this.room.sessionId);
       if (v) this.floatText(v.headPoint().x, v.headPoint().y - 14, `+${e.amount} EXP`, "#d7b6ff", 13);
     });
+    this.room.onMessage(Msg.Arena, (d: ArenaData) => setArena(d));
     this.room.onMessage(Msg.Private, (d: PrivateData) => {
       const gained = this.gold === null ? 0 : d.gold - this.gold;
       this.gold = d.gold;
@@ -825,7 +828,7 @@ export class WorldScene extends Phaser.Scene {
   /** Another player under the pointer (only where players can fight). */
   private pickPlayer(wx: number, wy: number): string | null {
     // in peaceful maps only a healer can pick friends, so others can still walk past people
-    if (!this.map.pvp && !this.map.border && this.me?.job !== "acolyte") return null;
+    if (!this.map.pvp && !this.map.border && !this.map.arena && this.me?.job !== "acolyte") return null;
     for (const [id, v] of this.views) {
       if (id === this.room.sessionId || (this.room.state as any).players.get(id)?.dead) continue;
       const c = v.center();
@@ -925,7 +928,7 @@ export class WorldScene extends Phaser.Scene {
       if (monsterId) {
         this.setTarget(monsterId);
         // choosing a friend to heal is not an attack
-        if (this.map.pvp || this.map.border || this.monsters.has(monsterId)) this.room.send(Msg.Attack, { id: monsterId });
+        if (this.map.pvp || this.map.border || this.map.arena || this.monsters.has(monsterId)) this.room.send(Msg.Attack, { id: monsterId });
         this.marker.setVisible(false);
         return;
       }

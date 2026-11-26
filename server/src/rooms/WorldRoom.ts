@@ -89,6 +89,7 @@ import {
   wholeNumber,
 } from "../../../shared/market";
 import { GameMap, isCalm, isSafe, isWalkable, ZoneId } from "../../../shared/map";
+import { ArenaRecord, arenaScale, cleanRecord, COUNTDOWN_MS, DUEL_ASK_MS, HONOR, MATCH_MS, pickPair, rankOf, timeoutWinner } from "../../../shared/arena";
 import { buildZone, ZONE_NAMES, zoneId } from "../../../shared/zones";
 import { isNight } from "../../../shared/daylight";
 import { GROVE, LANTERNS } from "../../../shared/mossfen";
@@ -96,7 +97,7 @@ import { canStep, inReach, levelOf, reachableFrom, setRegion } from "../../../sh
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, pointsLeftFor, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
-import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PARTY_BONUS, PARTY_SHARE_RANGE, PartyAction, PrivateData, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../../shared/protocol";
+import { ArenaData, ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PARTY_BONUS, PARTY_SHARE_RANGE, PartyAction, PrivateData, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../../shared/protocol";
 import {
   ATTACK_RANGE,
   attackRange,
@@ -205,6 +206,8 @@ interface PlayerCtl {
   quests: QuestState;
   /** outlaw points (red name above 0) */
   karma: number;
+  /** colosseum honour and results */
+  arena: ArenaRecord;
 }
 
 interface AuthData {
@@ -339,6 +342,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.onMessage(Msg.Chat, (client, msg) => this.handleChat(client, msg));
     this.onMessage(Msg.PartyAct, (client, msg) => this.handleParty(client, msg as PartyAction));
     this.onMessage(Msg.EnterRift, (client, msg) => this.handleEnterRift(client, msg));
+    this.onMessage(Msg.ArenaAct, (client, msg) => this.handleArena(client, msg));
 
     for (const b of this.map.rift ? [] : await loadBundles(this.map.id)) {
       let items: ItemStack[] = [];
@@ -518,6 +522,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       struck: new Set(),
       quests,
       karma: Math.max(0, Number(c.karma) || 0),
+      arena: cleanRecord(safeJson(c.arena)),
     });
     p.outlaw = (Number(c.karma) || 0) > 0;
     p.gm = c.admin === 1;
@@ -563,6 +568,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
 
   /** The character really leaves the world. */
   private async logOut(id: string, p: Player, c: PlayerCtl) {
+    this.arenaDrop(id);
     c.leaving = true;
     await this.save(p, c).catch((e) => console.error("[world] save failed", e));
     this.state.players.delete(id);
@@ -597,6 +603,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private async travel(client: Client, p: Player, c: PlayerCtl, zone: ZoneId, at: Point = { x: -1, y: -1 }, rift?: { roomId: string; info: RiftInfo }) {
     if (c.leaving) return;
     if (c.stall) this.closeStall(c.stall);
+    this.arenaDrop(client.sessionId);
     c.leaving = true;
     const id = client.sessionId;
     c.corruption = 0;
@@ -759,6 +766,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       corruption: p.dead ? 0 : c.corruption,
       quests: JSON.stringify(c.quests),
       karma: c.karma,
+      arena: JSON.stringify(c.arena),
       x: this.map.rift && !p.dead ? this.map.rift.at.x : ok ? tile.x : -1,
       y: this.map.rift && !p.dead ? this.map.rift.at.y : ok ? tile.y : -1,
     };
@@ -829,6 +837,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.tickPortals(now);
     this.tickEvents(now);
     if (this.map.rift) this.tickRift(now);
+    if (this.map.arena) this.tickArena(now);
     if (this.map.id === "mossfen") {
       for (const [key, until] of this.state.lit) if (until <= now && !this.state.fogUntil) this.state.lit.delete(key);
       if (this.state.fogUntil && this.state.fogUntil <= now) this.closeFog();
@@ -2383,12 +2392,224 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.broadcast(Msg.ChatLine, line);
   }
 
+  // ---- the colosseum -----------------------------------------------------------
+
+  /** People waiting for a 1 on 1, by session id. */
+  private arenaQueue = new Map<string, number>();
+  /** Fights going on, one per pit. */
+  private matches: ({ a: string; b: string; startAt: number; endsAt: number; duel: boolean } | null)[] = [];
+  /** challenges waiting for an answer: who was asked -> who asked */
+  private duelAsk = new Map<string, { from: string; at: number }>();
+  /** accepted duels waiting for a free pit */
+  private duelWait: [string, string][] = [];
+  private arenaSentAt = 0;
+
+  private matchOf(id: string): { i: number; m: NonNullable<WorldRoom["matches"][number]> } | null {
+    for (let i = 0; i < this.matches.length; i++) {
+      const m = this.matches[i];
+      if (m && (m.a === id || m.b === id)) return { i, m };
+    }
+    return null;
+  }
+
+  private sidByName(name: string): string | null {
+    let found: string | null = null;
+    const want = name.trim().toLowerCase();
+    this.state.players.forEach((p, id) => {
+      if (p.name.toLowerCase() === want && !p.offline) found = id;
+    });
+    return found;
+  }
+
+  private handleArena(client: Client, msg: unknown) {
+    if (!this.map.arena) return;
+    const pc = this.get(client);
+    if (!pc) return;
+    const id = client.sessionId;
+    const { action, name } = (msg ?? {}) as { action?: string; name?: unknown };
+    const say = (text: string) => client.send(Msg.Notice, { text });
+    if (action === "queue") {
+      if (this.matchOf(id)) return say("คุณกำลังสู้อยู่");
+      this.arenaQueue.set(id, Date.now());
+      say("เข้าคิวดวล 1 ต่อ 1 แล้ว รอจับคู่กับคนเลเวลใกล้เคียง");
+    } else if (action === "unqueue") {
+      this.arenaQueue.delete(id);
+    } else if (action === "duel" && typeof name === "string") {
+      const other = this.sidByName(name);
+      if (!other) return say("ไม่พบผู้เล่นชื่อนี้ในโคลอสเซียม");
+      if (other === id) return say("ท้าดวลตัวเองไม่ได้");
+      if (this.matchOf(other)) return say("คนนั้นกำลังสู้อยู่");
+      this.duelAsk.set(other, { from: id, at: Date.now() });
+      say(`ส่งคำท้าดวลถึง ${this.state.players.get(other)!.name} แล้ว`);
+      this.clientOf(other)?.send(Msg.Notice, { text: `⚔ ${pc.p.name} ท้าคุณดวล! ตอบรับได้ที่หน้าต่างสนามประลอง` });
+    } else if (action === "accept") {
+      const ask = this.duelAsk.get(id);
+      this.duelAsk.delete(id);
+      if (!ask || !this.state.players.has(ask.from)) return say("คำท้านั้นไม่อยู่แล้ว");
+      if (this.matchOf(ask.from) || this.matchOf(id)) return say("มีคนกำลังสู้อยู่ ลองใหม่ทีหลัง");
+      this.arenaQueue.delete(id);
+      this.arenaQueue.delete(ask.from);
+      this.duelWait.push([ask.from, id]);
+    } else if (action === "decline") {
+      const ask = this.duelAsk.get(id);
+      this.duelAsk.delete(id);
+      if (ask) this.clientOf(ask.from)?.send(Msg.Notice, { text: `${pc.p.name} ไม่รับคำท้า` });
+    }
+    this.arenaSentAt = 0;
+  }
+
+  /** Puts two fighters into a free pit, healed, facing each other. */
+  private startMatch(a: string, b: string, duel: boolean): boolean {
+    const pits = this.map.arena!.pits;
+    while (this.matches.length < pits.length) this.matches.push(null);
+    const i = this.matches.findIndex((m) => m === null);
+    if (i < 0) return false;
+    const pit = pits[i];
+    const now = Date.now();
+    for (const [id, spot] of [[a, pit.a], [b, pit.b]] as const) {
+      const p = this.state.players.get(id);
+      const c = this.ctl.get(id);
+      if (!p || !c) return false;
+      this.arenaQueue.delete(id);
+      this.teleportInside(id, p, c, spot.x, spot.y);
+      p.hp = p.maxHp;
+      p.mp = p.maxMp;
+      c.stunUntil = 0;
+      c.slowUntil = c.markUntil = 0;
+      p.slowed = p.marked = false;
+    }
+    this.matches[i] = { a, b, startAt: now + COUNTDOWN_MS, endsAt: now + COUNTDOWN_MS + MATCH_MS, duel };
+    const na = this.state.players.get(a)!.name;
+    const nb = this.state.players.get(b)!.name;
+    this.broadcastSystem(`⚔ ${na} ปะทะ ${nb} ที่ลานประลองที่ ${i + 1}!`);
+    return true;
+  }
+
+  private teleportInside(id: string, p: Player, c: PlayerCtl, x: number, y: number) {
+    this.stopInteract(this.clientOf(id), c);
+    c.path = [];
+    c.targetId = null;
+    c.pendingSkill = null;
+    c.charge = null;
+    p.x = x;
+    p.y = y;
+    p.moving = false;
+  }
+
+  /** The fight is over: honour for both, everyone healed and back outside the pit. */
+  private endMatch(i: number, winner: string | null, why: string) {
+    const m = this.matches[i];
+    if (!m) return;
+    this.matches[i] = null;
+    const pit = this.map.arena!.pits[i];
+    const names: string[] = [];
+    for (const id of [m.a, m.b]) {
+      const p = this.state.players.get(id);
+      const c = this.ctl.get(id);
+      if (!p || !c) continue;
+      names.push(p.name);
+      const r = c.arena;
+      if (!winner) {
+        r.draws++;
+        r.honor += HONOR.draw;
+      } else if (id === winner) {
+        r.wins++;
+        r.honor += HONOR.win;
+      } else {
+        r.losses++;
+        r.honor += HONOR.loss;
+      }
+      p.dead = false;
+      p.hp = p.maxHp;
+      p.mp = p.maxMp;
+      c.stunUntil = 0;
+      if (!c.leaving) this.teleportInside(id, p, c, pit.out.x + (id === m.a ? -1 : 1), pit.out.y);
+      c.shieldUntil = this.clock.currentTime + 3000;
+      this.save(p, c).catch((e) => console.error("[arena] save failed", e));
+    }
+    const w = winner ? this.state.players.get(winner)?.name : null;
+    this.broadcastSystem(w ? `🏆 ${w} ชนะ${why} (+${HONOR.win} เกียรติยศ)` : `🤝 ${names.join(" กับ ")} เสมอกัน`);
+    this.arenaSentAt = 0;
+  }
+
+  /** Someone leaves the colosseum: out of the queue, and a fight they were in is lost. */
+  private arenaDrop(id: string) {
+    if (!this.map.arena) return;
+    this.arenaQueue.delete(id);
+    this.duelAsk.delete(id);
+    this.duelWait = this.duelWait.filter(([a, b]) => a !== id && b !== id);
+    const f = this.matchOf(id);
+    if (f) this.endMatch(f.i, f.m.a === id ? f.m.b : f.m.a, " เพราะอีกฝ่ายออกจากสนาม");
+  }
+
+  private tickArena(now: number) {
+    // accepted duels first, then the queue
+    while (this.duelWait.length && this.matches.filter(Boolean).length < this.map.arena!.pits.length) {
+      const [a, b] = this.duelWait.shift()!;
+      if (this.state.players.has(a) && this.state.players.has(b) && !this.matchOf(a) && !this.matchOf(b)) this.startMatch(a, b, true);
+    }
+    for (const [id, ask] of this.duelAsk) if (now - ask.at > DUEL_ASK_MS || !this.state.players.has(id)) this.duelAsk.delete(id);
+    for (const id of this.arenaQueue.keys()) if (!this.state.players.has(id)) this.arenaQueue.delete(id);
+    const pair = pickPair(
+      [...this.arenaQueue].map(([id, since]) => ({ id, since, level: this.state.players.get(id)!.level })),
+      now,
+    );
+    if (pair) this.startMatch(pair[0], pair[1], false);
+    // time runs out: more health (in %) wins
+    this.matches.forEach((m, i) => {
+      if (!m || now < m.endsAt) return;
+      const pa = this.state.players.get(m.a);
+      const pb = this.state.players.get(m.b);
+      const w = timeoutWinner(pa ? pa.hp / pa.maxHp : 0, pb ? pb.hp / pb.maxHp : 0);
+      this.endMatch(i, w === "draw" ? null : w === "a" ? m.a : m.b, " เมื่อหมดเวลา");
+    });
+    if (now - this.arenaSentAt > 1000) {
+      this.arenaSentAt = now;
+      this.sendArena();
+    }
+  }
+
+  private sendArena() {
+    const fights = this.matches.flatMap((m, pit) => (m ? [{ a: this.state.players.get(m.a)?.name ?? "?", b: this.state.players.get(m.b)?.name ?? "?", pit }] : []));
+    const top = [...this.ctl.entries()]
+      .map(([id, c]) => ({ name: this.state.players.get(id)?.name ?? "", honor: c.arena.honor, wins: c.arena.wins }))
+      .filter((t) => t.name)
+      .sort((x, y) => y.honor - x.honor)
+      .slice(0, 5);
+    for (const client of this.clients) {
+      const id = client.sessionId;
+      const c = this.ctl.get(id);
+      if (!c) continue;
+      const f = this.matchOf(id);
+      const ask = this.duelAsk.get(id);
+      const mine = [...this.duelAsk].find(([, a]) => a.from === id);
+      const data: ArenaData = {
+        record: c.arena,
+        rank: rankOf(c.arena.honor),
+        queued: this.arenaQueue.has(id),
+        queueSize: this.arenaQueue.size,
+        invite: ask ? (this.state.players.get(ask.from)?.name ?? null) : null,
+        asked: mine ? (this.state.players.get(mine[0])?.name ?? null) : null,
+        match: f ? { opponent: this.state.players.get(f.m.a === id ? f.m.b : f.m.a)?.name ?? "?", startAt: f.m.startAt, endsAt: f.m.endsAt, pit: f.i } : null,
+        fights,
+        top,
+      };
+      client.send(Msg.Arena, data);
+    }
+  }
+
   // ---- combat -------------------------------------------------------------
 
   /** A monster, or (in the Hollow) another player that may be attacked. */
   private targetOf(me: string, id: string): { x: number; y: number } | undefined {
     const m = this.state.monsters.get(id);
     if (m) return m;
+    if (this.map.arena) {
+      // in the colosseum only your opponent, once the countdown is over
+      const f = this.matchOf(me);
+      const other = f && (f.m.a === me ? f.m.b : f.m.a);
+      return f && other === id && Date.now() >= f.m.startAt ? this.state.players.get(id) : undefined;
+    }
     if ((!this.map.pvp && !this.map.border) || id === me) return undefined;
     const p = this.state.players.get(id);
     const c = this.ctl.get(id);
@@ -2528,6 +2749,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const crit = Math.random() < this.critChance(c, targetId);
     let dmg = hitDamage(this.statsOf(p, c).atk, this.statsOf(t, tc).def, this.boosted(p, c, power, skill), Math.random(), crit, defIgnore);
     if (crit) dmg = Math.max(1, Math.round(dmg * (1 + c.mods.critDmgPct / 100)));
+    if (this.map.arena) dmg = Math.max(1, Math.round(dmg * arenaScale(p.maxHp, t.maxHp)));
     dmg = this.taken(t, tc, dmg * PVP_DAMAGE * (tc.markUntil > now ? 1 + tc.mark : 1), now);
     this.lifesteal(p, c, Math.min(dmg, t.hp));
     t.hp = Math.max(0, t.hp - dmg);
@@ -2542,6 +2764,9 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         c.karma += 240;
         this.broadcastSystem(`☠ ${p.name} สังหาร ${t.name} ชื่อแดงยิ่งเข้ม`);
       }
+      // in the colosseum nobody dies: the fight just ends
+      const f = this.map.arena ? this.matchOf(id) : null;
+      if (f) return this.endMatch(f.i, id, "");
       this.playerDies(targetId, t, tc, p.name);
     }
   }
@@ -3099,4 +3324,13 @@ function cleanRift(v: unknown): RiftInfo {
     at,
     dungeon: !!r.dungeon,
   };
+}
+
+/** JSON from the database, or null when it is broken. */
+function safeJson(s: string | undefined): unknown {
+  try {
+    return JSON.parse(s ?? "{}");
+  } catch {
+    return null;
+  }
 }

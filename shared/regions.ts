@@ -271,6 +271,9 @@ export function buildAldermere(): GameMap {
   addBig(map, { x: c, y: c, w: 2, h: 2, frame: "fountain" });
   // a clock tower looking over the square
   addBig(map, { x: c + 7, y: c - 9, w: 2, h: 2, frame: "clocktower" });
+  // the colosseum by the south street, its gate facing the road
+  addBig(map, { x: c - 7, y: c + 12, w: 5, h: 5, frame: "colosseum" });
+  map.exits.push({ x: c - 2, y: c + 14, to: "arena" as ZoneId, at: { x: 22, y: 39 }, label: "โคลอสเซียม (สนามประลอง ไม่เสียของ)" });
   // the auction board, the storage and two smiths stand on the square
   map.props[c - 4][c + 6] = Prop.Board;
   map.props[c + 6][c - 4] = Prop.Chest;

@@ -225,3 +225,48 @@ test("border lands: the first to strike turns red, red names lose everything and
   assert.equal((c.w as any).nearestPlayer(pc.x, pc.y, 5, true), null);
   await c.r.leave();
 });
+
+test("colosseum: queue, fight in a pit, nobody loses anything, honour for both", async () => {
+  const a = await inZone("ArenaA", "arena" as never, 40);
+  const b = await inZone("ArenaB", "arena" as never, 12);
+  const w = a.w;
+  const ca = w.ctl.get(a.r.sessionId)!;
+  const cb = w.ctl.get(b.r.sessionId)!;
+  const pa = w.state.players.get(a.r.sessionId)!;
+  const pb = w.state.players.get(b.r.sessionId)!;
+  for (const c of [ca, cb]) c.shieldUntil = 0;
+  // outside a match nobody can be hit
+  assert.equal((w as any).targetOf(a.r.sessionId, b.r.sessionId), undefined);
+  cb.inv.bag.push({ uid: "keep1", id: "ore_1", qty: 3 });
+  a.r.send(Msg.ArenaAct, { action: "queue" });
+  b.r.send(Msg.ArenaAct, { action: "queue" });
+  // levels 40 and 12 are far apart: they only meet after a long wait
+  await wait(200);
+  (w as any).arenaQueue.set(a.r.sessionId, Date.now() - 60_000);
+  (w as any).arenaQueue.set(b.r.sessionId, Date.now() - 60_000);
+  (w as any).tickArena(Date.now());
+  const f = (w as any).matchOf(a.r.sessionId);
+  assert.ok(f, "matched");
+  assert.equal((w as any).targetOf(a.r.sessionId, b.r.sessionId), undefined, "not before the countdown");
+  f.m.startAt = 0;
+  assert.ok((w as any).targetOf(a.r.sessionId, b.r.sessionId), "now they may fight");
+  // the strong one hits for a share of health, not a one-shot
+  pb.hp = pb.maxHp;
+  (w as any).playerHitsPlayer(a.r.sessionId, pa, ca, b.r.sessionId, 1);
+  assert.ok(pb.hp > 0 && pb.hp < pb.maxHp, `hit for ${pb.maxHp - pb.hp} of ${pb.maxHp}`);
+  // the finishing blow ends the fight instead of killing
+  const expA = pa.exp;
+  const expB = pb.exp;
+  pb.hp = 1;
+  (w as any).playerHitsPlayer(a.r.sessionId, pa, ca, b.r.sessionId, 5);
+  assert.equal((w as any).matchOf(a.r.sessionId), null);
+  assert.equal(pb.dead, false);
+  assert.equal(pb.hp, pb.maxHp);
+  assert.equal(pb.exp, expB);
+  assert.equal(pa.exp, expA);
+  assert.ok(cb.inv.bag.some((s: any) => s.uid === "keep1"), "the loser keeps everything");
+  assert.equal(ca.arena.wins, 1);
+  assert.equal(cb.arena.losses, 1);
+  assert.ok(ca.arena.honor > cb.arena.honor && cb.arena.honor > 0);
+  await Promise.all([a.r.leave(), b.r.leave()]);
+});

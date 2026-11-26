@@ -67,6 +67,10 @@ export const Msg = {
   Respawn: "respawn",
   /** client -> server: say something in chat */
   Chat: "chat",
+  /** client -> server (colosseum): queue, duel and answers {action, name?} */
+  ArenaAct: "arena_act",
+  /** server -> client (colosseum): your state there (ArenaData) */
+  Arena: "arena",
   /** client -> server: walk to a mist portal and go in {id} */
   EnterRift: "enter_rift",
   /** client -> server: party things {action: invite|accept|decline|leave|kick, name?} */
@@ -128,7 +132,30 @@ export const ROOM_OF: Record<ZoneId, string> = {
   sunreach: "sunreach",
   thornmarsh: "thornmarsh",
   greywater: "greywater",
+  arena: "arena",
 };
+
+/** The colosseum, as one player sees it. */
+export interface ArenaData {
+  record: import("./arena").ArenaRecord;
+  rank: string;
+  queued: boolean;
+  queueSize: number;
+  /** someone who challenged you, waiting for an answer */
+  invite: string | null;
+  /** your challenge, waiting for the other to answer */
+  asked: string | null;
+  match: { opponent: string; startAt: number; endsAt: number; pit: number } | null;
+  /** the fights going on now, for those who watch */
+  fights: { a: string; b: string; pit: number }[];
+  /** the best fighters in this hall */
+  top: { name: string; honor: number; wins: number }[];
+}
+/** client -> server, in the colosseum: { action: "queue" | "unqueue" | "duel" | "accept" | "decline", name? } */
+export interface ArenaAct {
+  action: "queue" | "unqueue" | "duel" | "accept" | "decline";
+  name?: string;
+}
 /** Join error text when the character is in another map: this plus the zone id. */
 export const ZONE_ERROR = "ZONE:";
 
