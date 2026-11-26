@@ -40,7 +40,7 @@ export enum Prop {
   Treasure = 14,
 }
 
-export type ZoneId = "brindle" | "mossfen" | "hollow";
+export type ZoneId = "brindle" | "mossfen" | "hollow" | "rift";
 
 /** A spot that leads to another map when you walk onto it. */
 export interface MapExit {
@@ -76,6 +76,14 @@ export interface GameMap {
   springs: { x: number; y: number; r: number }[];
   /** quiet places for gathering: monsters never come in or chase anyone inside */
   quiet: QuietZone[];
+  /** set inside a mist portal */
+  rift?: import("./rift").RiftInfo;
+}
+
+/** Which map's colours and trees to use. */
+export function lookOf(map: GameMap): "brindle" | "mossfen" | "hollow" {
+  if (map.rift) return map.rift.dark ? "hollow" : map.rift.origin;
+  return map.id === "rift" ? "brindle" : map.id;
 }
 
 export interface QuietZone {

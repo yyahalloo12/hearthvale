@@ -16,6 +16,7 @@ before(async () => {
   const httpServer = http.createServer();
   gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) });
   for (const zone of ZONE_IDS) gameServer.define(ROOM_OF[zone], WorldRoom, { zone });
+  gameServer.define(ROOM_OF.rift, WorldRoom, { zone: "rift" });
   await gameServer.listen(PORT);
 });
 after(async () => {

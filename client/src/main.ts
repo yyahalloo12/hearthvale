@@ -101,7 +101,7 @@ function startGame(first: Room, zone: ZoneId) {
     const old = room;
     const opts: TicketOptions = { ticket: e.ticket };
     try {
-      room = await client.joinOrCreate(ROOM_OF[e.zone], opts);
+      room = e.roomId ? await client.joinById(e.roomId, opts) : await client.joinOrCreate(ROOM_OF[e.zone], opts);
     } catch {
       addChatLine({ from: "", name: "", text: "เดินทางไม่สำเร็จ รีเฟรชหน้านี้แล้วเข้าใหม่" }, "notice");
       return;
@@ -109,7 +109,7 @@ function startGame(first: Room, zone: ZoneId) {
     old.leave().catch(() => {});
     game.scene.remove(`world${n}`);
     n++;
-    game.scene.add(`world${n}`, WorldScene, true, { room, zone: e.zone, travel });
+    game.scene.add(`world${n}`, WorldScene, true, { room, zone: e.zone, rift: e.rift, travel });
   };
 
   const game = new Phaser.Game({

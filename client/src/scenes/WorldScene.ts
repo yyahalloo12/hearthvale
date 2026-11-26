@@ -4,6 +4,7 @@ import { GLOW_AT } from "../../../shared/hollow";
 import { findStation, ITEMS, STATION_RANGE } from "../../../shared/items";
 import { darkness, isNight, untilChange } from "../../../shared/daylight";
 import { setRegion } from "../../../shared/terrain";
+import { PORTAL_MAX, riftName, RiftInfo, RARITY_COLORS } from "../../../shared/rift";
 import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
 import { GameMap, isCalm, isWalkable, ZoneId } from "../../../shared/map";
 import { buildZone, ZONE_NAMES } from "../../../shared/zones";
@@ -58,9 +59,13 @@ export class WorldScene extends Phaser.Scene {
     super(""); // the key comes from scene.add(), so each map visit can have its own
   }
 
-  init(data: { room: Room; zone: ZoneId; travel: (e: TravelEvent) => void }) {
+  private rift?: RiftInfo;
+  private portals = new Map<string, Phaser.GameObjects.Container>();
+
+  init(data: { room: Room; zone: ZoneId; rift?: RiftInfo; travel: (e: TravelEvent) => void }) {
     this.room = data.room;
     this.zone = data.zone;
+    this.rift = data.rift;
     this.travel = data.travel;
   }
 
@@ -71,7 +76,8 @@ export class WorldScene extends Phaser.Scene {
   create() {
     makeTextures(this);
     makeMonsterTextures(this);
-    this.map = buildZone(this.zone);
+    this.map = buildZone(this.zone, this.rift);
+    this.portals = new Map();
     setIsoMap(this.map);
     const st = this.room.state as any;
     this.land = new Land(
@@ -90,7 +96,7 @@ export class WorldScene extends Phaser.Scene {
     this.landTimer = -1000;
 
     this.marker = this.add.image(0, 0, "click-marker").setVisible(false).setDepth(-1);
-    this.cameras.main.setBackgroundColor(this.map.pvp ? "#211d2a" : this.zone === "mossfen" ? "#1f4a36" : "#2c5a34");
+    this.cameras.main.setBackgroundColor(this.map.rift ? (this.map.rift.dark ? "#0c0910" : "#2a3f63") : this.map.pvp ? "#211d2a" : this.zone === "mossfen" ? "#1f4a36" : "#2c5a34");
     setMinimap(this.map);
     this.cameras.main.setRoundPixels(true);
 
@@ -100,7 +106,7 @@ export class WorldScene extends Phaser.Scene {
       changeJob: (job) => this.room.send(Msg.ChangeJob, { job }),
       respawn: () => this.room.send(Msg.Respawn),
     });
-    setZone(ZONE_NAMES[this.zone], this.map.pvp);
+    setZone(this.map.rift ? this.map.name : ZONE_NAMES[this.zone], this.map.id === "hollow");
     initPassiveTree({
       learn: (id) => this.room.send(Msg.LearnPassive, { id }),
       refund: (id) => this.room.send(Msg.RefundPassive, { id }),
@@ -265,6 +271,20 @@ export class WorldScene extends Phaser.Scene {
       list.push({ icon: "🚪", kind: "boss", title: "ประตูทางออกสีทอง", text: `ย้ายที่ใน ${this.clock(st.gatesUntil - Date.now())}` });
       list.push({ icon: "🌈", kind: "epic", title: "บ่อสี 3 แห่ง", text: "ล้างการกัดกร่อน แต่ทุกคนเห็นคุณบนแผนที่" });
     }
+    if (this.map.rift) {
+      const r = this.map.rift;
+      list.length = 0;
+      list.push(st.riftCleared
+        ? { icon: "🎁", kind: "boss", title: "ปราบครบแล้ว!", text: "เปิดหีบรางวัลกลางเกาะ (คนละครั้ง) แล้วเดินกลับทางเข้า" }
+        : { icon: "⚔️", kind: r.dark ? "dark" : "epic", title: `ระลอก ${st.riftWave}/${st.riftWaves}`, text: `เหลือมอนสเตอร์ ${st.monsters?.size ?? 0} ตัว` });
+      list.push({ icon: "⏳", kind: "night", title: "พอร์ทัลปิดใน " + this.clock(st.riftEnds - Date.now()), text: "หมดเวลาแล้วจะถูกส่งกลับออกไป" });
+      if (r.dark) list.push({ icon: "☠", kind: "dark", title: "พอร์ทัลดำ", text: "ผู้เล่นนอกปาร์ตี้ตีกันได้ ตายแล้วของตกหมด" });
+    } else
+      st.portals?.forEach((p: any) => {
+        const me = this.me;
+        const far = me ? Math.round(Math.hypot(p.x - me.x, p.y - me.y)) : 0;
+        list.push({ icon: p.dark ? "☠" : "🌀", kind: p.dark ? "dark" : ["sun", "rare", "epic", "boss"][p.rarity], title: riftName(p), text: `อีก ${far} ช่อง · ปิดใน ${this.clock(p.until - Date.now())} · ${p.inside}/${PORTAL_MAX} คน` });
+      });
     void CRACK_WARN_MS;
     setEvents(list);
   }
@@ -296,11 +316,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private showDaylight() {
-    const dark = this.map.pvp ? 0 : darkness();
+    const dark = this.map.pvp || this.map.rift ? 0 : darkness();
     document.getElementById("night")!.style.opacity = String(dark * 0.5);
     this.showEvents();
     this.showTarget();
-    if (this.map.pvp) return setDaytime("");
+    if (this.map.pvp || this.map.rift) return setDaytime("");
     setDaytime(`${isNight() ? "🌙" : "☀️"} ${this.clock(untilChange())}`);
     const want = dark > 0.5 ? 14 : 0;
     const view = this.cameras.main.worldView;
@@ -417,6 +437,11 @@ export class WorldScene extends Phaser.Scene {
       this.bundles.delete(id);
     });
 
+    $(state).portals.onAdd((p: any, id: string) => this.addPortal(id, p));
+    $(state).portals.onRemove((_p: any, id: string) => {
+      this.portals.get(id)?.destroy();
+      this.portals.delete(id);
+    });
     $(state).stalls.onAdd((s: any, id: string) => this.addStall(id, s));
     $(state).stalls.onRemove((_s: any, id: string) => {
       this.stalls.get(id)?.root.destroy();
@@ -738,6 +763,29 @@ export class WorldScene extends Phaser.Scene {
     return null;
   }
 
+  /** A swirling portal with its rarity and how many went in. */
+  private addPortal(id: string, p: any) {
+    const at = place(p.x, p.y);
+    const color = p.dark ? 0x3a1c4a : RARITY_COLORS[p.rarity];
+    const glow = this.add.image(0, -30, "sparkle").setTint(p.dark ? 0xff3a6a : color).setScale(5).setAlpha(0.45).setBlendMode(Phaser.BlendModes.ADD);
+    const img = this.scenery(0, 0, "portal").setTint(p.dark ? 0x6a4a7a : color);
+    const label = this.add
+      .text(0, -92, "", { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: p.dark ? "#ff9ab0" : "#ffffff", stroke: "#000", strokeThickness: 3, align: "center" })
+      .setOrigin(0.5, 1);
+    const box = this.add.container(at.x, at.y, [glow, img, label]).setDepth(at.depth);
+    const show = () => label.setText(`${riftName(p)}\n${p.inside}/${PORTAL_MAX} คน`);
+    show();
+    getStateCallbacks(this.room)(p).listen("inside", show);
+    this.tweens.add({ targets: glow, scale: 6, alpha: 0.25, duration: 900, yoyo: true, repeat: -1 });
+    this.tweens.add({ targets: img, scaleX: img.scaleX * 1.06, duration: 1200, yoyo: true, repeat: -1 });
+    this.portals.set(id, box);
+  }
+
+  private pickPortal(wx: number, wy: number): string | null {
+    for (const [id, b] of this.portals) if (Math.abs(wx - b.x) < 34 && wy < b.y + 12 && wy > b.y - 80) return id;
+    return null;
+  }
+
   private pickBundle(wx: number, wy: number): string | null {
     for (const [id, b] of this.bundles) if (Math.abs(wx - b.x) < 20 && wy < b.y + 10 && wy > b.y - 32) return id;
     return null;
@@ -788,6 +836,12 @@ export class WorldScene extends Phaser.Scene {
       if (stall) {
         this.setTarget(null);
         this.room.send(Msg.StallVisit, { id: stall });
+        return;
+      }
+      const portal = this.pickPortal(pointer.worldX, pointer.worldY);
+      if (portal) {
+        this.setTarget(null);
+        this.room.send(Msg.EnterRift, { id: portal });
         return;
       }
       const bundle = this.pickBundle(pointer.worldX, pointer.worldY);
@@ -858,7 +912,7 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.mapTimer > 200) {
       this.mapTimer = time;
       drawMinimap(this.room.state, this.room.sessionId, partySessions());
-      if (this.map.pvp && this.me) setCorruption(this.me.corruption, (this.room.state as any).gatesUntil);
+      if (this.map.id === "hollow" && this.me) setCorruption(this.me.corruption, (this.room.state as any).gatesUntil);
     }
     if (this.marker.visible) this.marker.setAlpha(0.6 + Math.sin(time / 120) * 0.4);
   }

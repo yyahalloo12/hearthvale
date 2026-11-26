@@ -80,7 +80,25 @@ export class Stall extends Schema {
   @type("string") helm = "";
 }
 
+/** A mist (or black) portal standing in an open map. */
+export class Portal extends Schema {
+  @type("uint8") x = 0;
+  @type("uint8") y = 0;
+  @type("uint8") rarity = 0;
+  @type("boolean") dark = false;
+  /** closes at this time (epoch ms) */
+  @type("float64") until = 0;
+  /** how many have gone in (max 7) */
+  @type("uint8") inside = 0;
+}
+
 export class WorldState extends Schema {
+  @type({ map: Portal }) portals = new MapSchema<Portal>();
+  /** inside a portal: which wave, how many, when it closes, and whether all are beaten */
+  @type("uint8") riftWave = 0;
+  @type("uint8") riftWaves = 0;
+  @type("float64") riftEnds = 0;
+  @type("boolean") riftCleared = false;
   @type("string") mapName = "";
   /** regions of the map that are closed now (fog, fallen ground) */
   @type({ map: "boolean" }) closed = new MapSchema<boolean>();

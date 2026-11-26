@@ -65,6 +65,8 @@ export const Msg = {
   Respawn: "respawn",
   /** client -> server: say something in chat */
   Chat: "chat",
+  /** client -> server: walk to a mist portal and go in {id} */
+  EnterRift: "enter_rift",
   /** client -> server: party things {action: invite|accept|decline|leave|kick, name?} */
   PartyAct: "party_act",
   /** server -> client: your party now (PartyData) */
@@ -114,13 +116,16 @@ export interface TicketOptions {
 }
 
 /** Room name of each map. */
-export const ROOM_OF: Record<ZoneId, string> = { brindle: "world", mossfen: "mossfen", hollow: "hollow" };
+export const ROOM_OF: Record<ZoneId, string> = { brindle: "world", mossfen: "mossfen", hollow: "hollow", rift: "rift" };
 /** Join error text when the character is in another map: this plus the zone id. */
 export const ZONE_ERROR = "ZONE:";
 
 export interface TravelEvent {
   zone: ZoneId;
   ticket: string;
+  /** a mist portal's own room, joined by id */
+  roomId?: string;
+  rift?: import("./rift").RiftInfo;
 }
 
 export interface MoveRequest {

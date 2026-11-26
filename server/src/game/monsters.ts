@@ -15,8 +15,12 @@ export interface SpawnDef {
   radius: number;
   count: number;
   respawnMs: number;
+  /** fixed level instead of the kind's usual range */
+  level?: number;
+  /** attacks anyone this close, whatever the kind usually does */
+  aggro?: number;
 }
-export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, mossfen: mossfenSpawnsJson, hollow: hollowSpawnsJson };
+export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, mossfen: mossfenSpawnsJson, hollow: hollowSpawnsJson, rift: [] };
 
 type AIState = "idle" | "chase" | "return";
 
@@ -77,7 +81,7 @@ export class MonsterSystem {
     // a game master may call monsters into the village; normal ones stay out
     const at = this.randomTileNear(spawn, spawn.radius, !Number.isFinite(spawn.respawnMs));
     if (!at) return;
-    const level = def.level[0] + Math.floor(Math.random() * (def.level[1] - def.level[0] + 1));
+    const level = spawn.level ?? def.level[0] + Math.floor(Math.random() * (def.level[1] - def.level[0] + 1));
     const st = monsterStats(def, level);
     const m = new Monster();
     m.kind = spawn.kind;
@@ -110,6 +114,11 @@ export class MonsterSystem {
       exp: st.exp,
       lastHitBy: null,
     });
+  }
+
+  /** A wave inside a mist portal: they never come back, and they hunt. */
+  wave(kind: string, count: number, x: number, y: number, radius: number, level: number) {
+    for (let i = 0; i < count; i++) this.spawnOne({ kind, x, y, radius, count: 1, respawnMs: Infinity, level, aggro: 14 });
   }
 
   /** Game master: monsters that do not come back when killed. Returns how many appeared. */
@@ -243,8 +252,9 @@ export class MonsterSystem {
       const speed = c.def.speed * (slowed ? 1 - c.slow : 1);
 
       if (c.state === "idle") {
-        if (c.def.aggroRange > 0) {
-          const pid = this.host.nearestPlayer(m.x, m.y, c.def.aggroRange);
+        const aggro = c.spawn.aggro ?? c.def.aggroRange;
+        if (aggro > 0) {
+          const pid = this.host.nearestPlayer(m.x, m.y, aggro);
           if (pid) {
             c.state = "chase";
             c.targetId = pid;

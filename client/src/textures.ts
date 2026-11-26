@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { TILE_H, TILE_W } from "../../shared/constants";
-import { GameMap, Prop, Tile } from "../../shared/map";
+import { GameMap, lookOf, Prop, Tile } from "../../shared/map";
 
 /**
  * The ground colours (drawn with code) and which Blender-rendered scenery
@@ -105,7 +105,7 @@ export function hash(x: number, y: number, salt = 0): number {
 const pick = (x: number, y: number, n: number, salt: number) => Math.floor(hash(x, y, salt) * n);
 
 export function groundKey(t: Tile, x: number, y: number, map?: GameMap): string {
-  if (map?.id === "mossfen") {
+  if (map && lookOf(map) === "mossfen") {
     if (t === Tile.Path) return "t-trail";
     if (t === Tile.Water) return "t-pool";
     if (t === Tile.Flowers) return "t-fern";
@@ -175,11 +175,11 @@ export function groundDetail(t: Tile, x: number, y: number): string | null {
 export function propFrame(map: GameMap, x: number, y: number, rockItem?: string): string | null {
   switch (map.props[y][x]) {
     case Prop.Tree:
-      return map.pvp ? `dead${pick(x, y, 2, 4)}` : map.id === "mossfen" ? `moss${pick(x, y, 3, 4)}` : `tree${pick(x, y, 3, 4)}`;
+      return map.pvp ? `dead${pick(x, y, 2, 4)}` : lookOf(map) === "mossfen" ? `moss${pick(x, y, 3, 4)}` : `tree${pick(x, y, 3, 4)}`;
     case Prop.Rock:
       return `rock-${rockItem ?? "ore_1"}`;
     case Prop.Bush:
-      return `${map.id === "mossfen" ? "shroom" : "bush"}${pick(x, y, 2, 4)}`;
+      return `${lookOf(map) === "mossfen" ? "shroom" : "bush"}${pick(x, y, 2, 4)}`;
     case Prop.Ruin:
       return `ruin${pick(x, y, 2, 4)}`;
     case Prop.Well:

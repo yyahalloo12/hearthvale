@@ -1,5 +1,6 @@
 import { GLOW_AT } from "../../shared/hollow";
-import { GameMap, Prop, Tile } from "../../shared/map";
+import { GameMap, lookOf, Prop, Tile } from "../../shared/map";
+import { RARITY_COLORS } from "../../shared/rift";
 
 /** Small map in the corner. In the Hollow it also shows the exits and anyone who glows. */
 
@@ -34,7 +35,7 @@ export function setMinimap(map: GameMap) {
     for (let x = 0; x < map.width; x++) {
       const prop = map.props[y][x];
       g.fillStyle = COLORS[map.tiles[y][x]] ?? "#000";
-      if (prop === Prop.Tree) g.fillStyle = map.id === "hollow" ? "#4b4654" : map.id === "mossfen" ? "#2c6a46" : "#2f8a3e";
+      if (prop === Prop.Tree) g.fillStyle = lookOf(map) === "hollow" ? "#4b4654" : lookOf(map) === "mossfen" ? "#2c6a46" : "#2f8a3e";
       else if (prop === Prop.House) g.fillStyle = "#c8453a";
       else if (prop === Prop.Ruin) g.fillStyle = "#38333f";
       else if (prop === Prop.Anvil || prop === Prop.Chest || prop === Prop.Board) g.fillStyle = "#6b4226";
@@ -104,6 +105,7 @@ export function drawMinimap(state: any, myId: string, friends: Set<string> = new
   state.closed?.forEach((_v: boolean, id: string) => tiles(id, current!.pvp ? "#0d0b12" : "#e6f2ea"));
   for (const e of current.exits) dot(e, "#b8f0b0", 4);
   state.gates?.forEach((p: Dot) => dot(p, "#ffd23a", 5));
+  state.portals?.forEach((p: any) => dot(p, p.dark ? "#1a1022" : "#" + RARITY_COLORS[p.rarity].toString(16).padStart(6, "0"), 6));
   state.players?.forEach((p: any, id: string) => {
     if (id !== myId && (p.corruption >= GLOW_AT || p.inSpring) && !p.dead) dot(p, "#ff5a5a", 4);
   });

@@ -1,4 +1,5 @@
-import { Client, Room, ServerError } from "@colyseus/core";
+import { Client, matchMaker, Room, ServerError } from "@colyseus/core";
+import { buildRift, DARK_CHANCE, OpenZone, PORTAL_EVERY_MS, PORTAL_MAX, PORTAL_OPEN_MS, PORTALS_AT_ONCE, RARITY_NAMES, RIFT_MS, riftName, RiftInfo, riftRewards, riftWaves, rollRarity } from "../../../shared/rift";
 import {
   AUTOSAVE_MS,
   CHAT_COOLDOWN_MS,
@@ -127,7 +128,7 @@ import { dist, faceTowards, planFrom, stepAlong } from "../game/movement";
 import { freeLock, holdsLock, Lock, makeTicket, takeLock, useTicket } from "../game/sessions";
 import * as party from "../game/parties";
 import { PartyError } from "../game/parties";
-import { Bundle, Gate, Player, Stall, WorldState } from "./schema";
+import { Bundle, Gate, Player, Portal, Stall, WorldState } from "./schema";
 
 export { facingFor } from "../game/movement";
 
@@ -183,7 +184,7 @@ interface PlayerCtl {
   /** plain numbers from gear */
   gear: FlatStats;
   /** the rock, tree or station being walked to or used */
-  interact: { x: number; y: number; res: Resource | null; station: StationKind | null; bundle: string | null; stall: string | null; doneAt: number } | null;
+  interact: { x: number; y: number; res: Resource | null; station: StationKind | null; bundle: string | null; stall: string | null; portal?: string; doneAt: number } | null;
   /** id of our open stall: we sit and cannot walk */
   stall: string | null;
   /** monsters already hit once (for the "first strike" keystone) */
@@ -220,15 +221,34 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private stalls = new Map<string, market.StallRow>();
   /** used-up rocks and trees: "x,y" -> when they come back */
   private depletedUntil = new Map<string, number>();
+  /** open maps: the mist portals standing now */
+  private portalCtl = new Map<string, { info: RiftInfo; roomId: string | null; making: Promise<string> | null; entered: Set<number> }>();
+  private nextPortalAt = 0;
+  private portalSeq = 1;
+  /** inside a portal: when the next wave comes */
+  private nextWaveAt = 0;
+  private get hollow() {
+    return this.map.id === "hollow";
+  }
+  /** what a travel ticket into this room is made out to */
+  private get ticketZone() {
+    return this.map.rift ? `rift:${this.roomId}` : this.map.id;
+  }
 
-  async onCreate(options: { zone?: ZoneId }) {
-    this.map = buildZone(zoneId(options?.zone));
+  async onCreate(options: { zone?: ZoneId; rift?: RiftInfo }) {
+    this.map = options?.zone === "rift" ? buildRift(cleanRift(options.rift)) : buildZone(zoneId(options?.zone));
     this.setState(new WorldState());
     this.state.mapName = this.map.name;
     this.reach = reachableFrom(this.map, this.map.spawn);
     for (const id of Object.keys(this.map.regions)) if (this.map.regions[id].some((k) => this.map.closed.has(k))) this.state.closed.set(id, true);
     this.crackAt = Date.now() + CRACK_EVERY_MS;
-    this.autoDispose = false; // the world stays alive (monsters keep living) with nobody online
+    this.autoDispose = !!this.map.rift; // the world stays alive (monsters keep living) with nobody online; a portal's island does not
+    if (this.map.rift) {
+      this.state.riftWaves = riftWaves(this.map.rift).length;
+      this.state.riftEnds = Date.now() + RIFT_MS;
+      this.nextWaveAt = Date.now() + 5000;
+    }
+    this.nextPortalAt = Date.now() + 60_000 + Math.random() * 60_000;
 
     this.monsterSys = new MonsterSystem({
       map: this.map,
@@ -240,7 +260,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       now: () => this.clock.currentTime,
     });
     this.monsterSys.spawnAll();
-    if (this.map.pvp) this.moveGates(false);
+    if (this.hollow) this.moveGates(false);
 
     party.addHost(this);
     this.clock.setInterval(() => this.tickParties(), 500);
@@ -280,8 +300,9 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.onMessage(Msg.Respawn, (client) => this.handleRespawn(client));
     this.onMessage(Msg.Chat, (client, msg) => this.handleChat(client, msg));
     this.onMessage(Msg.PartyAct, (client, msg) => this.handleParty(client, msg as PartyAction));
+    this.onMessage(Msg.EnterRift, (client, msg) => this.handleEnterRift(client, msg));
 
-    for (const b of await loadBundles(this.map.id)) {
+    for (const b of this.map.rift ? [] : await loadBundles(this.map.id)) {
       let items: ItemStack[] = [];
       try {
         items = cleanInventory({ bag: JSON.parse(b.items) }).bag;
@@ -305,7 +326,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
 
   async onAuth(_client: Client, options: Partial<JoinOptions & TicketOptions>): Promise<AuthData> {
     if (typeof options?.ticket === "string") {
-      const t = useTicket(options.ticket, this.map.id);
+      const t = useTicket(options.ticket, this.ticketZone);
       const character = t && (await loadCharacter(t.accountId));
       if (!t || !character) throw new ServerError(401, "การเดินทางหมดเวลา เข้าสู่ระบบใหม่อีกครั้ง");
       return { character, lock: t.lock };
@@ -396,7 +417,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.showGear(p, inv);
     this.applyStats(p, { mods, gear: worn.flat }, true);
     const saved = { x: Math.round(c.x), y: Math.round(c.y) };
-    const spot = c.x >= 0 && this.standable(saved.x, saved.y) ? saved : this.findSpawn();
+    const spot = !this.map.rift && c.x >= 0 && this.standable(saved.x, saved.y) ? saved : this.findSpawn();
     p.x = spot.x;
     p.y = spot.y;
     p.facing = Math.floor(Math.random() * 8);
@@ -409,7 +430,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       lock: auth.lock,
       leaving: false,
       lingerUntil: 0,
-      corruption: this.map.pvp ? Math.max(0, Math.min(100, c.corruption)) : 0,
+      corruption: this.hollow ? Math.max(0, Math.min(100, c.corruption)) : 0,
       shieldUntil: this.map.pvp ? this.clock.currentTime + PROTECT_MS : 0,
       stunUntil: 0,
       path: [],
@@ -447,8 +468,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     });
     p.gm = c.admin === 1;
     p.shielded = this.map.pvp;
-    p.corruption = this.map.pvp ? Math.floor(Math.max(0, Math.min(100, c.corruption))) : 0;
-    this.broadcastSystem(this.map.pvp ? `มีใครบางคนก้าวเข้ามาใน Hollow` : `${p.name} เดินทางมาถึง${ZONE_NAMES[this.map.id]}`);
+    p.corruption = this.hollow ? Math.floor(Math.max(0, Math.min(100, c.corruption))) : 0;
+    this.broadcastSystem(this.map.pvp ? `มีใครบางคนก้าวเข้ามาใน${this.map.rift ? "พอร์ทัลดำ" : " Hollow"}` : `${p.name} เดินทางมาถึง${this.map.rift ? this.map.name : ZONE_NAMES[this.map.id]}`);
     for (const s of this.stalls.values())
       if (s.account_id === c.account_id) {
         // back behind our own stall
@@ -514,14 +535,15 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   // ---- travelling between maps ----------------------------------------------
 
   /** Saves the character as being in another map and sends the player there. */
-  private async travel(client: Client, p: Player, c: PlayerCtl, zone: ZoneId, at: Point = { x: -1, y: -1 }) {
+  private async travel(client: Client, p: Player, c: PlayerCtl, zone: ZoneId, at: Point = { x: -1, y: -1 }, rift?: { roomId: string; info: RiftInfo }) {
     if (c.leaving) return;
     if (c.stall) this.closeStall(c.stall);
     c.leaving = true;
     const id = client.sessionId;
     c.corruption = 0;
     try {
-      await saveCharacter({ ...this.rowOf(p, c), zone, x: at.x, y: at.y });
+      // going into a portal: saved as standing by it, in case the server stops
+      await saveCharacter(rift ? { ...this.rowOf(p, c), zone: rift.info.origin, x: rift.info.at.x, y: rift.info.at.y } : { ...this.rowOf(p, c), zone, x: at.x, y: at.y });
     } catch (e) {
       console.error("[world] travel save failed", e);
       c.leaving = false;
@@ -530,7 +552,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.state.players.delete(id);
     this.ctl.delete(id);
     this.monsterSys.forget(id);
-    client.send(Msg.Travel, { zone, ticket: makeTicket(c.accountId, zone) } satisfies TravelEvent);
+    if (rift) client.send(Msg.Travel, { zone: "rift", ticket: makeTicket(c.accountId, `rift:${rift.roomId}`), roomId: rift.roomId, rift: rift.info } satisfies TravelEvent);
+    else client.send(Msg.Travel, { zone, ticket: makeTicket(c.accountId, zone) } satisfies TravelEvent);
   }
 
   private handleEnterHollow(client: Client) {
@@ -657,11 +680,11 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       nodes: JSON.stringify([...c.nodes]),
       gold: c.gold,
       inv: JSON.stringify(c.inv),
-      // the dead wake up in the village
-      zone: p.dead ? "brindle" : this.map.id,
+      // the dead wake up in the village; inside a portal we count as standing by it outside
+      zone: p.dead ? "brindle" : this.map.rift ? this.map.rift.origin : this.map.id,
       corruption: p.dead ? 0 : c.corruption,
-      x: ok ? tile.x : -1,
-      y: ok ? tile.y : -1,
+      x: this.map.rift && !p.dead ? this.map.rift.at.x : ok ? tile.x : -1,
+      y: this.map.rift && !p.dead ? this.map.rift.at.y : ok ? tile.y : -1,
     };
   }
 
@@ -727,11 +750,13 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
 
   private tickMap() {
     const now = Date.now();
+    this.tickPortals(now);
+    if (this.map.rift) this.tickRift(now);
     if (this.map.id === "mossfen") {
       for (const [key, until] of this.state.lit) if (until <= now && !this.state.fogUntil) this.state.lit.delete(key);
       if (this.state.fogUntil && this.state.fogUntil <= now) this.closeFog();
     }
-    if (!this.map.pvp) return;
+    if (!this.hollow) return;
     // the Hollow's ground: warn, fall, come back
     if (this.state.cracking && this.crackEnds <= now) {
       const id = this.state.cracking;
@@ -787,6 +812,15 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       this.chestTaken.clear();
       this.setClosed("fog", false);
       this.broadcastSystem("โคมหินสว่างครบ! หมอกเปิดทางขึ้นลานสมบัติ 3 นาที");
+    } else if (kind === "treasure" && this.map.rift) {
+      if (!this.state.riftCleared) return client.send(Msg.Notice, { text: "หีบยังล็อกอยู่ ปราบมอนสเตอร์ให้หมดทุกระลอกก่อน" });
+      if (this.chestTaken.has(c.accountId)) return client.send(Msg.Notice, { text: "คุณเปิดหีบนี้ไปแล้ว" });
+      const r = riftRewards(this.map.rift, Math.random);
+      if (!this.giveLoot(client, p, c, r.items)) return;
+      this.chestTaken.add(c.accountId);
+      c.gold += r.gold;
+      this.itemsChanged(client, p, c);
+      client.send(Msg.Notice, { text: `เปิดหีบรางวัล ได้ ${r.gold} เหรียญและของอีก ${r.items.length} อย่าง` });
     } else if (kind === "treasure") {
       if (!this.state.fogUntil) return;
       if (this.chestTaken.has(c.accountId)) return client.send(Msg.Notice, { text: "คุณเปิดหีบรอบนี้ไปแล้ว" });
@@ -1295,6 +1329,11 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const client = this.clients.find((cl) => cl.sessionId === id);
     if (!client || dist(p, it) > 1.6) return this.stopInteract(client, c);
     faceTowards(p, it);
+    if (it.portal) {
+      c.interact = null;
+      this.enterPortal(client, p, c, it.portal);
+      return;
+    }
     if (it.station === "windmill" || it.station === "lantern" || it.station === "treasure") {
       this.useSpecial(client, p, c, it.station, it.x, it.y);
       c.interact = null;
@@ -1940,7 +1979,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     },
     setCorruption: (id, value) => {
       const c = this.ctl.get(id);
-      if (!c || !this.map.pvp) return false;
+      if (!c || !this.hollow) return false;
       c.corruption = value;
       return true;
     },
@@ -1968,8 +2007,13 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     },
     spawn: (kind, count, x, y) => this.monsterSys.summon(kind, count, x, y),
     clearMonsters: (x, y, r) => this.monsterSys.clearNear(x, y, r),
+    portal: (id, rarity, dark) => {
+      const p = this.state.players.get(id);
+      if (!p || (this.map.id !== "brindle" && this.map.id !== "mossfen")) return false;
+      return !!this.openPortal(rarity, dark, p);
+    },
     moveGates: () => {
-      if (!this.map.pvp) return false;
+      if (!this.hollow) return false;
       this.moveGates(true);
       return true;
     },
@@ -2160,6 +2204,113 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     }
   }
 
+  // ---- mist portals ----------------------------------------------------------
+
+  /** Open maps grow a portal now and then; old ones close. */
+  private tickPortals(now: number) {
+    if (this.map.id !== "brindle" && this.map.id !== "mossfen") return;
+    for (const [id, p] of this.state.portals)
+      if (p.until <= now) {
+        this.state.portals.delete(id);
+        this.portalCtl.delete(id);
+      }
+    if (now < this.nextPortalAt) return;
+    this.nextPortalAt = now + PORTAL_EVERY_MS[0] + Math.random() * (PORTAL_EVERY_MS[1] - PORTAL_EVERY_MS[0]);
+    if (this.state.portals.size < PORTALS_AT_ONCE) this.openPortal(rollRarity(Math.random()), Math.random() < DARK_CHANCE);
+  }
+
+  /** A new portal somewhere out in the wild. Returns its id. */
+  openPortal(rarity: number, dark: boolean, near?: Point): string | null {
+    for (let tries = 0; tries < 300; tries++) {
+      const x = near ? Math.round(near.x + (Math.random() * 2 - 1) * 4) : 4 + Math.floor(Math.random() * (this.map.width - 8));
+      const y = near ? Math.round(near.y + (Math.random() * 2 - 1) * 4) : 4 + Math.floor(Math.random() * (this.map.height - 8));
+      if (!this.standable(x, y) || (!near && isCalm(this.map, x, y)) || this.map.ramp[y][x]) continue;
+      if (this.map.exits.some((e) => Math.hypot(e.x - x, e.y - y) < 6)) continue;
+      if ([...this.state.portals.values()].some((p) => Math.hypot(p.x - x, p.y - y) < 10)) continue;
+      const id = `p${this.portalSeq++}`;
+      const portal = new Portal();
+      Object.assign(portal, { x, y, rarity, dark, until: Date.now() + PORTAL_OPEN_MS, inside: 0 });
+      this.state.portals.set(id, portal);
+      this.portalCtl.set(id, {
+        info: { seed: Math.floor(Math.random() * 1e9), origin: this.map.id as OpenZone, rarity, dark, at: { x, y } },
+        roomId: null,
+        making: null,
+        entered: new Set(),
+      });
+      this.broadcastSystem(`${riftName({ rarity, dark })} ปรากฏขึ้นที่ ${x}, ${y}! เข้าได้ ${PORTAL_MAX} คน`);
+      return id;
+    }
+    return null;
+  }
+
+  private handleEnterRift(client: Client, msg: unknown) {
+    const pc = this.get(client);
+    const id = (msg as { id?: unknown } | null)?.id;
+    const portal = typeof id === "string" ? this.state.portals.get(id) : undefined;
+    if (!pc || !portal || pc.p.dead || pc.c.charge || this.sitting(client, pc.c)) return;
+    this.walkBeside(client, pc.p, pc.c, { x: portal.x, y: portal.y, res: null, station: null, bundle: null, stall: null, portal: id as string, doneAt: 0 });
+    if (dist(pc.p, portal) <= 1.6 && !pc.c.path.length) this.enterPortal(client, pc.p, pc.c, id as string);
+  }
+
+  private async enterPortal(client: Client, p: Player, c: PlayerCtl, id: string) {
+    const portal = this.state.portals.get(id);
+    const ctl = this.portalCtl.get(id);
+    if (!portal || !ctl || portal.until <= Date.now()) return client.send(Msg.Notice, { text: "พอร์ทัลปิดไปแล้ว" });
+    if (dist(p, portal) > 2) return;
+    if (!ctl.entered.has(c.accountId) && ctl.entered.size >= PORTAL_MAX) return client.send(Msg.Notice, { text: `พอร์ทัลนี้เต็มแล้ว (${PORTAL_MAX} คน)` });
+    if (ctl.info.dark && p.level < HOLLOW_MIN_LEVEL) return client.send(Msg.Notice, { text: `พอร์ทัลดำเข้าได้ตั้งแต่เลเวล ${HOLLOW_MIN_LEVEL}` });
+    if (c.lastCombatAt > 0 && this.clock.currentTime - c.lastCombatAt < OUT_OF_COMBAT_MS) return client.send(Msg.Notice, { text: "เข้าระหว่างต่อสู้ไม่ได้" });
+    ctl.entered.add(c.accountId);
+    portal.inside = ctl.entered.size;
+    try {
+      if (!ctl.roomId) {
+        ctl.making ??= matchMaker.createRoom(ROOM_OF.rift, { zone: "rift", rift: ctl.info }).then((r) => r.roomId);
+        ctl.roomId = await ctl.making;
+      }
+    } catch (e) {
+      console.error("[rift] could not open", e);
+      ctl.entered.delete(c.accountId);
+      portal.inside = ctl.entered.size;
+      ctl.making = null;
+      return client.send(Msg.Notice, { text: "พอร์ทัลสั่นไหว ลองใหม่อีกครั้ง" });
+    }
+    if (!this.ctl.has(client.sessionId)) return;
+    this.travel(client, p, c, "rift", undefined, { roomId: ctl.roomId, info: ctl.info });
+  }
+
+  /** Inside a portal: waves, the chest, and the end. */
+  private tickRift(now: number) {
+    const rift = this.map.rift!;
+    if (now >= this.state.riftEnds) {
+      // time is up: everyone goes back out
+      for (const client of this.clients) {
+        const pc = this.get(client);
+        if (pc) this.travel(client, pc.p, pc.c, rift.origin, rift.at);
+      }
+      this.state.players.forEach((p, id) => {
+        const c = this.ctl.get(id);
+        if (c && !c.leaving && c.lingerUntil) this.logOut(id, p, c).catch(() => {});
+      });
+      return;
+    }
+    if (this.state.riftCleared || this.state.monsters.size || now < this.nextWaveAt || !this.clients.length) return;
+    const waves = riftWaves(rift);
+    if (this.state.riftWave >= waves.length) {
+      this.state.riftCleared = true;
+      this.broadcastSystem("ปราบครบทุกระลอกแล้ว! หีบรางวัลกลางเกาะเปิดได้ คนละครั้ง");
+      return;
+    }
+    const levelOfWave = (kind: string, bonus: number) => (MONSTERS[kind]?.level[1] ?? 1) + bonus;
+    const c = this.map.width / 2;
+    for (const w of waves[this.state.riftWave]) {
+      const a = Math.random() * Math.PI * 2;
+      this.monsterSys.wave(w.kind, w.count + Math.max(0, this.clients.length - 1), Math.round(c + Math.cos(a) * 7), Math.round(c - 2 + Math.sin(a) * 5), 4, levelOfWave(w.kind, w.levelBonus));
+    }
+    this.state.riftWave++;
+    this.nextWaveAt = now + 4000;
+    this.broadcastSystem(`ระลอกที่ ${this.state.riftWave}/${waves.length} มาแล้ว!`);
+  }
+
   /** Who gets a share of this kill: the killer and party members close by. */
   private sharersOf(id: string, c: PlayerCtl, at: { x: number; y: number }): [string, Player, PlayerCtl][] {
     const out: [string, Player, PlayerCtl][] = [[id, this.state.players.get(id)!, c]];
@@ -2255,6 +2406,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       this.logOut(id, p, c).catch((e) => console.error("[world] save failed", e));
       return true;
     }
+    if (!this.hollow) return false;
     const before = c.corruption;
     const spring = this.map.springs.some((s) => dist(s, p) <= s.r);
     if (p.inSpring !== spring) p.inSpring = spring;
@@ -2366,7 +2518,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     });
 
     this.tickMap();
-    if (this.map.pvp && Date.now() >= this.state.gatesUntil) this.moveGates(true);
+    if (this.hollow && Date.now() >= this.state.gatesUntil) this.moveGates(true);
     for (const [id, b] of this.bundles) if (b.expires <= Date.now()) this.removeBundle(id);
 
     for (const [key, at] of this.depletedUntil)
@@ -2377,4 +2529,17 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
 
     this.monsterSys.tick(dt);
   }
+}
+
+/** Portal settings from the room options, kept to sane values. */
+function cleanRift(v: unknown): RiftInfo {
+  const r = (v ?? {}) as Partial<RiftInfo>;
+  const at = r.at && Number.isFinite(r.at.x) && Number.isFinite(r.at.y) ? { x: Math.round(r.at.x), y: Math.round(r.at.y) } : { x: 26, y: 26 };
+  return {
+    seed: Number.isFinite(r.seed) ? Math.floor(r.seed!) : 1,
+    origin: r.origin === "mossfen" ? "mossfen" : "brindle",
+    rarity: Math.max(0, Math.min(RARITY_NAMES.length - 1, Math.floor(Number(r.rarity) || 0))),
+    dark: !!r.dark,
+    at,
+  };
 }

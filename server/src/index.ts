@@ -31,6 +31,8 @@ if (existsSync(clientDist)) app.use(express.static(clientDist));
 const httpServer = http.createServer(app);
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) });
 for (const zone of ZONE_IDS) gameServer.define(ROOM_OF[zone], WorldRoom, { zone });
+// mist portals: one room each, made when the first person steps in
+gameServer.define(ROOM_OF.rift, WorldRoom, { zone: "rift" });
 
 gameServer.listen(PORT).then(() => {
   console.log(`Tales of Hearthvale server on http://localhost:${PORT}`);

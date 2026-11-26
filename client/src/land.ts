@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { TILE_H } from "../../shared/constants";
 import { resourceAt, StationKind, stationAt } from "../../shared/items";
-import { GameMap, isHouseAnchor, Prop, Tile } from "../../shared/map";
+import { GameMap, isHouseAnchor, lookOf, Prop, Tile } from "../../shared/map";
 import { RAMP_DIR } from "../../shared/terrain";
 import { LEVEL_H, place, toScreen } from "./iso";
 import { SCENERY_SCALE } from "./sprites";
@@ -42,7 +42,7 @@ const STATION_LABEL: Partial<Record<StationKind, string>> = {
   board: "กระดานประมูล",
   windmill: "กังหันลม",
   lantern: "โคมหิน",
-  treasure: "หีบลานสมบัติ",
+  treasure: "หีบสมบัติ",
 };
 const LABEL_UP: Partial<Record<StationKind, number>> = { portal: 80, windmill: 150, lantern: 72 };
 
@@ -143,7 +143,7 @@ export class Land {
       // a light rim where the land drops away behind
       const g = this.keep(scene.add.graphics({ x: flat.x, y: flat.y })).setDepth(depth + eps * 3);
       const [back, rt, , lt] = this.points(me);
-      g.lineStyle(3, CLIFF[map.id][1], 1);
+      g.lineStyle(3, CLIFF[lookOf(map)][1], 1);
       if (me[0] > nw[1] + 0.01 || me[3] > nw[2] + 0.01) g.lineBetween(back[0], back[1] + 1, lt[0], lt[1] + 1);
       if (me[0] > ne[3] + 0.01 || me[1] > ne[2] + 0.01) g.lineBetween(back[0], back[1] + 1, rt[0], rt[1] + 1);
     }
@@ -215,7 +215,7 @@ export class Land {
   private cliff(x: number, y: number, me: [number, number, number, number], se: [number, number, number, number] | null, sw: [number, number, number, number] | null, depth: number) {
     const f = toScreen(x, y);
     const g = this.keep(this.scene.add.graphics({ x: f.x, y: f.y })).setDepth(depth);
-    const [L, R, LIP] = CLIFF[this.map.id];
+    const [L, R, LIP] = CLIFF[lookOf(this.map)];
     const top = this.points(me);
     const face = (a: [number, number], b: [number, number], ha: number, hb: number, color: number) => {
       // a, b: upper ends of the edge; ha, hb: ground height below them
@@ -243,7 +243,7 @@ export class Land {
     const f = toScreen(x, y);
     const g = this.keep(this.scene.add.graphics({ x: f.x, y: f.y })).setDepth(depth);
     const pts = this.points(me);
-    const base = RAMP_TOP[this.map.id];
+    const base = RAMP_TOP[lookOf(this.map)];
     this.quad(g, pts, base);
     const [ux, uy] = RAMP_DIR[this.map.ramp[y][x]];
     // step lines run across the slope

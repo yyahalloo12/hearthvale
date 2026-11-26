@@ -23,6 +23,7 @@ before(async () => {
   const httpServer = http.createServer();
   gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) });
   for (const zone of ZONE_IDS) gameServer.define(ROOM_OF[zone], WorldRoom, { zone });
+  gameServer.define(ROOM_OF.rift, WorldRoom, { zone: "rift" });
   await gameServer.listen(PORT);
 });
 after(async () => {
@@ -44,7 +45,7 @@ function flat(n: number): GameMap {
 }
 
 test("maps are three times as big and have real height, all of it reachable by ramps", () => {
-  const old = { brindle: 48 * 48, mossfen: 64 * 64, hollow: 72 * 72 };
+  const old: Record<string, number> = { brindle: 48 * 48, mossfen: 64 * 64, hollow: 72 * 72 };
   for (const id of ZONE_IDS) {
     const m = buildZone(id);
     const area = m.width * m.height;
