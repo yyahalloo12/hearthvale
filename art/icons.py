@@ -490,6 +490,205 @@ for _id in ("heavy_strike", "guard", "charge", "taunt", "double_shot", "pierce_a
             "fireball", "ice_lance", "chain_lightning", "mana_shield", "holy_light", "heal", "blessing", "revive"):
     ICONS[f"sk_{_id}"] = globals()[f"sk_{_id}"]
 
+
+# ---- second job skills ------------------------------------------------------
+
+
+def sk_fortress():
+    p = pivot("p", (0, 0, 0.05))
+    shield(p, face=0x8A94A6, rim=0xF2B82E)
+    S = toon("stone", 0xA8A198)
+    for x in (-0.48, -0.16, 0.16, 0.48):
+        box("crenel", (x, 0.05, 0.72), (0.2, 0.2, 0.22), S, None, outline=0.03, bevel=0.02)
+
+
+def sk_chain_pull():
+    I = toon("iron", 0x9AA4B2, dark=0.65)
+    for i in range(6):
+        ring("link", (-0.62 + 0.24 * i, 0, 0.45 - 0.18 * i), 0.13, 0.04, I, None, outline=0.015, rot=(0, 0, rad(90 * (i % 2))), scale=(1.3, 1, 1))
+    cone("hook", (0.62, 0, -0.62), 0.16, 0.0, 0.36, I, None, outline=0.03, rot=(0, rad(-140), 0), seg=4, bevel=0)
+
+
+def sk_stand_firm():
+    cone("pole", (0, 0, -0.05), 0.04, 0.04, 1.6, wood_mat(), None, outline=0.03)
+    R = toon("flag", 0xC8453A, dark=0.7)
+    box("flag", (0.3, 0, 0.45), (0.6, 0.04, 0.46), R, None, outline=0.04, bevel=0.02)
+    ball("emb", (0.3, -0.04, 0.45), (0.1, 0.02, 0.1), toon("gold", 0xF2B82E, dark=0.7), None, outline=0.02)
+    box("base", (0, 0, -0.82), (0.5, 0.3, 0.12), toon("stone", 0xA8A198), None, outline=0.03)
+
+
+def sk_whirlwind():
+    W = toon("wind", 0xDDEBFF, dark=0.8)
+    for i in range(4):
+        ring("swirl", (0.05 * i, 0, -0.5 + 0.3 * i), 0.62 - 0.12 * i, 0.05, W, None, outline=0.015, scale=(1, 1, 0.35))
+    p = tilted(-60)
+    box("blade", (0.0, 0, 0.55), (0.5, 0.08, 0.36), toon("m", 0xC3CCD6), p, outline=0.04, bevel=0.03)
+
+
+def sk_bloodboil():
+    B = toon("blood", 0xD0283A, dark=0.65, light=1.25)
+    ball("drop", (0, 0, -0.15), 0.42, B, None, outline=0.045)
+    cone("tip", (0, 0, 0.38), 0.32, 0.0, 0.55, B, None, outline=0.045, seg=24)
+    for x, z in ((-0.5, 0.45), (0.5, 0.35), (0.35, 0.7)):
+        ball("bubble", (x, -0.05, z), 0.08, B, None, outline=0.02, seg=12)
+
+
+def sk_ground_slam():
+    R = toon("rock", 0x8A7A62, dark=0.62)
+    for i in range(6):
+        a = i * math.pi / 3
+        box("chunk", (0.55 * math.cos(a), 0, -0.45 + 0.25 * abs(math.sin(a))), (0.26, 0.2, 0.2), R, None, outline=0.035, rot=(rad(20 * i), rad(30 * i), 0), bevel=0.04)
+    p = pivot("p", (0, 0, 0.15))
+    cone("haft", (0, 0, 0.3), 0.06, 0.06, 0.9, wood_mat(), p, outline=0.035)
+    box("head", (0, 0, -0.2), (0.6, 0.3, 0.3), toon("m", 0x8A94A6), p, outline=0.04, bevel=0.05)
+
+
+def sk_long_shot():
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler.y = rad(-85)
+    arrow(p, length=2.0, head=0xF2B82E, fletch=0xF2B82E)
+    for i in range(3):
+        box("trail", (-0.75 + 0.15 * i, 0.05, 0.12 - 0.12 * i), (0.4, 0.02, 0.03), flat("tr", 0xFFFFFF), None, outline=0.01)
+
+
+def sk_steady_aim():
+    E = toon("eye", 0xFFFFFF, dark=0.85)
+    ball("eye", (0, 0, 0), (0.62, 0.15, 0.36), E, None, outline=0.045)
+    ball("iris", (0, -0.12, 0), (0.24, 0.06, 0.24), toon("iris", 0x4AA3FF), None, outline=0.02)
+    ball("pupil", (0, -0.17, 0), (0.1, 0.03, 0.1), flat("pu", 0x1A1A22), None, outline=0)
+    for a in (0, 90, 180, 270):
+        box("cross", (0.75 * math.cos(rad(a)), -0.05, 0.75 * math.sin(rad(a))), (0.22 if a % 180 == 0 else 0.05, 0.03, 0.05 if a % 180 == 0 else 0.22), flat("cr", 0xE8484A), None, outline=0.01)
+
+
+def sk_arrow_rain():
+    C = toon("cloud", 0xB8C4D6, dark=0.8)
+    for x, z, s in ((-0.3, 0.55, 0.3), (0.05, 0.62, 0.36), (0.38, 0.55, 0.28)):
+        ball("cloud", (x, 0.1, z), s, C, None, outline=0.03)
+    for x in (-0.45, -0.15, 0.15, 0.45):
+        p = pivot("p", (x, 0, -0.2 - 0.1 * abs(x)))
+        p.rotation_euler.y = rad(180)
+        arrow(p, length=0.7)
+
+
+def sk_spike_trap():
+    M = toon("m", 0xB8C0C8)
+    box("plate", (0, 0.1, -0.45), (1.3, 0.5, 0.12), toon("plate", 0x6B4A2A), None, outline=0.035)
+    for i in range(5):
+        cone("spike", (-0.5 + 0.25 * i, 0, -0.15 + 0.1 * (i % 2)), 0.1, 0.0, 0.5 + 0.12 * (i % 2), M, None, outline=0.03, seg=4, bevel=0)
+
+
+def sk_smoke_trap():
+    S = toon("smoke", 0xB4B0C0, dark=0.8)
+    rnd = random.Random(5)
+    for i in range(7):
+        ball("puff", (rnd.uniform(-0.55, 0.55), 0, rnd.uniform(-0.35, 0.55)), rnd.uniform(0.22, 0.34), S, None, outline=0.03)
+    ball("bomb", (0, -0.2, -0.45), 0.2, toon("bomb", 0x3A3A44), None, outline=0.03)
+
+
+def sk_camouflage():
+    L = toon("leaf", 0x4F9E4A, dark=0.65)
+    for i in range(7):
+        a = i * 2 * math.pi / 7
+        ball("leaf", (0.42 * math.cos(a), 0, 0.42 * math.sin(a)), (0.26, 0.06, 0.14), L, None, outline=0.03, rot=(0, -a, 0))
+    for x in (-0.12, 0.12):
+        ball("eye", (x, -0.1, 0.05), (0.07, 0.03, 0.05), flat("ey", 0xFFF39A), None, outline=0)
+
+
+def sk_meteor():
+    ball("rock", (0.25, 0, -0.25), 0.34, toon("met", 0x7A5A4A, dark=0.6), None, outline=0.045)
+    F = toon("flame", 0xFF8A2A, dark=0.75, light=1.25)
+    for i, s in enumerate((0.3, 0.22, 0.16)):
+        cone("tail", (-0.1 - 0.25 * i, 0.03, 0.12 + 0.25 * i), s, 0.0, 0.7, F, None, outline=0.03, rot=(0, rad(-135), 0), seg=12)
+
+
+def sk_blizzard():
+    I = toon("ice", 0xBDE8FF, dark=0.72, light=1.2)
+    for x, z in ((-0.4, 0.3), (0.35, 0.4), (0, -0.2), (-0.35, -0.45), (0.4, -0.35)):
+        for a in (0, 60, 120):
+            box("flake", (x, 0, z), (0.36, 0.04, 0.06), I, None, outline=0.02, rot=(0, rad(a), 0), bevel=0)
+
+
+def sk_tri_weave():
+    for i, c in enumerate((0xFF8A2A, 0x8FD3FF, 0xFFE24A)):
+        a = i * 2 * math.pi / 3 + 0.5
+        ball("orb", (0.42 * math.cos(a), 0, 0.42 * math.sin(a)), 0.22, toon(f"o{c}", c, dark=0.72, light=1.25), None, outline=0.035)
+    ring("weave", (0, 0.02, 0), 0.42, 0.04, toon("thr", 0xC39BFF), None, outline=0.015, rot=(rad(90), 0, 0))
+
+
+def sk_curse_weakness():
+    S = toon("skull", 0xE8E2D2, dark=0.75)
+    ball("skull", (0, 0, 0.1), (0.42, 0.36, 0.4), S, None, outline=0.045)
+    box("jaw", (0, 0, -0.32), (0.4, 0.3, 0.18), S, None, outline=0.04, bevel=0.06)
+    for x in (-0.15, 0.15):
+        ball("eye", (x, -0.3, 0.08), (0.11, 0.05, 0.12), flat("ey", 0x8A3AC0), None, outline=0)
+
+
+def sk_poison_mist():
+    G = toon("pois", 0x7ACF4A, dark=0.7)
+    rnd = random.Random(9)
+    for i in range(6):
+        ball("puff", (rnd.uniform(-0.5, 0.5), 0, rnd.uniform(-0.4, 0.5)), rnd.uniform(0.2, 0.32), G, None, outline=0.03)
+    for x, z in ((-0.2, 0.0), (0.25, 0.15)):
+        ball("bub", (x, -0.3, z), 0.07, flat("bb", 0xD8FF9A), None, outline=0)
+
+
+def sk_soul_drain():
+    S = toon("soul", 0xB8E0FF, dark=0.8, light=1.25)
+    ball("soul", (-0.25, 0, 0.25), (0.26, 0.15, 0.3), S, None, outline=0.035)
+    cone("wisp", (-0.05, 0.02, -0.05), 0.16, 0.0, 0.7, S, None, outline=0.03, rot=(0, rad(135), 0), seg=12)
+    ball("hand", (0.4, 0, -0.42), (0.22, 0.12, 0.18), toon("hand", 0x8A5AC0), None, outline=0.035)
+
+
+def sk_mass_heal():
+    G = toon("cross", 0x4FBF4A, dark=0.7, light=1.2)
+    for x, z, s in ((0, 0.12, 1.0), (-0.48, -0.3, 0.6), (0.48, -0.3, 0.6)):
+        box("v", (x, 0, z), (0.22 * s, 0.14, 0.7 * s), G, None, outline=0.04, bevel=0.05)
+        box("h", (x, 0, z + 0.05 * s), (0.7 * s, 0.14, 0.22 * s), G, None, outline=0.04, bevel=0.05)
+
+
+def sk_barrier():
+    ball("dome", (0, 0, -0.2), (0.75, 0.4, 0.6), toon("dome", 0xFFE7A3, dark=0.85, light=1.2), None, outline=0.04)
+    ball("shine", (-0.3, -0.36, 0.08), (0.12, 0.04, 0.08), flat("sh", 0xFFFFFF), None, outline=0)
+    box("ground", (0, 0, -0.55), (1.5, 0.4, 0.08), toon("gr", 0x8A6A4A), None, outline=0.03)
+
+
+def sk_foresight():
+    ball("orb", (0, 0, 0.1), 0.48, toon("orb", 0xC39BFF, dark=0.75, light=1.25), None, outline=0.045)
+    ball("inner", (0, -0.35, 0.1), (0.18, 0.06, 0.12), flat("eye", 0xFFFFFF), None, outline=0)
+    cone("stand", (0, 0, -0.5), 0.36, 0.2, 0.25, toon("gold", 0xF2B82E, dark=0.7), None, outline=0.035)
+
+
+def sk_light_hammer():
+    p = tilted(-30)
+    cone("haft", (0, 0, -0.25), 0.07, 0.07, 1.1, wood_mat(), p, outline=0.035)
+    box("head", (0, 0, 0.45), (0.7, 0.36, 0.38), toon("gold", 0xF2B82E, dark=0.7, light=1.2), p, outline=0.045, bevel=0.06)
+    burst(0.45, 0.45, 0xFFF39A, n=6, r=0.2, size=0.09)
+
+
+def sk_justice_aura():
+    G = toon("gold", 0xF2B82E, dark=0.7, light=1.2)
+    cone("pillar", (0, 0, -0.1), 0.05, 0.05, 1.1, G, None, outline=0.03)
+    box("beam", (0, 0, 0.42), (1.2, 0.08, 0.07), G, None, outline=0.03)
+    for s in (-1, 1):
+        cone("pan", (0.5 * s, 0, -0.1 + 0.1 * s), 0.24, 0.12, 0.1, G, None, outline=0.03)
+        box("str", (0.5 * s, 0, 0.18 + 0.05 * s), (0.02, 0.02, 0.5), G, None, outline=0)
+
+
+def sk_judgment():
+    S = toon("sword", 0xFFF2B8, dark=0.75, light=1.25)
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler.y = rad(180)
+    box("blade", (0, 0, 0.15), (0.26, 0.08, 1.1), S, p, outline=0.045)
+    cone("tip", (0, 0, 0.82), 0.18, 0.0, 0.28, S, p, outline=0.045, scale=(1, 0.36, 1), seg=4, rot=(0, 0, rad(45)), bevel=0)
+    box("guard", (0, 0, -0.45), (0.7, 0.16, 0.14), toon("gold", 0xF2B82E, dark=0.7), p, outline=0.04)
+    burst(0, 0.7, 0xFFE24A, n=8, r=0.3, size=0.1)
+
+
+for _id in ("fortress", "chain_pull", "stand_firm", "whirlwind", "bloodboil", "ground_slam", "long_shot", "steady_aim", "arrow_rain",
+            "spike_trap", "smoke_trap", "camouflage", "meteor", "blizzard", "tri_weave", "curse_weakness", "poison_mist", "soul_drain",
+            "mass_heal", "barrier", "foresight", "light_hammer", "justice_aura", "judgment"):
+    ICONS[f"sk_{_id}"] = globals()[f"sk_{_id}"]
+
 N = 96
 frames = []
 for name, build in ICONS.items():

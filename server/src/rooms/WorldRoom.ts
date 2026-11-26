@@ -88,7 +88,7 @@ import { GameMap, isCalm, isSafe, isWalkable, ZoneId } from "../../../shared/map
 import { buildZone, ZONE_NAMES, zoneId } from "../../../shared/zones";
 import { isNight } from "../../../shared/daylight";
 import { GROVE, LANTERNS } from "../../../shared/mossfen";
-import { inReach, levelOf, reachableFrom, setRegion } from "../../../shared/terrain";
+import { canStep, inReach, levelOf, reachableFrom, setRegion } from "../../../shared/terrain";
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
@@ -105,6 +105,10 @@ import {
   JOB_CHANGE_LEVEL,
   JOB_CHOICES,
   JOB_NAMES,
+  jobHas,
+  isMainJob,
+  SECOND_CHOICES,
+  SECOND_JOB_LEVEL,
   jobId,
   killExp,
   killGold,
@@ -160,6 +164,10 @@ interface PlayerCtl {
   pendingSkill: SkillId | null;
   cooldowns: Map<string, number>;
   windUntil: number;
+  frenzyUntil: number;
+  frenzyDmg: number;
+  frenzyCrit: number;
+  frenzyDodge: number;
   guardUntil: number;
   guardReduce: number;
   blessUntil: number;
@@ -464,6 +472,10 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       pendingSkill: null,
       cooldowns: new Map(),
       windUntil: 0,
+      frenzyUntil: 0,
+      frenzyDmg: 0,
+      frenzyCrit: 0,
+      frenzyDodge: 0,
       guardUntil: 0,
       guardReduce: 0,
       blessUntil: 0,
@@ -940,6 +952,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       this.broadcast(Msg.LevelUp, { id, level: p.level });
       if (p.level === JOB_CHANGE_LEVEL && p.job === "wanderer")
         client?.send(Msg.Notice, { text: "ถึงเลเวล 10 แล้ว! เลือกอาชีพได้ที่ปุ่มด้านล่าง" });
+      if (p.level === SECOND_JOB_LEVEL && isMainJob(p.job))
+        client?.send(Msg.Notice, { text: "ถึงเลเวล 30 แล้ว! เลือกอาชีพขั้นสองได้ที่ปุ่มด้านล่าง" });
       this.save(p, c).catch(() => {});
     }
   }
@@ -987,7 +1001,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const def = typeof skill === "string" ? SKILLS[skill] : undefined;
     if (!def) return;
     const lvl = p.skills.get(skill) ?? 0;
-    if (def.job !== p.job || lvl <= 0) return client.send(Msg.Notice, { text: `ยังไม่ได้เรียนสกิล ${def.name}` });
+    if (!jobHas(p.job, def.job) || lvl <= 0) return client.send(Msg.Notice, { text: `ยังไม่ได้เรียนสกิล ${def.name}` });
     const now = this.clock.currentTime;
     if ((c.cooldowns.get(skill) ?? 0) > now) return client.send(Msg.Notice, { text: `${def.name} ยังไม่พร้อม` });
 
@@ -1035,7 +1049,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     if (!pc) return;
     const skill = (msg as { skill?: unknown })?.skill;
     const def = typeof skill === "string" ? SKILLS[skill] : undefined;
-    if (!def || def.job !== pc.p.job) return;
+    if (!def || !jobHas(pc.p.job, def.job)) return;
     const lvl = pc.p.skills.get(skill as string) ?? 0;
     if (lvl >= def.maxLevel || this.skillPointsLeft(pc.p) <= 0) return;
     pc.p.skills.set(skill as string, lvl + 1);
@@ -1050,9 +1064,21 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
 
   private handleChangeJob(client: Client, msg: unknown) {
     const pc = this.get(client);
-    if (!pc || pc.p.job !== "wanderer" || pc.p.dead) return;
+    if (!pc || pc.p.dead) return;
     const { p, c } = pc;
-    const choice = JOB_CHOICES.find((j) => j.job === (msg as { job?: unknown } | null)?.job);
+    const want = (msg as { job?: unknown } | null)?.job;
+    if (isMainJob(p.job)) {
+      const second = SECOND_CHOICES[p.job].find((j) => j.job === want);
+      if (!second) return;
+      if (p.level < SECOND_JOB_LEVEL) return client.send(Msg.Notice, { text: `ต้องถึงเลเวล ${SECOND_JOB_LEVEL} ก่อน` });
+      p.job = second.job;
+      this.buildChanged(client, p, c);
+      this.applyStats(p, c, true);
+      this.broadcastSystem(`${p.name} เลื่อนขั้นเป็น${JOB_NAMES[second.job]}แล้ว!`);
+      return;
+    }
+    if (p.job !== "wanderer") return;
+    const choice = JOB_CHOICES.find((j) => j.job === want);
     if (!choice) return;
     if (p.level < JOB_CHANGE_LEVEL) return client.send(Msg.Notice, { text: `ต้องถึงเลเวล ${JOB_CHANGE_LEVEL} ก่อน` });
     if (choice.gift && c.inv.bag.length + (c.inv.equip.weapon ? 1 : 0) >= BAG_SIZE)
@@ -1137,10 +1163,52 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         c.shieldUntil = 0;
         return;
       }
-      case "splash":
-        this.playerHits(id, p, c, targetId, power, skill);
-        for (const [eid] of this.enemiesNear(id, at.x, at.y, def.radius ?? 1.8, targetId)) this.playerHits(id, p, c, eid, power * 0.6, skill);
+      case "splash": {
+        const stun = (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
+        this.playerHits(id, p, c, targetId, power, skill, stun);
+        for (const [eid] of this.enemiesNear(id, at.x, at.y, def.radius ?? 1.8, targetId)) this.playerHits(id, p, c, eid, power * 0.6, skill, stun);
         return;
+      }
+      case "frost": {
+        // hurts and slows everything around the target
+        const until = now + (def.durationMs ?? 3000);
+        for (const [eid] of [[targetId, at] as [string, unknown], ...this.enemiesNear(id, at.x, at.y, def.radius ?? 2, targetId)]) {
+          this.playerHits(id, p, c, eid, power, skill);
+          const tc = this.monsterSys.ctl.get(eid) ?? this.ctl.get(eid);
+          if (tc) Object.assign(tc, { slowUntil: until, slow: def.amount ?? 0.4 });
+        }
+        return;
+      }
+      case "pull": {
+        // the target is dragged next to us, then stunned
+        const spot = this.besideMe(p, at);
+        const stun = (def.stunMs ?? 800) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
+        const m = this.state.monsters.get(targetId);
+        const mc = this.monsterSys.ctl.get(targetId);
+        if (spot && m && mc && !MONSTERS[m.kind]?.boss) {
+          m.x = spot.x;
+          m.y = spot.y;
+          mc.path = [];
+        } else if (spot && this.state.players.has(targetId)) {
+          const t = this.state.players.get(targetId)!;
+          t.x = spot.x;
+          t.y = spot.y;
+          this.ctl.get(targetId)!.path = [];
+        }
+        this.playerHits(id, p, c, targetId, power, skill, stun);
+        return;
+      }
+      case "drain": {
+        const before = (this.state.monsters.get(targetId) ?? this.state.players.get(targetId))?.hp ?? 0;
+        this.playerHits(id, p, c, targetId, power, skill);
+        const after = (this.state.monsters.get(targetId) ?? this.state.players.get(targetId))?.hp ?? 0;
+        const got = Math.round(Math.max(0, before - after) * (def.amount ?? 0.5));
+        if (got > 0) {
+          p.hp = Math.min(p.maxHp, p.hp + got);
+          this.broadcast(Msg.Hit, { from: id, to: id, dmg: got, skill, heal: true } satisfies HitEvent);
+        }
+        return;
+      }
       case "slow": {
         this.playerHits(id, p, c, targetId, power, skill);
         const until = now + (def.durationMs ?? 3000) + (def.durationPerLevel ?? 0) * (lvl - 1);
@@ -1162,8 +1230,10 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         }
         return;
       }
-      default:
-        for (let i = 0; i < (def.hits ?? 1); i++) if (this.targetOf(id, targetId)) this.playerHits(id, p, c, targetId, power, skill);
+      default: {
+        const stun = (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
+        for (let i = 0; i < (def.hits ?? 1); i++) if (this.targetOf(id, targetId)) this.playerHits(id, p, c, targetId, power, skill, stun, def.ignoreDef ?? 0);
+      }
     }
   }
 
@@ -1193,6 +1263,50 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         c.manaShieldUntil = until;
         c.manaShield = this.amountOf(def, lvl);
         p.manaShield = true;
+        return;
+      case "whirl": {
+        this.payFor(client, p, c, skill);
+        const power = (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1);
+        const stun = (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
+        for (const [eid] of this.enemiesNear(id, p.x, p.y, def.radius ?? 2, "")) this.playerHits(id, p, c, eid, power, skill, stun);
+        c.lastCombatAt = now;
+        return;
+      }
+      case "frenzy": {
+        this.payFor(client, p, c, skill);
+        const per = (base: number | undefined, step: number | undefined) => (base ?? 0) + (step ?? 0) * (lvl - 1);
+        this.state.players.forEach((t, tid) => {
+          const tc = this.ctl.get(tid);
+          if (!tc || t.dead || tc.leaving) return;
+          if (tid !== id && (!def.radius || dist(p, t) > def.radius || (this.map.pvp && !party.sameParty(c.accountId, tc.accountId)))) return;
+          tc.frenzyUntil = until;
+          tc.frenzyDmg = per(def.amount, def.amountPerLevel);
+          tc.frenzyCrit = per(def.crit, def.critPerLevel);
+          tc.frenzyDodge = per(def.dodge, def.dodgePerLevel);
+          t.frenzy = true;
+        });
+        return;
+      }
+      case "massheal": {
+        this.payFor(client, p, c, skill);
+        const power = (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1);
+        const amount = Math.round(this.statsOf(p, c).atk * power * (1 + c.mods.skillDmgPct / 100));
+        this.state.players.forEach((t, tid) => {
+          const tc = this.ctl.get(tid);
+          if (!tc || t.dead || tc.leaving || dist(p, t) > (def.radius ?? 6)) return;
+          if (tid !== id && this.map.pvp && !party.sameParty(c.accountId, tc.accountId)) return;
+          const got = Math.min(amount, t.maxHp - t.hp);
+          t.hp += got;
+          if (got > 0) this.broadcast(Msg.Hit, { from: id, to: tid, dmg: got, skill, heal: true } satisfies HitEvent);
+        });
+        return;
+      }
+      case "vanish":
+        this.payFor(client, p, c, skill);
+        this.monsterSys.forget(id);
+        c.shieldUntil = until;
+        c.targetId = null;
+        p.shielded = true;
         return;
       case "bless": {
         this.payFor(client, p, c, skill);
@@ -1264,6 +1378,19 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     }
   }
 
+  /** A free tile right next to us on the side of `from`. */
+  private besideMe(p: Player, from: { x: number; y: number }): Point | null {
+    const dx = Math.sign(Math.round(from.x - p.x));
+    const dy = Math.sign(Math.round(from.y - p.y));
+    const tries = [[dx, dy], [dx, 0], [0, dy], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    for (const [ox, oy] of tries) {
+      const x = Math.round(p.x) + ox;
+      const y = Math.round(p.y) + oy;
+      if ((ox || oy) && this.standable(x, y) && canStep(this.map, Math.round(p.x), Math.round(p.y), x, y)) return { x, y };
+    }
+    return null;
+  }
+
   /** Damage after everything that protects this player. May use up mana. */
   private taken(p: Player, c: PlayerCtl, dmg: number, now: number): number {
     dmg *= 1 - c.mods.dmgReduce / 100;
@@ -1283,6 +1410,11 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     if (p.guarding && c.guardUntil <= now) p.guarding = false;
     if (p.blessed && c.blessUntil <= now) p.blessed = false;
     if (p.windy && c.windUntil <= now) p.windy = false;
+    if (p.frenzy && c.frenzyUntil <= now) p.frenzy = false;
+    if (!this.map.pvp) {
+      const shielded = c.shieldUntil > now;
+      if (p.shielded !== shielded) p.shielded = shielded;
+    }
     if (p.manaShield && (c.manaShieldUntil <= now || p.mp <= 0)) {
       c.manaShieldUntil = 0;
       p.manaShield = false;
@@ -2100,7 +2232,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const now = this.clock.currentTime;
     if (c.shieldUntil > now) return;
     c.lastCombatAt = now;
-    if (c.god || Math.random() * 100 < c.mods.dodge) {
+    if (c.god || Math.random() * 100 < c.mods.dodge + (c.frenzyUntil > now ? c.frenzyDodge : 0)) {
       const ev: HitEvent = { from: monsterId, to: playerId, dmg: 0, miss: true };
       this.broadcast(Msg.Hit, ev);
       return;
@@ -2146,7 +2278,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
 
   /** Crit chance against this target, counting the "first strike" keystone. */
   private critChance(c: PlayerCtl, targetId: string) {
-    let chance = CRIT_CHANCE + c.mods.critChance / 100;
+    let chance = CRIT_CHANCE + c.mods.critChance / 100 + (c.frenzyUntil > this.clock.currentTime ? c.frenzyCrit / 100 : 0);
     if (c.mods.firststrike) chance = c.struck.has(targetId) ? chance * 0.5 : 1;
     if (c.struck.size > 100)
       for (const s of c.struck) if (!this.state.monsters.has(s) && !this.state.players.has(s)) c.struck.delete(s);
@@ -2158,6 +2290,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private boosted(p: Player, c: PlayerCtl, power: number, skill?: string) {
     let boost = power;
     if (skill) boost *= 1 + c.mods.skillDmgPct / 100;
+    if (c.frenzyUntil > this.clock.currentTime) boost *= 1 + c.frenzyDmg;
     if (p.hp < p.maxHp / 2) boost *= 1 + c.mods.lowHpDmgPct / 100;
     return boost;
   }
@@ -2180,7 +2313,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     faceTowards(p, t);
     c.lastCombatAt = tc.lastCombatAt = now;
     c.shieldUntil = 0; // whoever attacks gives up the arrival shield
-    if (tc.god || Math.random() * 100 < tc.mods.dodge) {
+    if (tc.god || Math.random() * 100 < tc.mods.dodge + (tc.frenzyUntil > now ? tc.frenzyDodge : 0)) {
       this.broadcast(Msg.Hit, { from: id, to: targetId, dmg: 0, miss: true } satisfies HitEvent);
       return;
     }

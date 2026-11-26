@@ -612,6 +612,7 @@ export class WorldScene extends Phaser.Scene {
       buffs: [
         p.shielded && { icon: "🔰", name: "เพิ่งมาถึง: ยังไม่โดนโจมตี" },
         p.windy && { icon: "🌬️", name: "ลมจากกังหัน: เดินเร็วขึ้น 20%" },
+        p.frenzy && { icon: "🔥", name: "พลังพิเศษจากสกิล (ตีแรงขึ้น คริติคอล หรือหลบหลีก)" },
         p.guarding && { icon: "🛡️", name: "ตั้งการ์ด" },
         p.blessed && { icon: "✨", name: "พรคุ้มกัน" },
         p.manaShield && { icon: "🔮", name: "โล่มานา" },

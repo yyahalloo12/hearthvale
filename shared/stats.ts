@@ -7,8 +7,65 @@ import skillsJson from "./data/skills.json";
 import type { DropDef, FlatStats } from "./items";
 import type { Mods } from "./passives";
 
-export type Job = "wanderer" | "squire" | "archer" | "weaver" | "acolyte";
-export const JOB_NAMES: Record<Job, string> = { wanderer: "ผู้พเนจร", squire: "สไควร์", archer: "นักธนู", weaver: "นักทอเวท", acolyte: "อาโคไลต์" };
+export type MainJob = "squire" | "archer" | "weaver" | "acolyte";
+export type SecondJob = "warden" | "reaver" | "sharpshooter" | "pathfinder" | "elementalist" | "hexer" | "oracle" | "templar";
+export type Job = "wanderer" | MainJob | SecondJob;
+export const JOB_NAMES: Record<Job, string> = {
+  wanderer: "ผู้พเนจร",
+  squire: "สไควร์",
+  archer: "นักธนู",
+  weaver: "นักทอเวท",
+  acolyte: "อาโคไลต์",
+  warden: "วอร์เดน",
+  reaver: "รีเวอร์",
+  sharpshooter: "ชาร์ปชูตเตอร์",
+  pathfinder: "พาธไฟน์เดอร์",
+  elementalist: "เอเลเมนทาลิสต์",
+  hexer: "เฮกเซอร์",
+  oracle: "ออราเคิล",
+  templar: "เทมพลาร์",
+};
+/** Second jobs grow out of a main job (GDD 2.1). */
+export const BASE_OF: Record<SecondJob, MainJob> = {
+  warden: "squire",
+  reaver: "squire",
+  sharpshooter: "archer",
+  pathfinder: "archer",
+  elementalist: "weaver",
+  hexer: "weaver",
+  oracle: "acolyte",
+  templar: "acolyte",
+};
+export const SECOND_JOB_LEVEL = 30;
+export const SECOND_CHOICES: Record<MainJob, { job: SecondJob; text: string }[]> = {
+  squire: [
+    { job: "warden", text: "แทงก์โล่ ดึงศัตรู คุ้มกันเพื่อน" },
+    { job: "reaver", text: "ขวานสองมือ ฟันวงกว้าง เลือดเดือด" },
+  ],
+  archer: [
+    { job: "sharpshooter", text: "ยิงไกลแรง คริติคอลสูง" },
+    { job: "pathfinder", text: "กับดัก ทำให้ช้าและมึน อำพราง" },
+  ],
+  weaver: [
+    { job: "elementalist", text: "เวทธาตุ ดาเมจวงกว้างแรงมาก" },
+    { job: "hexer", text: "สาป พิษ ดูดเลือด" },
+  ],
+  acolyte: [
+    { job: "oracle", text: "ฮีลทั้งปาร์ตี้ ม่านคุ้มกัน" },
+    { job: "templar", text: "นักบวชสายบู๊ ค้อนแสง ออร่า" },
+  ],
+};
+/** The main job a job belongs to (itself for main jobs and the wanderer). */
+export function baseJob(job: string): Job {
+  return (BASE_OF as Record<string, MainJob>)[job] ?? (job as Job);
+}
+/** True when a skill of skillJob belongs to someone of this job. */
+export function jobHas(job: string, skillJob: string) {
+  return job === skillJob || baseJob(job) === skillJob;
+}
+export function isMainJob(job: string): job is MainJob {
+  return job === "squire" || job === "archer" || job === "weaver" || job === "acolyte";
+}
 /** Jobs that can be picked at level 10, with one line about each. */
 export const JOB_CHOICES: { job: Job; text: string; gift?: string }[] = [
   { job: "squire", text: "ประชิด เลือดและเกราะสูง" },
@@ -26,6 +83,14 @@ const JOB_STATS: Record<Job, { hp: number; atk: number; def: number; mp: number 
   archer: { hp: 1, atk: 1.03, def: 0.95, mp: 0 },
   weaver: { hp: 0.88, atk: 1.08, def: 0.85, mp: 1.5 },
   acolyte: { hp: 1.05, atk: 0.95, def: 1, mp: 1.25 },
+  warden: { hp: 1.35, atk: 0.98, def: 1.25, mp: 0 },
+  reaver: { hp: 1.22, atk: 1.12, def: 1.05, mp: 0 },
+  sharpshooter: { hp: 1.02, atk: 1.15, def: 0.95, mp: 0 },
+  pathfinder: { hp: 1.08, atk: 1.08, def: 1.0, mp: 0 },
+  elementalist: { hp: 0.9, atk: 1.2, def: 0.86, mp: 1.7 },
+  hexer: { hp: 0.95, atk: 1.12, def: 0.9, mp: 1.6 },
+  oracle: { hp: 1.1, atk: 0.98, def: 1.05, mp: 1.5 },
+  templar: { hp: 1.18, atk: 1.08, def: 1.12, mp: 1.3 },
 };
 
 export const MAX_LEVEL = 60;
@@ -73,9 +138,16 @@ export type SkillKind =
   | "manashield"
   | "heal"
   | "bless"
-  | "revive";
+  | "revive"
+  | "pull"
+  | "whirl"
+  | "frenzy"
+  | "frost"
+  | "drain"
+  | "massheal"
+  | "vanish";
 /** Skills aimed at an enemy; the others work at once, on you or on friends. */
-export const ENEMY_SKILLS: ReadonlySet<SkillKind> = new Set(["strike", "charge", "pierce", "mark", "splash", "slow", "chain"]);
+export const ENEMY_SKILLS: ReadonlySet<SkillKind> = new Set(["strike", "charge", "pierce", "mark", "splash", "slow", "chain", "pull", "frost", "drain"]);
 
 export interface SkillDef {
   name: string;
@@ -101,6 +173,13 @@ export interface SkillDef {
   reducePerLevel?: number;
   stunMs?: number;
   stunPerLevelMs?: number;
+  /** frenzy: extra crit chance and dodge (in %) */
+  crit?: number;
+  critPerLevel?: number;
+  dodge?: number;
+  dodgePerLevel?: number;
+  /** part of the target's armour ignored */
+  ignoreDef?: number;
 }
 export const SKILLS = skillsJson as unknown as Record<string, SkillDef>;
 export type SkillId = keyof typeof skillsJson;

@@ -1,4 +1,4 @@
-import { expToNext, Job, JOB_CHANGE_LEVEL, JOB_CHOICES, JOB_NAMES, MAX_LEVEL, RESPAWN_DELAY_MS, skillPointsEarned, SKILLS } from "../../shared/stats";
+import { expToNext, isMainJob, Job, JOB_CHANGE_LEVEL, JOB_CHOICES, JOB_NAMES, jobHas, MAX_LEVEL, RESPAWN_DELAY_MS, SECOND_CHOICES, SECOND_JOB_LEVEL, skillPointsEarned, SKILLS } from "../../shared/stats";
 
 import { GLOW_AT } from "../../shared/hollow";
 import icons from "./icons.json";
@@ -38,6 +38,10 @@ const SKILL_ICON: Record<string, string> = {
   double_shot: "🏹", pierce_arrow: "➶", backstep: "💨", mark_weak: "🎯",
   fireball: "🔥", ice_lance: "❄️", chain_lightning: "⚡", mana_shield: "🔮",
   holy_light: "🌟", heal: "💚", blessing: "✨", revive: "🕊️",
+  fortress: "🏰", chain_pull: "⛓️", stand_firm: "🚩", whirlwind: "🌪️", bloodboil: "🩸", ground_slam: "💥",
+  long_shot: "🎯", steady_aim: "👁️", arrow_rain: "🌧️", spike_trap: "🌵", smoke_trap: "💨", camouflage: "🌿",
+  meteor: "☄️", blizzard: "🌨️", tri_weave: "🔱", curse_weakness: "💀", poison_mist: "☠️", soul_drain: "👻",
+  mass_heal: "💞", barrier: "🛡️", foresight: "🔮", light_hammer: "🔨", justice_aura: "⚖️", judgment: "⚡",
 };
 
 export interface HudActions {
@@ -64,21 +68,32 @@ export function initHud(a: HudActions) {
       $("chat-log").dataset.tab = b.dataset.tab;
       $("chat-log").scrollTop = $("chat-log").scrollHeight;
     };
-  const jobs = $("job-change");
-  jobs.replaceChildren(Object.assign(document.createElement("div"), { className: "job-title", textContent: "เลือกอาชีพ (เปลี่ยนทีหลังไม่ได้)" }));
-  for (const { job, text } of JOB_CHOICES) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.append(Object.assign(document.createElement("b"), { textContent: JOB_NAMES[job] }), Object.assign(document.createElement("span"), { textContent: text }));
-    b.onclick = () => actions.changeJob(job);
-    jobs.append(b);
-  }
+  jobsShownFor = "";
   $("respawn").onclick = () => actions.respawn();
   if (!started) requestAnimationFrame(drawCooldowns);
   started = true;
 }
 
 let started = false;
+let jobsShownFor = "";
+
+/** The buttons for picking a job: the first one at 10, the second at 30. */
+function showJobChoices(job: string) {
+  jobsShownFor = job;
+  const second = isMainJob(job);
+  const list = second ? SECOND_CHOICES[job] : JOB_CHOICES;
+  const jobs = $("job-change");
+  jobs.replaceChildren(
+    Object.assign(document.createElement("div"), { className: "job-title", textContent: second ? `เลือกอาชีพขั้นสองของ${JOB_NAMES[job as Job]} (เปลี่ยนทีหลังไม่ได้)` : "เลือกอาชีพ (เปลี่ยนทีหลังไม่ได้)" }),
+  );
+  for (const { job: j, text } of list) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.append(Object.assign(document.createElement("b"), { textContent: JOB_NAMES[j] }), Object.assign(document.createElement("span"), { textContent: text }));
+    b.onclick = () => actions.changeJob(j);
+    jobs.append(b);
+  }
+}
 
 /** Name of the map, and whether the Hollow bars show. */
 export function setZone(name: string, hollow: boolean) {
@@ -192,7 +207,10 @@ export function updateMe(me: MeView) {
     $("buffs").replaceChildren(...me.buffs.map((b) => Object.assign(document.createElement("div"), { className: "buff", textContent: b.icon, title: b.name })));
   }
 
-  $("job-change").hidden = !(me.job === "wanderer" && me.level >= JOB_CHANGE_LEVEL);
+  const canFirst = me.job === "wanderer" && me.level >= JOB_CHANGE_LEVEL;
+  const canSecond = isMainJob(me.job) && me.level >= SECOND_JOB_LEVEL;
+  $("job-change").hidden = !(canFirst || canSecond);
+  if ((canFirst || canSecond) && jobsShownFor !== me.job) showJobChoices(me.job);
 
   let spent = 0;
   me.skills.forEach((v) => (spent += v));
@@ -227,7 +245,7 @@ function renderSkills(me: MeView, points: number) {
       ? `เลือกอาชีพและใช้สกิลได้ที่ Lv ${JOB_CHANGE_LEVEL}`
       : "";
   for (const [id, def] of Object.entries(SKILLS)) {
-    if (def.job !== me.job) continue;
+    if (!jobHas(me.job, def.job)) continue;
     const lvl = me.skills.get(id) ?? 0;
     const slot = document.createElement("div");
     slot.className = "skill" + (lvl === 0 ? " locked" : "");
@@ -266,5 +284,5 @@ function renderSkills(me: MeView, points: number) {
 
 /** Skill id bound to a number key, if any. */
 export function skillForKey(key: string, job: string): string | undefined {
-  return Object.entries(SKILLS).find(([, d]) => d.key === key && d.job === job)?.[0];
+  return Object.entries(SKILLS).find(([, d]) => d.key === key && jobHas(job, d.job))?.[0];
 }

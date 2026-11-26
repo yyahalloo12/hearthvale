@@ -6,6 +6,7 @@
 import passivesJson from "./data/passives.json";
 
 /** Same values as Job in stats.ts (not imported, so the two files do not need each other). */
+import { baseJob } from "./stats";
 type JobName = string;
 
 export interface Mods {
@@ -155,7 +156,8 @@ export function refundCost(level: number) {
 
 /** Everyone can start from the middle; a job also opens its own corner. */
 export function rootsFor(job: JobName): string[] {
-  return PASSIVE_NODES.filter((n) => n.size === "root" && (n.job === "wanderer" || n.job === job)).map((n) => n.id);
+  const base = baseJob(job);
+  return PASSIVE_NODES.filter((n) => n.size === "root" && (n.job === "wanderer" || n.job === base)).map((n) => n.id);
 }
 
 /** Starting points plus the learned nodes that connect to them. */

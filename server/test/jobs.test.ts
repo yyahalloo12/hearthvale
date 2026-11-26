@@ -92,7 +92,7 @@ test("job data: every job has four skills on its own keys, a tree corner and a f
   assert.equal(playerStats(10, "squire").maxMp, 0);
   assert.ok(playerStats(10, "weaver").maxMp > 0);
   assert.ok(attackRange("bow") > 5 && attackRange("sword") < 2 && attackRange(undefined) < 2);
-  assert.equal(Object.keys(JOB_NAMES).length, 5);
+  assert.equal(Object.keys(JOB_NAMES).length, 13);
 });
 
 test("new gear: jobs, recipes of all three crafts, and herbs", () => {
@@ -262,4 +262,88 @@ test("squire: taunt turns monsters on you", async () => {
   await until(() => s.notices.length > k);
   assert.equal(body(s).skills.get("fireball"), undefined);
   await s.room.leave();
+});
+
+test("second jobs: from level 30, keep the main skills, add three of their own", async () => {
+  const { SECOND_CHOICES, baseJob } = await import("../../shared/stats");
+  for (const [main, list] of Object.entries(SECOND_CHOICES)) {
+    assert.equal(list.length, 2, main);
+    for (const { job } of list) {
+      assert.equal(baseJob(job), main);
+      const own = Object.values(SKILLS).filter((d) => d.job === job);
+      assert.deepEqual(own.map((d) => d.key).sort(), ["5", "6", "7"], job);
+      assert.equal(rootsFor(job).length, rootsFor(main as Job).length, `${job} starts where ${main} does`);
+      assert.ok(playerStats(30, job).maxHp > 0);
+    }
+  }
+  const s = await make("squire", 29);
+  const p = body(s);
+  s.room.send(Msg.ChangeJob, { job: "reaver" });
+  await until(() => s.notices.some((n) => n.includes("30")), 3000, "too low");
+  p.level = 30;
+  s.room.send(Msg.ChangeJob, { job: "oracle" });
+  await wait(120);
+  assert.equal(p.job, "squire", "not someone else's second job");
+  s.room.send(Msg.ChangeJob, { job: "reaver" });
+  await until(() => p.job === "reaver");
+  // old skills still work, and the new ones too
+  clear(s);
+  Object.assign(p, FIELD);
+  const a = dummy(s, FIELD.x + 1, FIELD.y);
+  const b = dummy(s, FIELD.x - 1, FIELD.y);
+  p.skills.set("whirlwind", 1);
+  p.skills.set("bloodboil", 1);
+  s.hits.length = 0;
+  s.room.send(Msg.Skill, { skill: "heavy_strike", target: a });
+  await until(() => s.hits.some((h) => h.skill === "heavy_strike"), 3000, "main skill");
+  s.room.send(Msg.Skill, { skill: "whirlwind" });
+  await until(() => new Set(s.hits.filter((h) => h.skill === "whirlwind").map((h) => h.to)).size === 2, 3000, "whirl");
+  void b;
+  s.room.send(Msg.Skill, { skill: "bloodboil" });
+  await until(() => p.frenzy, 3000, "frenzy");
+  assert.ok(ctl(s).frenzyDmg > 0.2);
+  // no third change
+  s.room.send(Msg.ChangeJob, { job: "warden" });
+  await wait(120);
+  assert.equal(p.job, "reaver");
+  await s.room.leave();
+});
+
+test("pathfinder vanishes, warden pulls, oracle heals everyone around", async () => {
+  const w1 = await make("archer");
+  const p = body(w1);
+  w1.room.send(Msg.ChangeJob, { job: "pathfinder" });
+  await until(() => p.job === "pathfinder");
+  p.skills.set("camouflage", 1);
+  w1.room.send(Msg.Skill, { skill: "camouflage" });
+  await until(() => p.shielded, 3000, "hidden");
+  await w1.room.leave();
+
+  const w2 = await make("squire");
+  const q = body(w2);
+  w2.room.send(Msg.ChangeJob, { job: "warden" });
+  await until(() => q.job === "warden");
+  clear(w2);
+  Object.assign(q, FIELD);
+  const far = dummy(w2, FIELD.x + 4, FIELD.y);
+  q.skills.set("chain_pull", 1);
+  w2.room.send(Msg.Skill, { skill: "chain_pull", target: far });
+  await until(() => Math.hypot(w2.w.state.monsters.get(far)!.x - q.x, w2.w.state.monsters.get(far)!.y - q.y) < 1.6, 4000, "pulled");
+  await w2.room.leave();
+
+  const w3 = await make("acolyte");
+  const o = body(w3);
+  const friend = await make(null, 30);
+  w3.room.send(Msg.ChangeJob, { job: "oracle" });
+  await until(() => o.job === "oracle");
+  const f = body(friend);
+  Object.assign(o, FIELD);
+  Object.assign(f, { x: FIELD.x + 2, y: FIELD.y });
+  f.hp = 5;
+  o.hp = 5;
+  o.mp = o.maxMp;
+  o.skills.set("mass_heal", 1);
+  w3.room.send(Msg.Skill, { skill: "mass_heal" });
+  await until(() => f.hp > 5 && o.hp > 5, 3000, "both healed");
+  await Promise.all([w3.room.leave(), friend.room.leave()]);
 });

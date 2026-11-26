@@ -24,6 +24,8 @@ export class Player extends Schema {
   /** standing in a colour spring: everyone sees you */
   @type("boolean") inSpring = false;
   @type("boolean") blessed = false;
+  /** a frenzy-type skill is on (stronger, sharper or quicker to dodge) */
+  @type("boolean") frenzy = false;
   @type("boolean") manaShield = false;
   @type("boolean") slowed = false;
   @type("boolean") marked = false;

@@ -7,7 +7,7 @@ import itemsJson from "./data/items.json";
 import recipesJson from "./data/recipes.json";
 import { GameMap, Prop } from "./map";
 import type { Mods, NumMod } from "./passives";
-import type { Job } from "./stats";
+import { baseJob, type Job } from "./stats";
 
 export type Slot = "weapon" | "head" | "body" | "feet";
 export const SLOTS: Slot[] = ["weapon", "head", "body", "feet"];
@@ -179,7 +179,7 @@ export function takeStack(list: ItemStack[], uid: string, qty: number): ItemStac
 }
 
 export function canUse(def: ItemDef, job: Job): boolean {
-  return !def.jobs || def.jobs.includes(job);
+  return !def.jobs || def.jobs.includes(job) || def.jobs.includes(baseJob(job));
 }
 
 /** Puts gear on (swapping what was there back into the bag). Returns an error text or null. */
