@@ -672,3 +672,109 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 5
 .qrow.done { opacity: 0.55; }
 .gem.quest { display: none; }
 .ev:has(.gem.quest) b { color: #6a3a00; }
+
+/* Inlaid brass and deep green bind the field map and pocket compass. */
+#worldmap { inset: max(20px, 5vh) max(16px, 6vw); padding: 0; overflow: hidden; border: 3px double #dabf83; border-radius: 14px; background: #233f38; box-shadow: 0 22px 90px #111b18aa; }
+#worldmap .win-head { flex-wrap: wrap; background: #203f37; padding: 10px 14px; border-bottom: 2px solid #b79860; gap: 6px; }
+#worldmap .win-head h2 { color: #f7e7ba !important; text-shadow: none; }
+#worldmap .win-head button { min-height: 32px; border: 1px solid #8a9678 !important; border-radius: 6px !important; color: #fff2d3; background: #335247 !important; opacity: 1; }
+#worldmap .win-head button:hover, #worldmap .wm-tab.on { background: #e7d4a4 !important; color: #223d34; box-shadow: none; }
+#worldmap button:focus-visible, #mapbox button:focus-visible { outline: 3px solid white; outline-offset: 2px; }
+#worldmap.continent #wm-me, #worldmap.continent #wm-in, #worldmap.continent #wm-out { display: none; }
+.wm-hint { position: static; padding: 8px 16px; border-radius: 0; background: #203f37; color: #fff1cc; }
+.atlas-compass { position: absolute; bottom: 54px; right: 20px; color: #655137; text-align: center; pointer-events: none; font: bold 12px Georgia, serif; }
+.atlas-compass i { display: block; width: 40px; height: 40px; transform: rotate(45deg); background: conic-gradient(#806445 0 12.5%,#f5eac9 0 25%,#806445 0 37.5%,#f5eac9 0 50%,#806445 0 62.5%,#f5eac9 0 75%,#806445 0 87.5%,#f5eac9 0); clip-path: polygon(50% 0,60% 40%,100% 50%,60% 60%,50% 100%,40% 60%,0 50%,40% 40%); }
+.continent .atlas-compass { display: none; }
+#minimap { box-sizing: border-box; border: 4px double #dfc38a; box-shadow: 0 0 0 3px #244137, 0 3px 10px #13271caf; }
+#minimap-ring::after { pointer-events: none; inset: 6px; border: 1px solid #e7cf9660; }
+#zone-banner::before { background: linear-gradient(#385c4c,#213d34); }
+#mapbox .mapbtn, #mapbox .mmbtn { background: #244438; color: #ffedbf; border-color: #c4a669; }
+@media (max-width: 620px) {
+  #worldmap { inset: 8px; }
+  #worldmap .win-head h2 { flex-basis: 100%; font-size: 16px; }
+  #worldmap .win-head { padding: 8px; gap: 4px; }
+}
+
+/* Brindle field journal */
+:root {
+  --forest: #213d34; --pine: #345649; --brass: #bc9f67; --vellum: #f5efdd;
+  --ink: #27392f; --paper: var(--vellum); --accent: #38745c;
+  --wood: #858367; --wood-dark: #254438; --wood-m: #30493b; --wood-dd: #162d26;
+  --gold: #d5b97b; --gold-d: #af9664; --gold-l: #ffedc4;
+  --parch: #f4eedb; --parch-d: #e4d8b9;
+}
+button, input, select { font-family: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #4b92ae; outline-offset: 2px; }
+.parch, .panel { background: linear-gradient(135deg,#fcf7e9,#ece2c8); border: 1px solid var(--brass); border-radius: 10px; box-shadow: 0 4px 20px #10271c60; }
+.frame, #chat-tabs, .win-head, .tree-head { background: linear-gradient(120deg,#294b3e,#18372e); }
+.frame { border: 1px solid var(--brass); box-shadow: 0 2px 8px #10251d66; }
+.win-head, .tree-head { padding: 10px 14px; border-bottom: 1px solid var(--brass) !important; }
+.win-head button, .tree-head button { color: #fff2cc; background: #385a49 !important; border: 1px solid #8e9a79 !important; border-radius: 6px !important; min-height: 30px; }
+.win-head button:hover, .tree-head button:hover { filter: brightness(1.16); }
+.win-body { line-height: 1.55; padding: 14px; scrollbar-color: #9a997d #ece4cf; }
+.win-body h3 { border-bottom: 1px solid #d6caab; padding-bottom: 4px; }
+#login { inset: 0; width: 100%; height: 100%; transform: none; padding: clamp(16px,5vw,86px); border: 0; border-radius: 0; display: flex; align-items: center; justify-content: space-between; gap: 24px; overflow: auto; background: linear-gradient(0deg,#102b29b8,transparent 60%),url('/art/brindle-valley.webp') center / cover; }
+#login .title-art { align-self: flex-end; color: #fff4d6; padding-bottom: 3vh; text-shadow: 0 3px 14px #092019; }
+#login h1 { color: inherit; font: 600 clamp(48px,7.3vw,120px)/0.96 Georgia,serif; letter-spacing: -.055em; text-align: left; }
+#login h1 span { display: block; margin-bottom: 8px; font: italic 400 .36em/1.2 Georgia,serif; letter-spacing: .04em; }
+#login .sub { text-align: left; margin: 18px 0 0; opacity: 1; }
+#login-form { flex: 0 1 355px; padding: clamp(20px,3vw,42px); border: 1px solid var(--brass); outline: 1px solid #fff5d465; outline-offset: -6px; border-radius: 12px; background: #faf3df; box-shadow: 0 12px 48px #15282066; }
+#login-form h2 { margin: 0 0 18px; font-size: 26px; color: var(--forest); }
+#login label { font-size: 14px; }
+#login input { border: 1px solid #aaa286; border-radius: 6px; min-height: 42px; }
+#colors { flex-wrap: wrap; }
+#colors button { width: 28px; height: 28px; }
+#enter, #create { width: 100%; border-radius: 6px; min-height: 42px; }
+#enter { background: var(--forest); border: 1px solid var(--pine); color: #fff2cd; }
+#create { background: transparent; border: 1px solid #a69c80; color: var(--forest); }
+#login-error:empty { display: none; }
+body:has(#login) #xp-strip { visibility: hidden; }
+#portrait { background: radial-gradient(circle at 45% 30%,#d4dcb1,#54776a); border: 3px double var(--brass); }
+#plate, #action-bar { background: linear-gradient(120deg,#294b3ef7,#162f28f7); }
+.bar > div::after { height: 2px; }
+#side-menu { align-items: flex-end; gap: 4px; }
+#side-menu .mbtn { display: flex; gap: 8px; justify-content: flex-start; border-radius: 6px; background: #1e3a31f5; border: 1px solid #b49c6d; width: 106px; height: 36px; padding: 0 8px; box-shadow: 0 2px 6px #0e211c55; }
+#side-menu .mbtn[hidden] { display: none; }
+#side-menu .nav-label { font: bold 12px Tahoma,sans-serif; color: #fff1d3; }
+#side-menu .mbtn b { position: static; margin-left: auto; min-width: 12px; background: transparent; border: 0; color: #cfbc94; }
+#side-menu .mbtn:hover::after { display: none; }
+#side-menu .mbtn:hover, #side-menu .mbtn:focus-visible { background: #446452; }
+#events { right: 128px; }
+#chat-tabs button { color: #f1e4c4; }
+#chat-tabs button[aria-pressed="true"] { background: var(--vellum); color: var(--forest); }
+#chat-input, #party-name, #tree-search { border-radius: 6px; }
+#tree-canvas { background: radial-gradient(ellipse at center,#334f45,#152c28); }
+#tree-side, #quest-main { background: #faf4e5; }
+#quest-main { border-left: 3px solid var(--brass); padding: 8px 12px; }
+.char-side, .cslot, .skill { background: linear-gradient(140deg,#345447,#152f28); }
+.char-stage { background: radial-gradient(ellipse at center,#e7e6c3,#94aa90); }
+.islot:not(:disabled) { background-color: #faf4e6; }
+#xp-fill { background: linear-gradient(#a4d49d,#529675); }
+.death-box { padding: 24px; border-top: 4px solid #ad7653; }
+#death, #enter-hollow { backdrop-filter: blur(3px); }
+@media (max-width: 760px) {
+  #login { flex-direction: column; align-items: stretch; justify-content: safe center; gap: 14px; }
+  #login .title-art, #login-form { width: min(100%,400px); margin: 0 auto; flex: none; padding-bottom: 16px; }
+  #login .sub { margin-top: 6px; }
+  #login h1 { font-size: 46px; }
+  #side-menu .mbtn { width: 36px; justify-content: center; }
+  #side-menu .mbtn b, #side-menu .nav-label { display: none; }
+  #hud { transform: scale(.72); transform-origin: top left; }
+  #mapbox { transform: scale(.68); }
+  #bag, #station, #market, #party, #questwin, #settings, #charwin { left: 8px; right: 8px; top: 12px; bottom: auto; transform: none; width: auto; max-height: calc(100dvh - 30px); overflow: auto; }
+  #tree { inset: 8px; }
+  .tree-head { flex-wrap: wrap; gap: 4px; }
+  .tree-body { flex-direction: column; }
+  #tree-side { width: 100%; max-height: 30%; }
+  .char-body { flex-direction: column; }
+  .char-side { width: 100%; }
+  #skills { gap: 2px; }
+  .skill { width: min(8.6vw,44px); height: min(8.6vw,44px); line-height: normal; }
+  .skill .pic.ipic { max-width: 90%; max-height: 90%; }
+  #chat { width: min(58vw,250px); bottom: 83px; }
+  #chat-log { height: 60px; }
+  #chat-tabs button { padding: 3px 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tree .node.open .shape { animation: none; }
+}

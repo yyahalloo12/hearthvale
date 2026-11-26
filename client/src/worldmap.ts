@@ -191,18 +191,24 @@ function draw() {
   // the same old paper as the continent map, with this map inked on it
   g.fillStyle = "#e6d2a2";
   g.fillRect(0, 0, c.width, c.height);
+  g.strokeStyle = "rgba(104,78,39,0.10)";
+  g.lineWidth = 1;
+  g.beginPath();
+  for (let x = 0; x < c.width; x += 32) { g.moveTo(x, 0); g.lineTo(x, c.height); }
+  for (let y = 0; y < c.height; y += 32) { g.moveTo(0, y); g.lineTo(c.width, y); }
+  g.stroke();
   const s = k();
   g.save();
   g.translate(view.x, view.y);
   g.rotate(Math.PI / 4);
   g.scale(s, s);
   g.imageSmoothingEnabled = false;
-  g.filter = "sepia(0.55) saturate(0.9) contrast(0.95) brightness(1.02)";
-  g.drawImage(base, 0, 0);
-  g.filter = "none";
+
+  g.drawImage(base, 0, 0, map.width, map.height);
+
   g.strokeStyle = "#4a3220";
   g.lineWidth = 2 / s;
-  g.strokeRect(0, 0, base.width, base.height);
+  g.strokeRect(0, 0, map.width, map.height);
   g.restore();
   const edge = g.createRadialGradient(c.width / 2, c.height / 2, Math.min(c.width, c.height) * 0.35, c.width / 2, c.height / 2, Math.max(c.width, c.height) * 0.75);
   edge.addColorStop(0, "rgba(0,0,0,0)");
@@ -232,9 +238,10 @@ function draw() {
       g.textAlign = "center";
       g.lineWidth = 3;
       g.strokeStyle = "#f3e4bc";
-      g.strokeText(label, p.x, p.y - r - 6);
+      const labelY = label === "คุณ" ? p.y + r + 16 : p.y - r - 6;
+      g.strokeText(label, p.x, labelY);
       g.fillStyle = "#3a2414";
-      g.fillText(label, p.x, p.y - r - 6);
+      g.fillText(label, p.x, labelY);
     }
   };
   // quiet places

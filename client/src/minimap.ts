@@ -18,12 +18,12 @@ import { RARITY_COLORS } from "../../shared/rift";
 const canvas = () => document.getElementById("minimap") as HTMLCanvasElement;
 
 const COLORS: Record<number, string> = {
-  [Tile.Grass]: "#7cc95a",
-  [Tile.Flowers]: "#8ed46c",
-  [Tile.Path]: "#d9b77e",
-  [Tile.Plaza]: "#c9c3b8",
-  [Tile.Water]: "#4fa8e0",
-  [Tile.Sand]: "#f0dc9c",
+  [Tile.Grass]: "#a3b987",
+  [Tile.Flowers]: "#b4c693",
+  [Tile.Path]: "#e5c58c",
+  [Tile.Plaza]: "#d0bc9b",
+  [Tile.Water]: "#609eaa",
+  [Tile.Sand]: "#eddaa7",
   [Tile.Ash]: "#75707e",
   [Tile.Pale]: "#858090",
   [Tile.Void]: "#1a1722",
@@ -44,15 +44,17 @@ let current: GameMap | null = null;
 export function setMinimap(map: GameMap) {
   current = map;
   base = document.createElement("canvas");
-  base.width = map.width;
-  base.height = map.height;
+  const detail = 6;
+  base.width = map.width * detail;
+  base.height = map.height * detail;
   const g = base.getContext("2d")!;
+  g.scale(detail, detail);
   for (let y = 0; y < map.height; y++)
     for (let x = 0; x < map.width; x++) {
       const prop = map.props[y][x];
       g.fillStyle = COLORS[map.tiles[y][x]] ?? "#000";
-      if (prop === Prop.Tree) g.fillStyle = lookOf(map) === "hollow" ? "#4b4654" : lookOf(map) === "mossfen" ? "#2c6a46" : "#2f8a3e";
-      else if (prop === Prop.House) g.fillStyle = "#c8453a";
+      if (prop === Prop.Tree) g.fillStyle = lookOf(map) === "hollow" ? "#4b4654" : lookOf(map) === "mossfen" ? "#2c6a46" : "#527c59";
+      else if (prop === Prop.House) g.fillStyle = "#ab6450";
       else if (prop === Prop.Big) g.fillStyle = map.id === "aldermere" && x < 20 && y < 20 ? (x >= 7 && y >= 7 && x < 16 && y < 16 ? "#f4efe4" : "#6fbf5a") : "#b8573a";
       else if (prop === Prop.Wall) g.fillStyle = "#9a9284";
       else if (prop === Prop.Stall) g.fillStyle = "#e8b83a";
@@ -62,6 +64,21 @@ export function setMinimap(map: GameMap) {
       else if (prop === Prop.Windmill) g.fillStyle = "#ffffff";
       else if (prop === Prop.Lantern || prop === Prop.Treasure) g.fillStyle = "#ffd76a";
       g.fillRect(x, y, 1, 1);
+      // Small ink silhouettes stay anchored to the same tiles at every zoom.
+      if (prop === Prop.Tree) {
+        g.fillStyle = "#355945";
+        g.beginPath();
+        g.moveTo(x + 0.5, y);
+        g.lineTo(x + 0.95, y + 0.85);
+        g.lineTo(x + 0.12, y + 0.85);
+        g.fill();
+      } else if (prop === Prop.House) {
+        g.fillStyle = "#e4b595";
+        g.fillRect(x, y, 0.33, 1);
+      } else if (map.tiles[y][x] === Tile.Water && (x + y * 3) % 7 === 0) {
+        g.fillStyle = "#99c3be";
+        g.fillRect(x + 0.15, y + 0.5, 0.7, 0.16);
+      }
       // higher ground is lighter
       const h = map.level[y][x] + (map.ramp[y][x] ? 0.5 : 0);
       if (h > 0) {
@@ -84,17 +101,16 @@ export function drawMinimap(state: any, myId: string, friends: Set<string> = new
   const S = c.width;
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, S, S);
-  // turned 45 degrees, like the world on screen, and centred on you
+  // North stays up, with the player at the centre.
   const centre = state.players?.get(myId) ?? { x: current.width / 2, y: current.height / 2 };
   const k = setting("mmZoom");
   g.fillStyle = current.pvp ? "#211d2a" : current.id === "mossfen" ? "#1f4a36" : "#2c5a34";
   g.fillRect(0, 0, S, S);
   g.translate(S / 2, S / 2);
-  g.rotate(Math.PI / 4);
   g.scale(k, k);
   g.translate(-centre.x, -centre.y);
   g.imageSmoothingEnabled = false;
-  g.drawImage(base, 0, 0);
+  g.drawImage(base, 0, 0, current.width, current.height);
   const dot = (p: Dot, color: string, r: number) => {
     g.fillStyle = "#000";
     g.beginPath();

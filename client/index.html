@@ -12,9 +12,10 @@
     <div id="mist" hidden></div>
 
     <div id="login" class="panel">
-      <h1>Tales of Hearthvale</h1>
-      <p class="sub">ผู้ผูกด้ายแห่งหมู่บ้านบรินเดิล</p>
+      <header class="title-art"><h1><span>Tales of</span> Hearthvale</h1>
+      <p class="sub">ผู้ผูกด้ายแห่งหมู่บ้านบรินเดิล</p></header>
       <form id="login-form" autocomplete="off">
+        <h2>เข้าสู่เกม</h2>
         <label for="name">ชื่อตัวละคร</label>
         <input id="name" maxlength="16" placeholder="เช่น Ploy" required />
         <label for="password">รหัสผ่าน</label>
@@ -63,13 +64,13 @@
     </div>
 
     <nav id="side-menu" aria-label="เมนู">
-      <button id="settings-open" class="mbtn" hidden title="ตั้งค่าและปุ่มลัด">⚙️</button>
-      <button id="party-open" class="mbtn" hidden title="ปาร์ตี้ (O)">👥<b>O</b></button>
-      <button id="map-open" class="mbtn" hidden title="แผนที่โลก (M)">🗺️<b>M</b></button>
-      <button id="quest-open" class="mbtn" hidden title="เควสต์ (J)">📜<b>J</b></button>
-      <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)">🌳<span id="tree-badge" hidden></span><b>P</b></button>
-      <button id="char-open" class="mbtn" hidden title="ตัวละคร (C)">🧙<b>C</b></button>
-      <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)">🎒<b>I</b></button>
+      <button id="settings-open" class="mbtn" hidden title="ตั้งค่าและปุ่มลัด"><span aria-hidden="true">⚙️</span><span class="nav-label">ตั้งค่า</span></button>
+      <button id="party-open" class="mbtn" hidden title="ปาร์ตี้ (O)"><span aria-hidden="true">👥</span><span class="nav-label">ปาร์ตี้</span><b>O</b></button>
+      <button id="map-open" class="mbtn" hidden title="แผนที่โลก (M)"><span aria-hidden="true">🗺️</span><span class="nav-label">แผนที่</span><b>M</b></button>
+      <button id="quest-open" class="mbtn" hidden title="เควสต์ (J)"><span aria-hidden="true">📜</span><span class="nav-label">เควสต์</span><b>J</b></button>
+      <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)"><span aria-hidden="true">🌳</span><span class="nav-label">พาสซีฟ</span><span id="tree-badge" hidden></span><b>P</b></button>
+      <button id="char-open" class="mbtn" hidden title="ตัวละคร (C)"><span aria-hidden="true">🧙</span><span class="nav-label">ตัวละคร</span><b>C</b></button>
+      <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)"><span aria-hidden="true">🎒</span><span class="nav-label">กระเป๋า</span><b>I</b></button>
     </nav>
 
     <div id="xp-strip" title="EXP"><div id="xp-fill"></div><span id="xp-text"></span></div>
@@ -90,9 +91,10 @@
     </div>
 
     <div id="worldmap" class="panel" role="dialog" aria-label="แผนที่โลก" hidden>
-      <div class="win-head"><h2 id="wm-title">แผนที่</h2><button id="wm-here" class="wm-tab on">📍 แผนที่นี้</button><button id="wm-world" class="wm-tab">🗺️ ทวีป</button><button id="wm-me">ตำแหน่งฉัน</button><button id="wm-out">−</button><button id="wm-in">+</button><button id="worldmap-close" aria-label="ปิด">✕</button></div>
-      <canvas id="worldmap-canvas"></canvas>
-      <div class="wm-hint">คลิกที่ไหนก็ได้เพื่อเดินไป · ลากเพื่อเลื่อน · ล้อเมาส์เพื่อซูม</div>
+      <div class="win-head"><h2 id="wm-title">แผนที่</h2><button id="wm-here" class="wm-tab on">พื้นที่ปัจจุบัน</button><button id="wm-world" class="wm-tab">ทวีป</button><button id="wm-me">ตำแหน่งฉัน</button><button id="wm-out" aria-label="ซูมออก">−</button><button id="wm-in" aria-label="ซูมเข้า">+</button><button id="worldmap-close" aria-label="ปิด">✕</button></div>
+      <canvas id="worldmap-canvas" aria-label="แผนที่"></canvas>
+      <div class="atlas-compass" aria-hidden="true"><b>N</b><i></i></div>
+      <div class="wm-hint" id="wm-hint">คลิกที่ไหนก็ได้เพื่อเดินไป · ลากเพื่อเลื่อน · ล้อเมาส์เพื่อซูม</div>
     </div>
 
     <div id="questwin" class="panel" role="dialog" aria-label="เควสต์" hidden>
