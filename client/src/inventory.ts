@@ -26,6 +26,8 @@ import {
 import { describeMods } from "../../shared/passives";
 import { Job, JOB_NAMES } from "../../shared/stats";
 import { itemIcon } from "./icons";
+import { drawHero, lookOf } from "./hero";
+import { equipTotals, ItemSlot } from "../../shared/items";
 
 /** Bag and gear (key I), the blacksmith window and the storage chest. */
 
@@ -48,6 +50,29 @@ let level = 1;
 let job: Job = "wanderer";
 let craftKind: CraftKind = "smith";
 let station: StationKind | null = null;
+/** which group of things the bag shows, and which way the hero faces */
+let tab = "all";
+let facing = 0;
+let heroColor = 0x4a90d9;
+let heroKey = "";
+export function setHeroColor(c: number) {
+  heroColor = c;
+}
+interface Tab {
+  id: string;
+  icon: string;
+  name: string;
+  test: (d: ItemDef) => boolean;
+}
+const inSlots = (...s: ItemSlot[]) => (d: ItemDef) => !!d.slot && s.includes(d.slot);
+const TABS: Tab[] = [
+  { id: "all", icon: "🎒", name: "ทั้งหมด", test: () => true },
+  { id: "weapon", icon: "⚔️", name: "อาวุธและมือรอง", test: inSlots("weapon", "offhand") },
+  { id: "armor", icon: "🛡️", name: "หมวก เกราะ และชุด", test: inSlots("head", "body", "hands", "feet", "belt", "cloak") },
+  { id: "trinket", icon: "💍", name: "สร้อยและแหวน", test: inSlots("neck", "ring") },
+  { id: "material", icon: "🪨", name: "วัตถุดิบ", test: (d) => d.kind === "material" },
+  { id: "tool", icon: "⛏️", name: "เครื่องมือ", test: (d) => d.kind === "tool" },
+];
 /** what the details box shows */
 let selected: { where: "bag" | "storage" | "equip"; uid: string } | null = null;
 
@@ -59,6 +84,24 @@ export function initInventory(a: ItemActions) {
   $("bag-open").hidden = false;
   $("bag-open").onclick = () => toggleBag();
   $("bag-close").onclick = () => toggleBag(false);
+  $("hero-left").onclick = () => turnHero(1);
+  $("hero-right").onclick = () => turnHero(-1);
+  // drag across the hero to turn them
+  const stage = $("hero-canvas");
+  let dragX: number | null = null;
+  stage.addEventListener("pointerdown", (e) => {
+    dragX = e.clientX;
+    stage.setPointerCapture(e.pointerId);
+  });
+  stage.addEventListener("pointermove", (e) => {
+    if (dragX === null) return;
+    const steps = Math.trunc((e.clientX - dragX) / 40);
+    if (steps) {
+      dragX += steps * 40;
+      turnHero(-steps);
+    }
+  });
+  stage.addEventListener("pointerup", () => (dragX = null));
   $("station-close").onclick = () => closeStation();
   $("use-crystal").onchange = () => render();
   window.addEventListener("keydown", (e) => {
@@ -91,8 +134,23 @@ export function toggleBag(open = $("bag").hidden) {
   render();
 }
 
+function turnHero(by: number) {
+  facing = (facing + by + 8) % 8;
+  heroKey = "";
+  if (!$("bag").hidden) drawHeroNow();
+}
+
+function drawHeroNow() {
+  const look = lookOf(heroColor, inv);
+  const key = JSON.stringify(look) + facing;
+  if (key === heroKey) return;
+  heroKey = key;
+  void drawHero($("hero-canvas") as HTMLCanvasElement, look, facing);
+}
+
 export function openStation(kind: StationKind) {
   station = kind;
+  document.body.classList.add("station-open");
   $("bag").hidden = false;
   $("station").hidden = false;
   render();
@@ -101,6 +159,7 @@ export function openStation(kind: StationKind) {
 export function closeStation() {
   if (!station) return;
   station = null;
+  document.body.classList.remove("station-open");
   $("station").hidden = true;
   if (selected?.where === "storage") selected = null;
   render();
@@ -187,18 +246,56 @@ function render() {
 }
 
 function renderBag() {
-  const worn = $("equip-slots");
-  worn.replaceChildren(
-    ...SLOTS.map((slot) => {
-      const box = el("div", "eslot");
-      box.append(slotButton(inv.equip[slot], "equip", ""), el("div", "ename", SLOT_NAMES[slot]));
-      return box;
+  // gear worn, on both sides of the hero
+  const worn = (slot: Slot) => {
+    const box = el("div", "eslot");
+    box.append(slotButton(inv.equip[slot], "equip", SLOT_NAMES[slot]));
+    box.title = inv.equip[slot] ? "" : `${SLOT_NAMES[slot]} (ว่าง)`;
+    return box;
+  };
+  $("equip-left").replaceChildren(...(["head", "neck", "body", "cloak", "belt", "feet"] as Slot[]).map(worn));
+  $("equip-right").replaceChildren(...(["weapon", "offhand", "hands", "ring1", "ring2"] as Slot[]).map(worn));
+  void SLOTS;
+  $("bag-count").textContent = `${inv.bag.length} / ${BAG_SIZE} ช่อง`;
+  $("bag-gold").textContent = `🪙 ${gold.toLocaleString("th-TH")}`;
+  // the tabs down the left side
+  $("inv-tabs").replaceChildren(
+    ...TABS.map((t) => {
+      const b = el("button", "inv-tab" + (t.id === tab ? " on" : ""), t.icon);
+      b.type = "button";
+      b.title = t.name;
+      const n = inv.bag.filter((s) => t.test(ITEMS[s.id])).length;
+      if (t.id !== "all" && n) b.append(el("small", "", String(n)));
+      b.onclick = () => {
+        tab = t.id;
+        render();
+      };
+      return b;
     }),
   );
-  $("bag-count").textContent = `${inv.bag.length} / ${BAG_SIZE} ช่อง · ${gold.toLocaleString("th-TH")} เหรียญ`;
+  const current = TABS.find((t) => t.id === tab) ?? TABS[0];
+  $("inv-tab-name").textContent = current.name;
   const grid = $("bag-grid");
   grid.replaceChildren();
-  for (let i = 0; i < BAG_SIZE; i++) grid.append(slotButton(inv.bag[i], "bag"));
+  const shown = inv.bag.filter((s) => current.test(ITEMS[s.id]));
+  for (const s of shown) grid.append(slotButton(s, "bag"));
+  const empty = tab === "all" ? BAG_SIZE - shown.length : Math.max(0, 24 - shown.length);
+  for (let i = 0; i < empty; i++) grid.append(slotButton(undefined, "bag"));
+  // what all the gear adds up to
+  const t = equipTotals(inv.equip).flat;
+  $("hero-stats").replaceChildren(
+    ...[
+      ["⚔️", "โจมตี", t.atk],
+      ["🛡️", "ป้องกัน", t.def],
+      ["❤️", "เลือด", t.hp],
+    ].map(([icon, name, v]) => {
+      const c = el("div", "hstat");
+      c.title = `${name}จากอุปกรณ์`;
+      c.append(el("span", "", String(icon)), el("b", "", `+${v ?? 0}`), el("small", "", String(name)));
+      return c;
+    }),
+  );
+  drawHeroNow();
   renderDetails();
 }
 
@@ -218,8 +315,24 @@ function renderDetails() {
     return;
   }
   const d = ITEMS[s.id];
-  box.append(el("h3", d.unique ? "qtu" : `qt${s.quality ?? 0}`, stackName(s) + (s.qty > 1 ? ` × ${s.qty}` : "")));
-  for (const t of itemLines(s)) box.append(el("div", "", t));
+  const head = el("div", "dhead");
+  head.append(itemIcon(s.id));
+  const title = el("div", "dtitle");
+  title.append(el("h3", d.unique ? "qtu" : `qt${s.quality ?? 0}`, stackName(s) + (s.qty > 1 ? ` × ${s.qty}` : "")));
+  title.append(el("div", "dstars", "★".repeat(Math.max(1, d.tier)) + "☆".repeat(Math.max(0, 6 - Math.max(1, d.tier)))));
+  head.append(title);
+  box.append(head);
+  if (d.slot) {
+    const f = itemFlat(s);
+    const chips = el("div", "dchips");
+    if (f.atk) chips.append(el("span", "chip atk", `⚔️ ${f.atk}`));
+    if (f.def) chips.append(el("span", "chip def", `🛡️ ${f.def}`));
+    if (f.hp) chips.append(el("span", "chip hp", `❤️ ${f.hp}`));
+    for (const m of [...describeMods(d.mods ?? {}), ...describeMods(s.affixes ?? {})]) chips.append(el("span", "chip mod", m));
+    box.append(chips);
+  }
+  const lines = itemLines(s).filter((t) => !/^(พลังโจมตี|ป้องกัน|เลือด) \+/.test(t) && !describeMods(d.mods ?? {}).includes(t) && !t.startsWith("✦"));
+  for (const t of lines) box.append(el("div", t === d.desc ? "ddesc" : "dline", t));
   const row = el("div", "row");
   if (selected.where === "equip") row.append(actionButton("ถอด", () => actions.unequip(slotOf(s.uid))));
   if (selected.where === "bag" && d.slot) {

@@ -269,3 +269,6 @@ kbd { border-radius: 0 !important; border: 2px solid var(--px-outline) !importan
 #questwin .qbar, .mate .bar, .prow .bar { height: 14px !important; padding: 3px; }
 .mate .bar.mp, .prow .bar.mp { height: 12px !important; }
 .mate .bar span, .prow .bar span { display: none; }
+
+#portrait img { width: 96px !important; height: 96px !important; transform: translate(-50%, -50%) !important; }
+.char-stage img { width: 300px !important; height: 360px !important; top: 50% !important; }

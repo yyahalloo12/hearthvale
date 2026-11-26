@@ -182,13 +182,26 @@
     </div>
 
     <div id="bag" class="panel" role="dialog" aria-label="กระเป๋า" hidden>
-      <div class="win-head"><h2>กระเป๋า</h2><button id="bag-close" aria-label="ปิด">✕</button></div>
-      <div class="win-body">
-        <div id="equip-slots"></div>
-        <div id="bag-count"></div>
-        <div id="bag-grid" class="grid"></div>
-        <div id="item-details"></div>
-        <button id="stall-new">เปิดแผงลอยขายของ</button>
+      <div class="win-head"><h2>กระเป๋า</h2><span id="bag-count"></span><span id="bag-gold"></span><button id="bag-close" aria-label="ปิด">✕</button></div>
+      <div class="inv-body">
+        <nav id="inv-tabs" aria-label="หมวดของ"></nav>
+        <div class="inv-mid">
+          <div id="inv-tab-name"></div>
+          <div id="bag-grid" class="grid"></div>
+          <div id="item-details"></div>
+        </div>
+        <div class="inv-hero">
+          <div id="equip-left" class="eqcol"></div>
+          <div class="hero-stage">
+            <div class="hero-glow"></div>
+            <div class="pedestal"></div>
+            <canvas id="hero-canvas" width="400" height="480" aria-label="ตัวละคร"></canvas>
+            <div class="hero-rot"><button id="hero-left" type="button" aria-label="หมุนซ้าย">◀</button><span>หมุน</span><button id="hero-right" type="button" aria-label="หมุนขวา">▶</button></div>
+          </div>
+          <div id="equip-right" class="eqcol"></div>
+          <div id="hero-stats"></div>
+          <button id="stall-new">เปิดแผงลอยขายของ</button>
+        </div>
       </div>
     </div>
 

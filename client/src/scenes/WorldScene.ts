@@ -15,7 +15,7 @@ import { addChatLine } from "../chat";
 import { askEnterHollow, initHud, MapEvent, setCorruption, setDaytime, setEvents, setOnline, setPortrait, setTargetInfo, setZone, skillForKey, startCooldown, updateMe } from "../hud";
 import { MONSTERS } from "../../../shared/stats";
 import { CRACK_WARN_MS } from "../../../shared/hollow";
-import { closeStation, initInventory, openStation, openStationKind, setInventory, setItemLevel, showGathering } from "../inventory";
+import { closeStation, initInventory, openStation, openStationKind, setHeroColor, setInventory, setItemLevel, showGathering } from "../inventory";
 import { place, setIsoMap, toTile } from "../iso";
 import { FALLEN, Land } from "../land";
 import { closeMarket, initMarket, marketMode, openBoard, setBoard, setMarketInventory, setStall, visitedStall } from "../market";
@@ -27,6 +27,8 @@ import { initParty, partySessions, setParty } from "../party";
 import { initSettings, onSettings, setting } from "../settings";
 import { initQuests, questTracker, setQuests } from "../quests";
 import { initSkillWindow } from "../skillwin";
+import { heroImage, lookOf, portraitOf } from "../hero";
+import type { Inventory } from "../../../shared/items";
 import { initCharWin, setCharacter, setCharPortrait, setCharPrivate } from "../charwin";
 import { clearGoal, initWorldMap, setWorldMap } from "../worldmap";
 import { PartyData } from "../../../shared/protocol";
@@ -358,23 +360,15 @@ export class WorldScene extends Phaser.Scene {
     setTargetInfo(null);
   }
 
-  private portraitAt = 0;
   private offSettings?: () => void;
-  /** A picture of our own character for the round frame, taken now and then. */
-  private takePortrait(time: number) {
-    const v = this.views.get(this.room.sessionId);
-    if (!v || time < this.portraitAt) return;
-    this.portraitAt = time + 4000;
-    const cam = this.cameras.main;
-    const x = Math.round((v.root.x - cam.worldView.x) * cam.zoom) - 48;
-    const y = Math.round((v.root.y - cam.worldView.y) * cam.zoom) - 78;
-    if (x < 0 || y < 0 || x + 96 > this.scale.width || y + 96 > this.scale.height) return;
-    this.game.renderer.snapshotArea(x, y, 96, 96, (img) => {
-      if (img instanceof HTMLImageElement) {
-        setPortrait(img.src);
-        setCharPortrait(img.src);
-      }
-    });
+  private myColor = 0x4a90d9;
+  /** The face in the round frame and the hero in the character window, from the Blender pictures. */
+  private lastInv: Inventory | null = null;
+  private showPortrait(inv: Inventory) {
+    this.lastInv = inv;
+    const look = lookOf(this.myColor, inv);
+    void portraitOf(look).then((src) => src && setPortrait(src));
+    void heroImage(look).then((src) => setCharPortrait(src));
   }
 
   private showDaylight() {
@@ -418,6 +412,9 @@ export class WorldScene extends Phaser.Scene {
       view.setFriend(partySessions().has(id));
       if (isMe) {
         this.me = player;
+        this.myColor = player.color;
+        setHeroColor(player.color);
+        if (this.lastInv) this.showPortrait(this.lastInv);
         this.cameras.main.startFollow(view.root, true, 0.15, 0.15);
         $(player).skills.onAdd(() => this.refreshMe());
         $(player).skills.onChange(() => this.refreshMe());
@@ -557,6 +554,7 @@ export class WorldScene extends Phaser.Scene {
       setCharPrivate(d.inv, d.nodes);
       setInventory(d.inv, d.gold);
       setMarketInventory(d.inv, d.gold);
+      this.showPortrait(d.inv);
       const v = this.views.get(this.room.sessionId);
       if (gained > 0 && v) this.floatText(v.headPoint().x, v.headPoint().y - 30, `+${gained} เหรียญ`, "#ffe08a", 13);
     });
@@ -983,7 +981,6 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.landTimer > 100) {
       this.landTimer = time;
       this.land.update(this.cameras.main.worldView, time);
-      this.takePortrait(time);
       this.showDaylight();
     }
     if (time - this.mapTimer > 200) {

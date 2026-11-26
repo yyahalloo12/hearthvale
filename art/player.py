@@ -1,6 +1,10 @@
 """The player: a thread-binder with a golden scarf and a spool on the belt.
 
-blender --background --factory-startup --python art/player.py -- <out dir> [preview]
+blender --background --factory-startup --python art/player.py -- <out dir> [preview | hero]
+
+"hero" renders the big picture for the inventory (8 turns, one standing pose,
+one sheet per layer: hero-<layer>.png) and a close-up of the face for the
+HUD (portrait-<layer>.png). The game puts the layers together and tints them.
 """
 import math
 import os
@@ -13,6 +17,7 @@ from kit import *  # noqa: E402,F403
 args = sys.argv[sys.argv.index("--") + 1:]
 OUT = os.path.abspath(args[0])
 PREVIEW = "preview" in args
+HERO = "hero" in args
 W, H = 128, 144
 
 reset()
@@ -37,7 +42,7 @@ GRIP = toon("grip", 0x5A3B22)
 
 root = pivot("root", (0, 0, 0))
 body = pivot("body", (0, 0, 0), root)
-groups = {"base": [], "hair": [], "tunic": [], "helm": [], "sword": [], "axe": [], "bow": [], "staff": []}
+groups = {"base": [], "hair": [], "tunic": [], "helm": [], "sword": [], "axe": [], "bow": [], "staff": [], "cap": [], "hat": [], "cloak": []}
 
 
 def put(group, ob):
@@ -118,6 +123,19 @@ put("helm", ball("helm", (0, 0.06, 0.52), (0.51, 0.48, 0.42), METAL, head, outli
 put("helm", ring("helmrim", (0, 0.05, 0.53), 0.485, 0.05, METAL, head, outline=0.025, scale=(1.03, 0.97, 1)))
 put("helm", box("crest", (0, 0.1, 0.92), (0.07, 0.42, 0.1), METAL, head, outline=0.03, bevel=0.04))
 put("helm", box("nose", (0, -0.44, 0.44), (0.07, 0.05, 0.18), METAL, head, outline=0.02, bevel=0.02))
+
+# ---- soft cap, pointed hat and a cloak (only in the big inventory picture) ----------------
+put("cap", ball("cap", (0, 0.05, 0.6), (0.49, 0.47, 0.3), METAL, head, outline=0.032))
+put("cap", box("brim", (0, -0.4, 0.55), (0.42, 0.24, 0.045), METAL, head, outline=0.02, rot=(math.radians(-14), 0, 0)))
+put("cap", ball("pompom", (0, 0.12, 0.88), 0.08, METAL, head, outline=0.016))
+put("hat", cone("hatbrim", (0, 0.04, 0.6), 0.66, 0.6, 0.05, METAL, head, outline=0.028, bevel=0.01))
+hatpiv = pivot("hattip", (0, 0.06, 0.62), head)
+hatpiv.rotation_euler = (math.radians(-14), 0, 0)
+put("hat", cone("hatcone", (0, 0, 0.42), 0.4, 0.04, 0.84, METAL, hatpiv, outline=0.03, bevel=0.01))
+put("hat", ring("hatband", (0, 0.04, 0.66), 0.39, 0.035, GOLD, head, outline=0.012))
+cloak = pivot("cloakpiv", (0, 0.2, 0.47), chest)
+put("cloak", box("cloakback", (0, 0.06, -0.33), (0.58, 0.06, 0.78), METAL, cloak, outline=0.026, rot=(math.radians(10), 0, 0), bevel=0.02))
+put("cloak", ball("cloakcollar", (0, -0.02, 0.02), (0.3, 0.2, 0.08), METAL, cloak, outline=0.02))
 
 # ---- weapons ------------------------------------------------------------------------
 sword = pivot("sword", (0, 0, 0), hand)
@@ -221,7 +239,53 @@ LAYERS = {
 }
 
 os.makedirs(OUT, exist_ok=True)
-if PREVIEW:
+HERO_LAYERS = {
+    "base": (("base", "hair", "tunic"), ()),
+    "tunic": (("tunic",), ("base", "hair", "cloak")),
+    "helm": (("helm",), ("base", "tunic")),
+    "cap": (("cap",), ("base", "tunic")),
+    "hat": (("hat",), ("base", "tunic")),
+    "cloak": (("cloak",), ("base", "hair", "tunic")),
+    "sword": (("sword",), ("base", "hair", "tunic", "cloak")),
+    "axe": (("axe",), ("base", "hair", "tunic", "cloak")),
+    "bow": (("bow",), ("base", "hair", "tunic", "cloak")),
+    "staff": (("staff",), ("base", "hair", "tunic", "cloak")),
+}
+if HERO:
+    sc = bpy.context.scene
+    cam = sc.camera
+
+    def aim(width, height, view, look, tilt=30):
+        """A camera only a little above the ground, so the hero stands tall."""
+        e = math.radians(tilt)
+        sc.render.resolution_x = width
+        sc.render.resolution_y = height
+        cam.data.ortho_scale = view
+        cam.rotation_euler = (math.radians(90 - tilt), 0, 0)
+        cam.location = (0, -math.cos(e) * 12, math.sin(e) * 12 + look)
+
+    try:
+        sc.eevee.taa_render_samples = 48
+    except AttributeError:
+        pass
+    # standing, turned eight ways
+    aim(400, 480, 2.25, 0.9, 12)
+    pose("idle", 0.25)
+    for layer, (vis, hold) in HERO_LAYERS.items():
+        show_only(groups, vis, hold)
+        row = []
+        for f in range(8):
+            turn.rotation_euler.z = -math.radians(45) * f
+            row.append(render_array())
+        save_sheet([row], os.path.join(OUT, f"hero-{layer}.png"))
+    # the face for the round frame, turned a little
+    aim(256, 256, 1.05, 1.22, 10)
+    turn.rotation_euler.z = math.radians(-18)
+    for layer in ("base", "tunic", "helm", "cap", "hat", "cloak"):
+        vis, hold = HERO_LAYERS[layer]
+        show_only(groups, vis, hold)
+        save_sheet([[render_array()]], os.path.join(OUT, f"portrait-{layer}.png"))
+elif PREVIEW:
     bpy.context.scene.render.resolution_percentage = 250
     show_only(groups, ("base", "hair", "tunic", "sword", "helm"))
     for ob in groups["helm"]:
