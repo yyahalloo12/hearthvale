@@ -26,6 +26,7 @@ import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTre
 import { initParty, partySessions, setParty } from "../party";
 import { initSettings, onSettings, setting } from "../settings";
 import { initQuests, questTracker, setQuests } from "../quests";
+import { initSkillWindow } from "../skillwin";
 import { initCharWin, setCharacter, setCharPortrait, setCharPrivate } from "../charwin";
 import { clearGoal, initWorldMap, setWorldMap } from "../worldmap";
 import { PartyData } from "../../../shared/protocol";
@@ -143,6 +144,7 @@ export class WorldScene extends Phaser.Scene {
     initParty((a) => this.room.send(Msg.PartyAct, a));
     initSettings();
     initQuests();
+    initSkillWindow((id) => this.room.send(Msg.LearnSkill, { skill: id }));
     bindMinimapZoom();
     initCharWin((slot) => this.room.send(Msg.Unequip, { slot }));
     initWorldMap((x, y) => {

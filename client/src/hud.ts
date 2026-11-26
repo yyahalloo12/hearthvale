@@ -3,6 +3,7 @@ import { expToNext, isMainJob, Job, JOB_CHANGE_LEVEL, JOB_CHOICES, JOB_NAMES, jo
 import { GLOW_AT } from "../../shared/hollow";
 import icons from "./icons.json";
 import { itemIcon } from "./icons";
+import { setSkillView } from "./skillwin";
 
 /** The DOM parts of the game screen: status panel, skill bar, death box. */
 
@@ -216,6 +217,7 @@ export function updateMe(me: MeView) {
   let spent = 0;
   me.skills.forEach((v) => (spent += v));
   const points = skillPointsEarned(me.level) - spent;
+  setSkillView({ job: me.job, level: me.level, skills: me.skills, points });
   const key = `${me.job}|${points}|${[...me.skills.entries()].join(",")}`;
   if (key !== lastSkillsKey) {
     lastSkillsKey = key;
@@ -240,7 +242,7 @@ function renderSkills(me: MeView, points: number) {
   const hasJob = me.job !== "wanderer";
   $("skill-points").textContent = hasJob
     ? points > 0
-      ? `แต้มสกิลเหลือ ${points} (กด + เพื่ออัปสกิล)`
+      ? `แต้มสกิลเหลือ ${points} · กด K เพื่อเปิดหน้าต่างสกิล`
       : ""
     : me.level < JOB_CHANGE_LEVEL
       ? `เลือกอาชีพและใช้สกิลได้ที่ Lv ${JOB_CHANGE_LEVEL}`
@@ -278,17 +280,6 @@ function renderSkills(me: MeView, points: number) {
     cd.className = "cd";
     slot.append(key, name, lv, cd);
     slot.onclick = () => lvl > 0 && actions.useSkill(id);
-    if (points > 0 && lvl < def.maxLevel) {
-      const plus = document.createElement("button");
-      plus.className = "learn";
-      plus.textContent = "+";
-      plus.title = `อัป ${def.name}`;
-      plus.onclick = (e) => {
-        e.stopPropagation();
-        actions.learnSkill(id);
-      };
-      slot.append(plus);
-    }
     box.append(slot);
   }
 }
