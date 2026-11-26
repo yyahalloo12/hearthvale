@@ -1099,9 +1099,13 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   // ---- skills ---------------------------------------------------------------
 
   /** Checks and takes the mana, and starts the cooldown. */
+  private manaCost(c: PlayerCtl, mp: number) {
+    return Math.round(mp * (1 - c.mods.manaCostPct / 100));
+  }
+
   private payFor(client: Client, p: Player, c: PlayerCtl, skill: SkillId): boolean {
     const def = SKILLS[skill];
-    const cost = def.mp ?? 0;
+    const cost = this.manaCost(c, def.mp ?? 0);
     if (p.mp < cost) {
       client.send(Msg.Notice, { text: "มานาไม่พอ" });
       return false;
@@ -1150,10 +1154,11 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
           const off = Math.abs((e.x - from.x) * uy - (e.y - from.y) * ux);
           if (eid === targetId || (along > 0 && off <= 0.9)) this.playerHits(id, p, c, eid, power, skill, 0, 0.5);
         }
+        this.extraShots(id, p, c, targetId, at, power, skill);
         return;
       }
       case "mark": {
-        const until = now + (def.durationMs ?? 8000);
+        const until = now + this.longer(c, def.durationMs ?? 8000);
         const mc = this.monsterSys.ctl.get(targetId);
         const tc = this.ctl.get(targetId);
         if (mc) Object.assign(mc, { markUntil: until, mark: this.amountOf(def, lvl) });
@@ -1164,15 +1169,15 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         return;
       }
       case "splash": {
-        const stun = (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
+        const stun = this.stunFor(c, (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1));
         this.playerHits(id, p, c, targetId, power, skill, stun);
-        for (const [eid] of this.enemiesNear(id, at.x, at.y, def.radius ?? 1.8, targetId)) this.playerHits(id, p, c, eid, power * 0.6, skill, stun);
+        for (const [eid] of this.enemiesNear(id, at.x, at.y, this.area(c, def.radius ?? 1.8), targetId)) this.playerHits(id, p, c, eid, power * 0.6, skill, stun);
         return;
       }
       case "frost": {
         // hurts and slows everything around the target
-        const until = now + (def.durationMs ?? 3000);
-        for (const [eid] of [[targetId, at] as [string, unknown], ...this.enemiesNear(id, at.x, at.y, def.radius ?? 2, targetId)]) {
+        const until = now + this.longer(c, def.durationMs ?? 3000);
+        for (const [eid] of [[targetId, at] as [string, unknown], ...this.enemiesNear(id, at.x, at.y, this.area(c, def.radius ?? 2), targetId)]) {
           this.playerHits(id, p, c, eid, power, skill);
           const tc = this.monsterSys.ctl.get(eid) ?? this.ctl.get(eid);
           if (tc) Object.assign(tc, { slowUntil: until, slow: def.amount ?? 0.4 });
@@ -1182,7 +1187,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       case "pull": {
         // the target is dragged next to us, then stunned
         const spot = this.besideMe(p, at);
-        const stun = (def.stunMs ?? 800) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
+        const stun = this.stunFor(c, (def.stunMs ?? 800) + (def.stunPerLevelMs ?? 0) * (lvl - 1));
         const m = this.state.monsters.get(targetId);
         const mc = this.monsterSys.ctl.get(targetId);
         if (spot && m && mc && !MONSTERS[m.kind]?.boss) {
@@ -1202,7 +1207,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         const before = (this.state.monsters.get(targetId) ?? this.state.players.get(targetId))?.hp ?? 0;
         this.playerHits(id, p, c, targetId, power, skill);
         const after = (this.state.monsters.get(targetId) ?? this.state.players.get(targetId))?.hp ?? 0;
-        const got = Math.round(Math.max(0, before - after) * (def.amount ?? 0.5));
+        const got = Math.round(Math.max(0, before - after) * (def.amount ?? 0.5) * (1 + c.mods.healPct / 100));
         if (got > 0) {
           p.hp = Math.min(p.maxHp, p.hp + got);
           this.broadcast(Msg.Hit, { from: id, to: id, dmg: got, skill, heal: true } satisfies HitEvent);
@@ -1211,7 +1216,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       }
       case "slow": {
         this.playerHits(id, p, c, targetId, power, skill);
-        const until = now + (def.durationMs ?? 3000) + (def.durationPerLevel ?? 0) * (lvl - 1);
+        this.extraShots(id, p, c, targetId, at, power, skill);
+        const until = now + this.longer(c, (def.durationMs ?? 3000) + (def.durationPerLevel ?? 0) * (lvl - 1));
         const tc = this.monsterSys.ctl.get(targetId) ?? this.ctl.get(targetId);
         if (tc) Object.assign(tc, { slowUntil: until, slow: def.amount ?? 0.4 });
         return;
@@ -1220,9 +1226,9 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         let from = at;
         const done = new Set([targetId]);
         this.playerHits(id, p, c, targetId, power, skill);
-        const jumps = 2 + Math.floor((lvl - 1) / 2);
+        const jumps = 2 + Math.floor((lvl - 1) / 2) + Math.floor(c.mods.chainJumps);
         for (let i = 1, k = 0.75; i <= jumps; i++, k *= 0.75) {
-          const next = this.enemiesNear(id, from.x, from.y, def.radius ?? 3, "").find(([eid]) => !done.has(eid));
+          const next = this.enemiesNear(id, from.x, from.y, this.area(c, def.radius ?? 3), "").find(([eid]) => !done.has(eid));
           if (!next) break;
           done.add(next[0]);
           from = { x: next[1].x, y: next[1].y };
@@ -1231,8 +1237,12 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         return;
       }
       default: {
-        const stun = (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
-        for (let i = 0; i < (def.hits ?? 1); i++) if (this.targetOf(id, targetId)) this.playerHits(id, p, c, targetId, power, skill, stun, def.ignoreDef ?? 0);
+        const stun = this.stunFor(c, (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1));
+        // "strike again" nodes: a chance of one more hit
+        const hits = (def.hits ?? 1) + (Math.random() * 100 < c.mods.multiStrike ? 1 : 0);
+        for (let i = 0; i < hits; i++) if (this.targetOf(id, targetId)) this.playerHits(id, p, c, targetId, power, skill, stun, def.ignoreDef ?? 0);
+        // shots from afar get the extra arrows
+        if (def.range > 2.5) this.extraShots(id, p, c, targetId, at, power, skill);
       }
     }
   }
@@ -1243,8 +1253,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const lvl = p.skills.get(skill) ?? 1;
     const now = this.clock.currentTime;
     const id = client.sessionId;
-    const until = now + (def.durationMs ?? 6000) + (def.durationPerLevel ?? 0) * (lvl - 1);
-    if (p.mp < (def.mp ?? 0)) return client.send(Msg.Notice, { text: "มานาไม่พอ" });
+    const until = now + this.longer(c, (def.durationMs ?? 6000) + (def.durationPerLevel ?? 0) * (lvl - 1));
+    if (p.mp < this.manaCost(c, def.mp ?? 0)) return client.send(Msg.Notice, { text: "มานาไม่พอ" });
     switch (def.kind) {
       case "guard":
         this.payFor(client, p, c, skill);
@@ -1254,7 +1264,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         return;
       case "taunt":
         this.payFor(client, p, c, skill);
-        this.monsterSys.taunt(id, p.x, p.y, (def.radius ?? 4) + (def.radiusPerLevel ?? 0) * (lvl - 1));
+        this.monsterSys.taunt(id, p.x, p.y, this.area(c, (def.radius ?? 4) + (def.radiusPerLevel ?? 0) * (lvl - 1)));
         c.lastCombatAt = now;
         c.shieldUntil = 0;
         return;
@@ -1267,8 +1277,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       case "whirl": {
         this.payFor(client, p, c, skill);
         const power = (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1);
-        const stun = (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1);
-        for (const [eid] of this.enemiesNear(id, p.x, p.y, def.radius ?? 2, "")) this.playerHits(id, p, c, eid, power, skill, stun);
+        const stun = this.stunFor(c, (def.stunMs ?? 0) + (def.stunPerLevelMs ?? 0) * (lvl - 1));
+        for (const [eid] of this.enemiesNear(id, p.x, p.y, this.area(c, def.radius ?? 2), "")) this.playerHits(id, p, c, eid, power, skill, stun);
         c.lastCombatAt = now;
         return;
       }
@@ -1278,7 +1288,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         this.state.players.forEach((t, tid) => {
           const tc = this.ctl.get(tid);
           if (!tc || t.dead || tc.leaving) return;
-          if (tid !== id && (!def.radius || dist(p, t) > def.radius || (this.map.pvp && !party.sameParty(c.accountId, tc.accountId)))) return;
+          if (tid !== id && (!def.radius || dist(p, t) > this.area(c, def.radius) || (this.map.pvp && !party.sameParty(c.accountId, tc.accountId)))) return;
           tc.frenzyUntil = until;
           tc.frenzyDmg = per(def.amount, def.amountPerLevel);
           tc.frenzyCrit = per(def.crit, def.critPerLevel);
@@ -1290,10 +1300,10 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       case "massheal": {
         this.payFor(client, p, c, skill);
         const power = (def.power ?? 1) + (def.powerPerLevel ?? 0) * (lvl - 1);
-        const amount = Math.round(this.statsOf(p, c).atk * power * (1 + c.mods.skillDmgPct / 100));
+        const amount = Math.round(this.statsOf(p, c).atk * power * (1 + c.mods.skillDmgPct / 100) * (1 + c.mods.healPct / 100));
         this.state.players.forEach((t, tid) => {
           const tc = this.ctl.get(tid);
-          if (!tc || t.dead || tc.leaving || dist(p, t) > (def.radius ?? 6)) return;
+          if (!tc || t.dead || tc.leaving || dist(p, t) > this.area(c, def.radius ?? 6)) return;
           if (tid !== id && this.map.pvp && !party.sameParty(c.accountId, tc.accountId)) return;
           const got = Math.min(amount, t.maxHp - t.hp);
           t.hp += got;
@@ -1313,7 +1323,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         this.state.players.forEach((t, tid) => {
           const tc = this.ctl.get(tid);
           if (!tc || t.dead || tc.leaving) return;
-          if (tid !== id && (dist(p, t) > (def.radius ?? 5) || (this.map.pvp && !party.sameParty(c.accountId, tc.accountId)))) return;
+          if (tid !== id && (dist(p, t) > this.area(c, def.radius ?? 5) || (this.map.pvp && !party.sameParty(c.accountId, tc.accountId)))) return;
           tc.blessUntil = until;
           tc.bless = this.amountOf(def, lvl);
           t.blessed = true;
@@ -1349,7 +1359,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         if (dist(p, t) > def.range + 0.5) return client.send(Msg.Notice, { text: "เป้าหมายไกลเกินไป" });
         this.payFor(client, p, c, skill);
         const power = (def.power ?? 1.6) + (def.powerPerLevel ?? 0) * (lvl - 1);
-        const amount = Math.round(this.statsOf(p, c).atk * power * (1 + c.mods.skillDmgPct / 100) * (0.95 + Math.random() * 0.1));
+        const amount = Math.round(this.statsOf(p, c).atk * power * (1 + c.mods.skillDmgPct / 100) * (1 + c.mods.healPct / 100) * (0.95 + Math.random() * 0.1));
         const got = Math.min(amount, t.maxHp - t.hp);
         t.hp += got;
         if (tid !== id) faceTowards(p, t);
@@ -1367,7 +1377,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         this.payFor(client, p, c, skill);
         const [tid, t] = best as [string, Player];
         t.dead = false;
-        t.hp = Math.max(1, Math.round(t.maxHp * this.amountOf(def, lvl)));
+        t.hp = Math.max(1, Math.min(t.maxHp, Math.round(t.maxHp * this.amountOf(def, lvl) * (1 + c.mods.healPct / 100))));
         const tc = this.ctl.get(tid)!;
         tc.path = [];
         tc.shieldUntil = this.map.pvp ? now + PROTECT_MS : 0;
@@ -1376,6 +1386,27 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         return;
       }
     }
+  }
+
+  /** Radius of an area skill after the "wider" nodes. */
+  private area(c: PlayerCtl, r: number) {
+    return r * Math.max(0.5, 1 + c.mods.aoePct / 100);
+  }
+  /** How long an effect lasts after the "longer" nodes. */
+  private longer(c: PlayerCtl, ms: number) {
+    return ms * (1 + c.mods.durationPct / 100);
+  }
+  private stunFor(c: PlayerCtl, ms: number) {
+    return ms > 0 ? ms * (1 + c.mods.stunPct / 100) : 0;
+  }
+  /** Extra arrows and bolts: each flies at another enemy close to the target. */
+  private extraShots(id: string, p: Player, c: PlayerCtl, targetId: string, at: { x: number; y: number }, power: number, skill?: string) {
+    const n = Math.floor(c.mods.extraProjectiles);
+    if (n <= 0) return;
+    const others = this.enemiesNear(id, at.x, at.y, 3.5, targetId).slice(0, n);
+    for (const [eid] of others) this.playerHits(id, p, c, eid, power * 0.7, skill);
+    // nobody else around: the spare arrows hit the same target, weaker
+    for (let i = others.length; i < n; i++) if (this.targetOf(id, targetId)) this.playerHits(id, p, c, targetId, power * 0.35, skill);
   }
 
   /** A free tile right next to us on the side of `from`. */
@@ -2319,6 +2350,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     }
     const crit = Math.random() < this.critChance(c, targetId);
     let dmg = hitDamage(this.statsOf(p, c).atk, this.statsOf(t, tc).def, this.boosted(p, c, power, skill), Math.random(), crit, defIgnore);
+    if (crit) dmg = Math.max(1, Math.round(dmg * (1 + c.mods.critDmgPct / 100)));
     dmg = this.taken(t, tc, dmg * PVP_DAMAGE * (tc.markUntil > now ? 1 + tc.mark : 1), now);
     this.lifesteal(p, c, Math.min(dmg, t.hp));
     t.hp = Math.max(0, t.hp - dmg);
@@ -2341,6 +2373,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     faceTowards(p, m);
     const crit = Math.random() < this.critChance(c, monsterId);
     let dmg = hitDamage(this.statsOf(p, c).atk, mc.def_, this.boosted(p, c, power, skill), Math.random(), crit, defIgnore);
+    if (crit) dmg = Math.max(1, Math.round(dmg * (1 + c.mods.critDmgPct / 100)));
     if (mc.markUntil > this.clock.currentTime) dmg = Math.round(dmg * (1 + mc.mark));
     c.lastCombatAt = this.clock.currentTime;
     c.shieldUntil = 0;
@@ -2799,7 +2832,12 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
               }
             } else if (now >= c.nextAttackAt) {
               c.nextAttackAt = now + swingMs;
+              const tgt = this.targetOf(id, c.targetId);
               this.playerHits(id, p, c, c.targetId, 1);
+              // a bow or staff shoots extra arrows; a melee swing sweeps those beside
+              if (tgt && reach > 2.5) this.extraShots(id, p, c, c.targetId, tgt, 0.7);
+              else if (tgt && c.mods.meleeSplash > 0)
+                for (const [eid] of this.enemiesNear(id, tgt.x, tgt.y, 1.6, c.targetId)) this.playerHits(id, p, c, eid, c.mods.meleeSplash / 100);
             }
           }
         } else {

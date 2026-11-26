@@ -29,6 +29,18 @@ export interface Mods {
   lifesteal: number;
   dmgReduce: number;
   lowHpDmgPct: number;
+  /** nodes that change skills */
+  critDmgPct: number;
+  extraProjectiles: number;
+  aoePct: number;
+  chainJumps: number;
+  stunPct: number;
+  durationPct: number;
+  healPct: number;
+  manaCostPct: number;
+  mpPct: number;
+  meleeSplash: number;
+  multiStrike: number;
   /** game-changing nodes */
   bloodthirst: boolean;
   firststrike: boolean;
@@ -64,20 +76,38 @@ const MOD_TEXT: Record<NumMod, (v: number) => string> = {
   agi: (v) => `ความคล่อง +${v}`,
   int: (v) => `ปัญญา +${v}`,
   fai: (v) => `ศรัทธา +${v}`,
-  hpPct: (v) => `เลือดสูงสุด +${v}%`,
-  atkPct: (v) => `พลังโจมตี +${v}%`,
-  defPct: (v) => `ป้องกัน +${v}%`,
+  hpPct: (v) => `เลือดสูงสุด ${sign(v)}%`,
+  atkPct: (v) => `พลังโจมตี ${sign(v)}%`,
+  defPct: (v) => `ป้องกัน ${sign(v)}%`,
   critChance: (v) => `โอกาสคริติคอล +${v}%`,
   attackSpeedPct: (v) => `ความเร็วโจมตี ${v > 0 ? "+" : ""}${v}%`,
-  moveSpeedPct: (v) => `ความเร็วเดิน +${v}%`,
+  moveSpeedPct: (v) => `ความเร็วเดิน ${sign(v)}%`,
   dodge: (v) => `หลบหลีก +${v}%`,
-  skillDmgPct: (v) => `ดาเมจสกิล +${v}%`,
-  cdrPct: (v) => `คูลดาวน์สกิล -${v}%`,
+  skillDmgPct: (v) => `ดาเมจสกิล ${sign(v)}%`,
+  cdrPct: (v) => (v >= 0 ? `คูลดาวน์สกิล -${v}%` : `คูลดาวน์สกิลนานขึ้น ${-v}%`),
   regenPct: (v) => `ฟื้นเลือดเร็วขึ้น ${v}%`,
   lifesteal: (v) => `ดูดเลือด ${v}% ของดาเมจ`,
   dmgReduce: (v) => `รับดาเมจน้อยลง ${v}%`,
   lowHpDmgPct: (v) => `ดาเมจ +${v}% เมื่อเลือดต่ำกว่าครึ่ง`,
+  critDmgPct: (v) => `คริติคอลแรงขึ้น ${sign(v)}%`,
+  extraProjectiles: (v) => `ลูกศรและกระสุนเวท ${sign(v)} ลูก (ยิงเป้าอื่นรอบตัวเป้าหมาย)`,
+  aoePct: (v) => `รัศมีสกิลวงกว้าง ${sign(v)}%`,
+  chainJumps: (v) => `สายฟ้าลูกโซ่กระโดดเพิ่ม ${sign(v)} ครั้ง`,
+  stunPct: (v) => `เวลามึน ${sign(v)}%`,
+  durationPct: (v) => `บัฟ ดีบัฟ และกับดักนานขึ้น ${sign(v)}%`,
+  healPct: (v) => `รักษาแรงขึ้น ${sign(v)}%`,
+  manaCostPct: (v) => `ใช้มานาน้อยลง ${v}%`,
+  mpPct: (v) => `มานาสูงสุด ${sign(v)}%`,
+  meleeSplash: (v) => `ตีประชิดกระเด็นโดนตัวข้างๆ ${v}% ของดาเมจ`,
+  multiStrike: (v) => `โอกาส ${v}% ที่สกิลโจมตีจะตีซ้ำอีกครั้ง`,
 };
+
+function sign(v: number) {
+  return v > 0 ? `+${v}` : String(v);
+}
+
+/** Bonuses that change how skills work (shown in their own list). */
+export const SKILL_MODS: ReadonlySet<NumMod> = new Set(["extraProjectiles", "aoePct", "chainJumps", "stunPct", "durationPct", "healPct", "manaCostPct", "meleeSplash", "multiStrike", "critDmgPct", "mpPct"]);
 
 /** What one point of each attribute gives (shown in the tree window too). */
 export const ATTRIBUTE_HELP = [
@@ -116,6 +146,17 @@ export function emptyMods(): Mods {
     lifesteal: 0,
     dmgReduce: 0,
     lowHpDmgPct: 0,
+    critDmgPct: 0,
+    extraProjectiles: 0,
+    aoePct: 0,
+    chainJumps: 0,
+    stunPct: 0,
+    durationPct: 0,
+    healPct: 0,
+    manaCostPct: 0,
+    mpPct: 0,
+    meleeSplash: 0,
+    multiStrike: 0,
     bloodthirst: false,
     firststrike: false,
   };
@@ -141,6 +182,10 @@ export function passiveMods(learned: Iterable<string>, extra: Partial<Record<Num
   m.cdrPct = Math.min(m.cdrPct, 40);
   m.dodge = Math.min(m.dodge, 40);
   m.dmgReduce = Math.min(m.dmgReduce, 50);
+  m.manaCostPct = Math.min(m.manaCostPct, 50);
+  m.multiStrike = Math.min(m.multiStrike, 50);
+  m.extraProjectiles = Math.max(0, Math.min(m.extraProjectiles, 6));
+  m.aoePct = Math.max(-50, m.aoePct);
   return m;
 }
 

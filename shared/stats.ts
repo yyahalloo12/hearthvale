@@ -212,7 +212,7 @@ export function playerStats(level: number, job: Job, mods?: Mods, gear?: FlatSta
   s.maxHp *= j.hp;
   s.atk *= j.atk;
   s.def *= j.def;
-  const maxMp = j.mp ? Math.round((50 + 5 * l) * j.mp + (mods?.int ?? 0)) : 0;
+  const maxMp = j.mp ? Math.round(((50 + 5 * l) * j.mp + (mods?.int ?? 0)) * (1 + (mods?.mpPct ?? 0) / 100)) : 0;
   if (gear) {
     s.maxHp += gear.hp;
     s.atk += gear.atk;

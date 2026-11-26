@@ -78,11 +78,16 @@
         <h2>ผืนทอแห่งชะตา</h2>
         <span id="tree-points"></span>
         <span id="tree-gold"></span>
+        <input id="tree-search" placeholder="ค้นหา เช่น ลูกศร, คริติคอล, ฮีล" autocomplete="off" />
+        <button id="tree-zoom-out" aria-label="ซูมออก">−</button>
+        <button id="tree-zoom-in" aria-label="ซูมเข้า">+</button>
         <button id="tree-centre">ดูทั้งผืน</button>
         <button id="tree-close" aria-label="ปิด">✕</button>
       </div>
       <div class="tree-body">
         <div id="tree-canvas">
+          <div id="tree-filters"></div>
+          <div id="tree-legend"><span class="lg small"></span>เล็ก <span class="lg notable"></span>เด่น <span class="lg keystone"></span>หลัก <span class="lg skillmod"></span>เปลี่ยนสกิล <span class="lg path"></span>เส้นทาง</div>
           <svg><g id="tree-nodes"></g></svg>
           <div id="tree-tip" hidden></div>
         </div>
@@ -90,6 +95,8 @@
           <div id="tree-selected"></div>
           <h3>โบนัสรวม</h3>
           <div id="tree-total"></div>
+          <h3>ผลกับสกิล</h3>
+          <div id="tree-skill"></div>
           <h3>ค่าพลัง</h3>
           <div id="tree-help"></div>
         </div>

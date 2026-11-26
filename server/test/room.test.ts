@@ -136,11 +136,11 @@ test("passive nodes: learn, spend points, pay to give back, and save", async () 
   assert.deepEqual(priv, { gold: 0, nodes: [], inv: emptyInventory() });
 
   // not next to a starting point: ignored. Level 1 has one point.
-  a.send(Msg.LearnPassive, { id: "r3" });
+  a.send(Msg.LearnPassive, { id: "r4" });
   a.send(Msg.LearnPassive, { id: "c_str" });
   await until(() => priv.nodes.length === 1);
   assert.deepEqual(priv.nodes, ["c_str"]);
-  a.send(Msg.LearnPassive, { id: "r3" });
+  a.send(Msg.LearnPassive, { id: "r4" });
   await until(() => notices.length === 1);
 
   // no coins: refused
@@ -153,16 +153,16 @@ test("passive nodes: learn, spend points, pay to give back, and save", async () 
   room.ctl.get(a.sessionId)!.gold = 1000;
   me.level = 5;
   const before = me.maxHp;
+  a.send(Msg.LearnPassive, { id: "r4" });
   a.send(Msg.LearnPassive, { id: "r3" });
-  a.send(Msg.LearnPassive, { id: "r2" });
   await until(() => priv.nodes.length === 3);
   assert.ok(me.maxHp > before);
 
   // r3 holds up r2: refused; r2 itself can go, for 50 coins at level 5
+  a.send(Msg.RefundPassive, { id: "r4" });
   a.send(Msg.RefundPassive, { id: "r3" });
-  a.send(Msg.RefundPassive, { id: "r2" });
   await until(() => priv.nodes.length === 2);
-  assert.deepEqual(priv.nodes, ["c_str", "r3"]);
+  assert.deepEqual(priv.nodes, ["c_str", "r4"]);
   assert.equal(priv.gold, 950);
   await a.leave();
 
@@ -171,7 +171,7 @@ test("passive nodes: learn, spend points, pay to give back, and save", async () 
   a.onMessage(Msg.Private, (d: any) => (back = d));
   a.send(Msg.Sync);
   await until(() => back !== null);
-  assert.deepEqual(back, { gold: 950, nodes: ["c_str", "r3"], inv: emptyInventory() });
+  assert.deepEqual(back, { gold: 950, nodes: ["c_str", "r4"], inv: emptyInventory() });
   await a.leave();
 });
 

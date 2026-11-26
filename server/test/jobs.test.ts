@@ -347,3 +347,21 @@ test("pathfinder vanishes, warden pulls, oracle heals everyone around", async ()
   await until(() => f.hp > 5 && o.hp > 5, 3000, "both healed");
   await Promise.all([w3.room.leave(), friend.room.leave()]);
 });
+
+test("tree nodes change skills: extra arrows fly at other enemies, wider splash", async () => {
+  const { passiveMods } = await import("../../shared/passives");
+  const s = await make("archer");
+  clear(s);
+  const p = body(s);
+  Object.assign(p, FIELD);
+  const a = dummy(s, FIELD.x, FIELD.y - 4);
+  const b = dummy(s, FIELD.x + 1, FIELD.y - 5);
+  const c2 = dummy(s, FIELD.x - 1, FIELD.y - 5);
+  ctl(s).mods = passiveMods(["k_barrage"]);
+  s.hits.length = 0;
+  s.room.send(Msg.Skill, { skill: "double_shot", target: a });
+  await until(() => new Set(s.hits.filter((h) => h.skill === "double_shot").map((h) => h.to)).size === 3, 4000, "arrows spread");
+  void b;
+  void c2;
+  await s.room.leave();
+});

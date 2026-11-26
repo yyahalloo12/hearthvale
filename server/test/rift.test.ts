@@ -85,6 +85,7 @@ test("into a portal: waves, the chest, and back out to where it stood", async ()
   const portal = a.w.state.portals.get(id)!;
   pa.x = portal.x;
   pa.y = portal.y + 1;
+  a.w.monsterSys.clearNear(portal.x, portal.y, 14);
   a.r.send(Msg.EnterRift, { id });
   await until(() => a.travel.length > 0, 4000, "travel");
   const t = a.travel[0];
@@ -171,6 +172,7 @@ test("a dungeon: rooms open one by one, the party shares one run", async () => {
   pa.level = 20;
   pa.x = door.x;
   pa.y = door.y + 1;
+  w.monsterSys.clearNear(door.x, door.y, 14);
   a.r.send(Msg.EnterRift, { id: "dungeon" });
   await until(() => a.travel.length > 0, 4000, "travel");
   const t = a.travel[0];

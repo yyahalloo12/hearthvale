@@ -534,3 +534,27 @@ button.secondary:disabled { opacity: 0.6; cursor: wait; }
 
 .skill .pic.ipic { display: block; width: 42px; height: 42px; margin: 1px auto 0; }
 .skill.locked .pic.ipic { opacity: 0.5; }
+
+/* ---- passive tree, bigger and easier ---- */
+.tree-head { flex-wrap: wrap; }
+#tree-search { flex: 1; min-width: 160px; max-width: 320px; font-size: 14px; padding: 6px 12px; border-radius: 14px; border: 2px solid var(--gold-d); background: #fffaf0; }
+#tree-filters { position: absolute; left: 10px; top: 10px; display: flex; gap: 6px; z-index: 2; flex-wrap: wrap; }
+#tree-filters button { font-size: 12px; font-weight: bold; padding: 5px 11px; border-radius: 12px; border: 1.5px solid var(--gold-d); background: rgba(40, 24, 12, 0.85); color: var(--gold-l); cursor: pointer; }
+#tree-filters button[aria-pressed="true"] { background: var(--gold); color: var(--wood-dd); }
+#tree-legend { position: absolute; left: 10px; bottom: 8px; z-index: 2; font-size: 11px; color: #efe6cf; display: flex; gap: 6px; align-items: center; background: rgba(20, 18, 30, 0.7); padding: 4px 10px; border-radius: 10px; pointer-events: none; }
+#tree-legend .lg { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #ccc; background: #2b2840; }
+#tree-legend .lg.notable { width: 16px; height: 16px; }
+#tree-legend .lg.keystone { border-radius: 2px; transform: rotate(45deg); }
+#tree-legend .lg.skillmod { border-color: #ffb02e; border-style: dashed; }
+#tree-legend .lg.path { background: #7fe0ff; border-color: #fff; }
+#tree .node .hit { fill: transparent; }
+#tree .node .glyph { font-size: 14px; text-anchor: middle; pointer-events: none; fill: #fff; }
+#tree .node.keystone .glyph { font-size: 17px; }
+#tree .node.skillmod .shape { stroke-dasharray: 4 2; }
+#tree .node.skillmod.small .shape { stroke: #ffb02e; }
+#tree .node.path .shape { fill: #2f5f7a; stroke: #7fe0ff; stroke-width: 4; opacity: 1; }
+#tree .edge.path { stroke: #7fe0ff; stroke-width: 5; stroke-dasharray: 8 4; }
+#tree .node.match .shape { stroke: #ffffff; stroke-width: 5; filter: drop-shadow(0 0 6px #fff); }
+#tree .node.dim { opacity: 0.22; }
+#tree-tip .kind, #tree-selected .kind { opacity: 0.7; font-size: 12px; }
+#tree-skill { color: #8a3a00; }

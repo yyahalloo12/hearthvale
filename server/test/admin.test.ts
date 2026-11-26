@@ -165,7 +165,7 @@ test("a game master can do things to themselves and to others", async () => {
 
   // lower level: no more nodes than points
   await run("/level 3");
-  for (const id of ["c_str", "r3", "s1"]) g.room.send(Msg.LearnPassive, { id });
+  for (const id of ["c_str", "r4", "str_t1"]) g.room.send(Msg.LearnPassive, { id });
   await until(() => ct.nodes.size === 3);
   await run("/level 1");
   assert.equal(ct.nodes.size, 1);
