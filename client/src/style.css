@@ -641,3 +641,14 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 5
 #side-menu .mbtn:hover::after { content: attr(title); position: absolute; right: 54px; top: 50%; transform: translateY(-50%); white-space: nowrap; background: rgba(31, 21, 13, 0.95); color: var(--gold-l); border: 1.5px solid var(--gold-d); border-radius: 8px; padding: 3px 9px; font-size: 12px; font-weight: bold; }
 #side-menu #tree-badge { right: auto; left: -5px; }
 .char-stage img { width: 190px; height: 190px; }
+
+/* ---- more gear ---- */
+#equip-slots { flex-wrap: wrap; gap: 6px; justify-content: center; }
+#equip-slots .eslot { width: 54px; }
+.char-stage { height: 380px; }
+.ccol { gap: 8px; }
+.cslot { width: 56px; height: 56px; }
+.islot.unique, .cslot.unique { border-color: #ffb02e !important; box-shadow: 0 0 10px #ffb02e, inset 0 0 8px rgba(255, 176, 46, 0.5) !important; background: radial-gradient(circle at 50% 35%, #fff2c4, #e8b04a) !important; }
+.cslot.unique { background: radial-gradient(circle at 50% 35%, #6a4a12, #2a1a06) !important; }
+.qtu { color: #d97a00 !important; text-shadow: 0 0 6px rgba(255, 176, 46, 0.6); }
+#charwin { width: 680px; }

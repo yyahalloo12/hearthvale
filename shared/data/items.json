@@ -1,63 +1,1290 @@
 {
-  "ore_1": {"name": "แร่ทองแดง", "kind": "material", "tier": 1, "icon": "🪨", "price": 1},
-  "ore_2": {"name": "แร่เหล็ก", "kind": "material", "tier": 2, "icon": "⛰️", "price": 2},
-  "wood_1": {"name": "ไม้โอ๊ก", "kind": "material", "tier": 1, "icon": "🪵", "price": 1},
-  "wood_2": {"name": "ไม้มอส", "kind": "material", "tier": 2, "icon": "🪵", "price": 2, "desc": "ตัดได้ในป่ามอสเฟน"},
-  "hide_2": {"name": "หนังหมาป่า", "kind": "material", "tier": 2, "icon": "🟫", "price": 4, "desc": "จากหมาป่าและหมีในป่ามอสเฟน"},
-  "ore_3": {"name": "แร่หมอก", "kind": "material", "tier": 3, "icon": "🌫️", "price": 8, "desc": "มีเฉพาะใน Hollow"},
-  "wood_3": {"name": "ไม้ไร้สี", "kind": "material", "tier": 3, "icon": "🦴", "price": 8, "desc": "มีเฉพาะใน Hollow"},
-  "thread_3": {"name": "ด้ายชะตาขาด", "kind": "material", "tier": 3, "icon": "🧵", "price": 15, "desc": "ดรอปจากมอนสเตอร์ใน Hollow"},
-  "hide_1": {"name": "หนังหนูนา", "kind": "material", "tier": 1, "icon": "🟫", "price": 2},
-  "herb_1": {"name": "ใบหอม", "kind": "material", "tier": 1, "icon": "", "price": 1, "desc": "เกี่ยวจากพุ่มไม้รอบหมู่บ้าน"},
-  "herb_2": {"name": "เห็ดเรือง", "kind": "material", "tier": 2, "icon": "", "price": 3, "desc": "เกี่ยวจากเห็ดในป่ามอสเฟน"},
-  "crystal_1": {"name": "ผลึกแสงเช้า", "kind": "material", "tier": 1, "icon": "💎", "price": 10, "desc": "ใส่ตอนคราฟต์เพื่อเพิ่มโอกาสได้ของคุณภาพสูง"},
-
-  "pickaxe": {"name": "อีเก้ง", "kind": "tool", "tier": 1, "icon": "⛏️", "price": 5, "buy": 15, "desc": "ใช้ขุดแร่จากก้อนหิน"},
-  "hatchet": {"name": "ขวานตัดไม้", "kind": "tool", "tier": 1, "icon": "🪓", "price": 5, "buy": 15, "desc": "ใช้ตัดไม้จากต้นไม้"},
-  "knife": {"name": "มีดแล่", "kind": "tool", "tier": 1, "icon": "🔪", "price": 5, "buy": 15, "desc": "พกไว้แล้วได้หนังจากสัตว์ที่ล้ม"},
-
-  "sickle": {"name": "เคียว", "kind": "tool", "tier": 1, "icon": "", "price": 5, "buy": 15, "desc": "ใช้เกี่ยวสมุนไพรจากพุ่มไม้และเห็ด"},
-
-  "sword_1": {"name": "ดาบทองแดง", "kind": "equip", "slot": "weapon", "look": "sword", "tier": 1, "level": 1, "icon": "🗡️", "price": 12, "atk": 6, "mods": {"critChance": 2}, "jobs": ["wanderer", "squire"]},
-  "axe_1": {"name": "ขวานศึกทองแดง", "kind": "equip", "slot": "weapon", "look": "axe", "tier": 1, "level": 1, "icon": "🪓", "price": 12, "atk": 8, "mods": {"attackSpeedPct": -8}, "jobs": ["wanderer", "squire"]},
-  "helm_1": {"name": "หมวกทองแดง", "kind": "equip", "slot": "head", "look": "helm", "tier": 1, "level": 1, "icon": "🪖", "price": 8, "def": 1, "hp": 10},
-  "armor_1": {"name": "เกราะทองแดง", "kind": "equip", "slot": "body", "tier": 1, "level": 1, "icon": "🛡️", "price": 16, "def": 3, "hp": 15},
-  "boots_1": {"name": "รองเท้าเกราะทองแดง", "kind": "equip", "slot": "feet", "tier": 1, "level": 1, "icon": "🥾", "price": 8, "def": 1, "hp": 8},
-
-  "sword_2": {"name": "ดาบเหล็ก", "kind": "equip", "slot": "weapon", "look": "sword", "tier": 2, "level": 8, "icon": "🗡️", "price": 30, "atk": 12, "mods": {"critChance": 3}, "jobs": ["wanderer", "squire"]},
-  "axe_2": {"name": "ขวานศึกเหล็ก", "kind": "equip", "slot": "weapon", "look": "axe", "tier": 2, "level": 8, "icon": "🪓", "price": 30, "atk": 15, "mods": {"attackSpeedPct": -8}, "jobs": ["wanderer", "squire"]},
-  "helm_2": {"name": "หมวกเหล็ก", "kind": "equip", "slot": "head", "look": "helm", "tier": 2, "level": 8, "icon": "🪖", "price": 20, "def": 2, "hp": 20},
-  "armor_2": {"name": "เกราะเหล็ก", "kind": "equip", "slot": "body", "tier": 2, "level": 8, "icon": "🛡️", "price": 40, "def": 6, "hp": 30},
-  "boots_2": {"name": "รองเท้าเกราะเหล็ก", "kind": "equip", "slot": "feet", "tier": 2, "level": 8, "icon": "🥾", "price": 20, "def": 2, "hp": 16},
-
-  "sword_3": {"name": "ดาบหมอก", "kind": "equip", "slot": "weapon", "look": "sword", "tier": 3, "level": 14, "icon": "🗡️", "price": 90, "atk": 20, "mods": {"critChance": 4}, "jobs": ["wanderer", "squire"]},
-  "axe_3": {"name": "ขวานศึกหมอก", "kind": "equip", "slot": "weapon", "look": "axe", "tier": 3, "level": 14, "icon": "🪓", "price": 90, "atk": 24, "mods": {"attackSpeedPct": -8}, "jobs": ["wanderer", "squire"]},
-  "helm_3": {"name": "หมวกหมอก", "kind": "equip", "slot": "head", "look": "helm", "tier": 3, "level": 14, "icon": "🪖", "price": 60, "def": 4, "hp": 34},
-  "armor_3": {"name": "เกราะหมอก", "kind": "equip", "slot": "body", "tier": 3, "level": 14, "icon": "🛡️", "price": 120, "def": 10, "hp": 50},
-  "boots_3": {"name": "รองเท้าเกราะหมอก", "kind": "equip", "slot": "feet", "tier": 3, "level": 14, "icon": "🥾", "price": 60, "def": 4, "hp": 28},
-
-  "bow_1": {"name":"ธนูโอ๊ก","kind":"equip","slot":"weapon","look":"bow","tier":1,"level":1,"icon":"","price":12,"atk":5,"mods":{"critChance":3},"jobs":["archer"]},
-  "staff_1": {"name":"คทาโอ๊ก","kind":"equip","slot":"weapon","look":"staff","tier":1,"level":1,"icon":"","price":12,"atk":6,"mods":{"skillDmgPct":4},"jobs":["weaver","acolyte"]},
-  "lcap_1": {"name":"หมวกหนังหนูนา","kind":"equip","slot":"head","look":"cap","tier":1,"level":1,"icon":"","price":8,"def":1,"hp":7,"mods":{"critChance":1}},
-  "lcoat_1": {"name":"เสื้อหนังหนูนา","kind":"equip","slot":"body","tier":1,"level":1,"icon":"","price":16,"def":2,"hp":11,"mods":{"dodge":2}},
-  "lboots_1": {"name":"รองเท้าหนังหนูนา","kind":"equip","slot":"feet","tier":1,"level":1,"icon":"","price":8,"def":1,"hp":5,"mods":{"moveSpeedPct":2}},
-  "hat_1": {"name":"หมวกทอใบหอม","kind":"equip","slot":"head","look":"hat","tier":1,"level":1,"icon":"","price":8,"hp":6,"mods":{"int":2}},
-  "robe_1": {"name":"ชุดทอใบหอม","kind":"equip","slot":"body","tier":1,"level":1,"icon":"","price":16,"def":1,"hp":9,"mods":{"skillDmgPct":2,"int":2}},
-  "shoes_1": {"name":"รองเท้าทอใบหอม","kind":"equip","slot":"feet","tier":1,"level":1,"icon":"","price":8,"hp":5,"mods":{"cdrPct":1}},
-  "bow_2": {"name":"ธนูมอส","kind":"equip","slot":"weapon","look":"bow","tier":2,"level":8,"icon":"","price":30,"atk":11,"mods":{"critChance":4},"jobs":["archer"]},
-  "staff_2": {"name":"คทามอส","kind":"equip","slot":"weapon","look":"staff","tier":2,"level":8,"icon":"","price":30,"atk":12,"mods":{"skillDmgPct":6},"jobs":["weaver","acolyte"]},
-  "lcap_2": {"name":"หมวกหนังหมาป่า","kind":"equip","slot":"head","look":"cap","tier":2,"level":8,"icon":"","price":20,"def":1,"hp":14,"mods":{"critChance":1}},
-  "lcoat_2": {"name":"เสื้อหนังหมาป่า","kind":"equip","slot":"body","tier":2,"level":8,"icon":"","price":40,"def":4,"hp":22,"mods":{"dodge":3}},
-  "lboots_2": {"name":"รองเท้าหนังหมาป่า","kind":"equip","slot":"feet","tier":2,"level":8,"icon":"","price":20,"def":1,"hp":11,"mods":{"moveSpeedPct":3}},
-  "hat_2": {"name":"หมวกทอเห็ดเรือง","kind":"equip","slot":"head","look":"hat","tier":2,"level":8,"icon":"","price":20,"hp":12,"mods":{"int":4}},
-  "robe_2": {"name":"ชุดทอเห็ดเรือง","kind":"equip","slot":"body","tier":2,"level":8,"icon":"","price":40,"def":2,"hp":18,"mods":{"skillDmgPct":4,"int":4}},
-  "shoes_2": {"name":"รองเท้าทอเห็ดเรือง","kind":"equip","slot":"feet","tier":2,"level":8,"icon":"","price":20,"hp":10,"mods":{"cdrPct":2}},
-  "bow_3": {"name":"ธนูไร้สี","kind":"equip","slot":"weapon","look":"bow","tier":3,"level":14,"icon":"","price":90,"atk":18,"mods":{"critChance":5},"jobs":["archer"]},
-  "staff_3": {"name":"คทาไร้สี","kind":"equip","slot":"weapon","look":"staff","tier":3,"level":14,"icon":"","price":90,"atk":20,"mods":{"skillDmgPct":8},"jobs":["weaver","acolyte"]},
-  "lcap_3": {"name":"หมวกหนังเงา","kind":"equip","slot":"head","look":"cap","tier":3,"level":14,"icon":"","price":60,"def":2,"hp":24,"mods":{"critChance":2}},
-  "lcoat_3": {"name":"เสื้อหนังเงา","kind":"equip","slot":"body","tier":3,"level":14,"icon":"","price":120,"def":7,"hp":38,"mods":{"dodge":4}},
-  "lboots_3": {"name":"รองเท้าหนังเงา","kind":"equip","slot":"feet","tier":3,"level":14,"icon":"","price":60,"def":2,"hp":20,"mods":{"moveSpeedPct":4}},
-  "hat_3": {"name":"หมวกทอด้ายชะตา","kind":"equip","slot":"head","look":"hat","tier":3,"level":14,"icon":"","price":60,"hp":20,"mods":{"int":6}},
-  "robe_3": {"name":"ชุดทอด้ายชะตา","kind":"equip","slot":"body","tier":3,"level":14,"icon":"","price":120,"def":4,"hp":32,"mods":{"skillDmgPct":6,"int":6}},
-  "shoes_3": {"name":"รองเท้าทอด้ายชะตา","kind":"equip","slot":"feet","tier":3,"level":14,"icon":"","price":60,"hp":18,"mods":{"cdrPct":3}}
+  "ore_1": {
+    "name": "แร่ทองแดง",
+    "kind": "material",
+    "tier": 1,
+    "icon": "🪨",
+    "price": 1
+  },
+  "ore_2": {
+    "name": "แร่เหล็ก",
+    "kind": "material",
+    "tier": 2,
+    "icon": "⛰️",
+    "price": 2
+  },
+  "wood_1": {
+    "name": "ไม้โอ๊ก",
+    "kind": "material",
+    "tier": 1,
+    "icon": "🪵",
+    "price": 1
+  },
+  "wood_2": {
+    "name": "ไม้มอส",
+    "kind": "material",
+    "tier": 2,
+    "icon": "🪵",
+    "price": 2,
+    "desc": "ตัดได้ในป่ามอสเฟน"
+  },
+  "hide_2": {
+    "name": "หนังหมาป่า",
+    "kind": "material",
+    "tier": 2,
+    "icon": "🟫",
+    "price": 4,
+    "desc": "จากหมาป่าและหมีในป่ามอสเฟน"
+  },
+  "ore_3": {
+    "name": "แร่หมอก",
+    "kind": "material",
+    "tier": 3,
+    "icon": "🌫️",
+    "price": 8,
+    "desc": "มีเฉพาะใน Hollow"
+  },
+  "wood_3": {
+    "name": "ไม้ไร้สี",
+    "kind": "material",
+    "tier": 3,
+    "icon": "🦴",
+    "price": 8,
+    "desc": "มีเฉพาะใน Hollow"
+  },
+  "thread_3": {
+    "name": "ด้ายชะตาขาด",
+    "kind": "material",
+    "tier": 3,
+    "icon": "🧵",
+    "price": 15,
+    "desc": "ดรอปจากมอนสเตอร์ใน Hollow"
+  },
+  "hide_1": {
+    "name": "หนังหนูนา",
+    "kind": "material",
+    "tier": 1,
+    "icon": "🟫",
+    "price": 2
+  },
+  "herb_1": {
+    "name": "ใบหอม",
+    "kind": "material",
+    "tier": 1,
+    "icon": "",
+    "price": 1,
+    "desc": "เกี่ยวจากพุ่มไม้รอบหมู่บ้าน"
+  },
+  "herb_2": {
+    "name": "เห็ดเรือง",
+    "kind": "material",
+    "tier": 2,
+    "icon": "",
+    "price": 3,
+    "desc": "เกี่ยวจากเห็ดในป่ามอสเฟน"
+  },
+  "crystal_1": {
+    "name": "ผลึกแสงเช้า",
+    "kind": "material",
+    "tier": 1,
+    "icon": "💎",
+    "price": 10,
+    "desc": "ใส่ตอนคราฟต์เพื่อเพิ่มโอกาสได้ของคุณภาพสูง"
+  },
+  "pickaxe": {
+    "name": "อีเก้ง",
+    "kind": "tool",
+    "tier": 1,
+    "icon": "⛏️",
+    "price": 5,
+    "buy": 15,
+    "desc": "ใช้ขุดแร่จากก้อนหิน"
+  },
+  "hatchet": {
+    "name": "ขวานตัดไม้",
+    "kind": "tool",
+    "tier": 1,
+    "icon": "🪓",
+    "price": 5,
+    "buy": 15,
+    "desc": "ใช้ตัดไม้จากต้นไม้"
+  },
+  "knife": {
+    "name": "มีดแล่",
+    "kind": "tool",
+    "tier": 1,
+    "icon": "🔪",
+    "price": 5,
+    "buy": 15,
+    "desc": "พกไว้แล้วได้หนังจากสัตว์ที่ล้ม"
+  },
+  "sickle": {
+    "name": "เคียว",
+    "kind": "tool",
+    "tier": 1,
+    "icon": "",
+    "price": 5,
+    "buy": 15,
+    "desc": "ใช้เกี่ยวสมุนไพรจากพุ่มไม้และเห็ด"
+  },
+  "sword_1": {
+    "name": "ดาบทองแดง",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "sword",
+    "tier": 1,
+    "level": 1,
+    "icon": "🗡️",
+    "price": 12,
+    "atk": 6,
+    "mods": {
+      "critChance": 2
+    },
+    "jobs": [
+      "wanderer",
+      "squire"
+    ]
+  },
+  "axe_1": {
+    "name": "ขวานศึกทองแดง",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "axe",
+    "tier": 1,
+    "level": 1,
+    "icon": "🪓",
+    "price": 12,
+    "atk": 8,
+    "mods": {
+      "attackSpeedPct": -8
+    },
+    "jobs": [
+      "wanderer",
+      "squire"
+    ]
+  },
+  "helm_1": {
+    "name": "หมวกทองแดง",
+    "kind": "equip",
+    "slot": "head",
+    "look": "helm",
+    "tier": 1,
+    "level": 1,
+    "icon": "🪖",
+    "price": 8,
+    "def": 1,
+    "hp": 10
+  },
+  "armor_1": {
+    "name": "เกราะทองแดง",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 1,
+    "level": 1,
+    "icon": "🛡️",
+    "price": 16,
+    "def": 3,
+    "hp": 15
+  },
+  "boots_1": {
+    "name": "รองเท้าเกราะทองแดง",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 1,
+    "level": 1,
+    "icon": "🥾",
+    "price": 8,
+    "def": 1,
+    "hp": 8
+  },
+  "sword_2": {
+    "name": "ดาบเหล็ก",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "sword",
+    "tier": 2,
+    "level": 8,
+    "icon": "🗡️",
+    "price": 30,
+    "atk": 12,
+    "mods": {
+      "critChance": 3
+    },
+    "jobs": [
+      "wanderer",
+      "squire"
+    ]
+  },
+  "axe_2": {
+    "name": "ขวานศึกเหล็ก",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "axe",
+    "tier": 2,
+    "level": 8,
+    "icon": "🪓",
+    "price": 30,
+    "atk": 15,
+    "mods": {
+      "attackSpeedPct": -8
+    },
+    "jobs": [
+      "wanderer",
+      "squire"
+    ]
+  },
+  "helm_2": {
+    "name": "หมวกเหล็ก",
+    "kind": "equip",
+    "slot": "head",
+    "look": "helm",
+    "tier": 2,
+    "level": 8,
+    "icon": "🪖",
+    "price": 20,
+    "def": 2,
+    "hp": 20
+  },
+  "armor_2": {
+    "name": "เกราะเหล็ก",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 2,
+    "level": 8,
+    "icon": "🛡️",
+    "price": 40,
+    "def": 6,
+    "hp": 30
+  },
+  "boots_2": {
+    "name": "รองเท้าเกราะเหล็ก",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 2,
+    "level": 8,
+    "icon": "🥾",
+    "price": 20,
+    "def": 2,
+    "hp": 16
+  },
+  "sword_3": {
+    "name": "ดาบหมอก",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "sword",
+    "tier": 3,
+    "level": 14,
+    "icon": "🗡️",
+    "price": 90,
+    "atk": 20,
+    "mods": {
+      "critChance": 4
+    },
+    "jobs": [
+      "wanderer",
+      "squire"
+    ]
+  },
+  "axe_3": {
+    "name": "ขวานศึกหมอก",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "axe",
+    "tier": 3,
+    "level": 14,
+    "icon": "🪓",
+    "price": 90,
+    "atk": 24,
+    "mods": {
+      "attackSpeedPct": -8
+    },
+    "jobs": [
+      "wanderer",
+      "squire"
+    ]
+  },
+  "helm_3": {
+    "name": "หมวกหมอก",
+    "kind": "equip",
+    "slot": "head",
+    "look": "helm",
+    "tier": 3,
+    "level": 14,
+    "icon": "🪖",
+    "price": 60,
+    "def": 4,
+    "hp": 34
+  },
+  "armor_3": {
+    "name": "เกราะหมอก",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 3,
+    "level": 14,
+    "icon": "🛡️",
+    "price": 120,
+    "def": 10,
+    "hp": 50
+  },
+  "boots_3": {
+    "name": "รองเท้าเกราะหมอก",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 3,
+    "level": 14,
+    "icon": "🥾",
+    "price": 60,
+    "def": 4,
+    "hp": 28
+  },
+  "bow_1": {
+    "name": "ธนูโอ๊ก",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "bow",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "atk": 5,
+    "mods": {
+      "critChance": 3
+    },
+    "jobs": [
+      "archer"
+    ]
+  },
+  "staff_1": {
+    "name": "คทาโอ๊ก",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "staff",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "atk": 6,
+    "mods": {
+      "skillDmgPct": 4
+    },
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ]
+  },
+  "lcap_1": {
+    "name": "หมวกหนังหนูนา",
+    "kind": "equip",
+    "slot": "head",
+    "look": "cap",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 8,
+    "def": 1,
+    "hp": 7,
+    "mods": {
+      "critChance": 1
+    }
+  },
+  "lcoat_1": {
+    "name": "เสื้อหนังหนูนา",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 16,
+    "def": 2,
+    "hp": 11,
+    "mods": {
+      "dodge": 2
+    }
+  },
+  "lboots_1": {
+    "name": "รองเท้าหนังหนูนา",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 8,
+    "def": 1,
+    "hp": 5,
+    "mods": {
+      "moveSpeedPct": 2
+    }
+  },
+  "hat_1": {
+    "name": "หมวกทอใบหอม",
+    "kind": "equip",
+    "slot": "head",
+    "look": "hat",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 8,
+    "hp": 6,
+    "mods": {
+      "int": 2
+    }
+  },
+  "robe_1": {
+    "name": "ชุดทอใบหอม",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 16,
+    "def": 1,
+    "hp": 9,
+    "mods": {
+      "skillDmgPct": 2,
+      "int": 2
+    }
+  },
+  "shoes_1": {
+    "name": "รองเท้าทอใบหอม",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 8,
+    "hp": 5,
+    "mods": {
+      "cdrPct": 1
+    }
+  },
+  "bow_2": {
+    "name": "ธนูมอส",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "bow",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 30,
+    "atk": 11,
+    "mods": {
+      "critChance": 4
+    },
+    "jobs": [
+      "archer"
+    ]
+  },
+  "staff_2": {
+    "name": "คทามอส",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "staff",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 30,
+    "atk": 12,
+    "mods": {
+      "skillDmgPct": 6
+    },
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ]
+  },
+  "lcap_2": {
+    "name": "หมวกหนังหมาป่า",
+    "kind": "equip",
+    "slot": "head",
+    "look": "cap",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 20,
+    "def": 1,
+    "hp": 14,
+    "mods": {
+      "critChance": 1
+    }
+  },
+  "lcoat_2": {
+    "name": "เสื้อหนังหมาป่า",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 40,
+    "def": 4,
+    "hp": 22,
+    "mods": {
+      "dodge": 3
+    }
+  },
+  "lboots_2": {
+    "name": "รองเท้าหนังหมาป่า",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 20,
+    "def": 1,
+    "hp": 11,
+    "mods": {
+      "moveSpeedPct": 3
+    }
+  },
+  "hat_2": {
+    "name": "หมวกทอเห็ดเรือง",
+    "kind": "equip",
+    "slot": "head",
+    "look": "hat",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 20,
+    "hp": 12,
+    "mods": {
+      "int": 4
+    }
+  },
+  "robe_2": {
+    "name": "ชุดทอเห็ดเรือง",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 40,
+    "def": 2,
+    "hp": 18,
+    "mods": {
+      "skillDmgPct": 4,
+      "int": 4
+    }
+  },
+  "shoes_2": {
+    "name": "รองเท้าทอเห็ดเรือง",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 20,
+    "hp": 10,
+    "mods": {
+      "cdrPct": 2
+    }
+  },
+  "bow_3": {
+    "name": "ธนูไร้สี",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "bow",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 90,
+    "atk": 18,
+    "mods": {
+      "critChance": 5
+    },
+    "jobs": [
+      "archer"
+    ]
+  },
+  "staff_3": {
+    "name": "คทาไร้สี",
+    "kind": "equip",
+    "slot": "weapon",
+    "look": "staff",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 90,
+    "atk": 20,
+    "mods": {
+      "skillDmgPct": 8
+    },
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ]
+  },
+  "lcap_3": {
+    "name": "หมวกหนังเงา",
+    "kind": "equip",
+    "slot": "head",
+    "look": "cap",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "def": 2,
+    "hp": 24,
+    "mods": {
+      "critChance": 2
+    }
+  },
+  "lcoat_3": {
+    "name": "เสื้อหนังเงา",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 120,
+    "def": 7,
+    "hp": 38,
+    "mods": {
+      "dodge": 4
+    }
+  },
+  "lboots_3": {
+    "name": "รองเท้าหนังเงา",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "def": 2,
+    "hp": 20,
+    "mods": {
+      "moveSpeedPct": 4
+    }
+  },
+  "hat_3": {
+    "name": "หมวกทอด้ายชะตา",
+    "kind": "equip",
+    "slot": "head",
+    "look": "hat",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "hp": 20,
+    "mods": {
+      "int": 6
+    }
+  },
+  "robe_3": {
+    "name": "ชุดทอด้ายชะตา",
+    "kind": "equip",
+    "slot": "body",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 120,
+    "def": 4,
+    "hp": 32,
+    "mods": {
+      "skillDmgPct": 6,
+      "int": 6
+    }
+  },
+  "shoes_3": {
+    "name": "รองเท้าทอด้ายชะตา",
+    "kind": "equip",
+    "slot": "feet",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "hp": 18,
+    "mods": {
+      "cdrPct": 3
+    }
+  },
+  "shield_1": {
+    "name": "โล่ไม้หุ้มทองแดง",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "jobs": [
+      "wanderer",
+      "squire"
+    ],
+    "def": 3,
+    "hp": 8,
+    "mods": {
+      "dmgReduce": 1
+    }
+  },
+  "shield_2": {
+    "name": "โล่เหล็ก",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "jobs": [
+      "wanderer",
+      "squire"
+    ],
+    "def": 5,
+    "hp": 16,
+    "mods": {
+      "dmgReduce": 2
+    }
+  },
+  "shield_3": {
+    "name": "โล่หมอกเงิน",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "jobs": [
+      "wanderer",
+      "squire"
+    ],
+    "def": 7,
+    "hp": 24,
+    "mods": {
+      "dmgReduce": 3
+    }
+  },
+  "quiver_1": {
+    "name": "กระบอกธนูหนัง",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "jobs": [
+      "archer"
+    ],
+    "atk": 2,
+    "mods": {
+      "critChance": 1,
+      "attackSpeedPct": 2
+    }
+  },
+  "quiver_2": {
+    "name": "กระบอกธนูมอส",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "jobs": [
+      "archer"
+    ],
+    "atk": 3,
+    "mods": {
+      "critChance": 2,
+      "attackSpeedPct": 4
+    }
+  },
+  "quiver_3": {
+    "name": "กระบอกธนูไร้สี",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "jobs": [
+      "archer"
+    ],
+    "atk": 4,
+    "mods": {
+      "critChance": 3,
+      "attackSpeedPct": 6
+    }
+  },
+  "tome_1": {
+    "name": "คัมภีร์ใบหอม",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ],
+    "hp": 4,
+    "mods": {
+      "mpPct": 4,
+      "skillDmgPct": 2
+    }
+  },
+  "tome_2": {
+    "name": "คัมภีร์เห็ดเรือง",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ],
+    "hp": 8,
+    "mods": {
+      "mpPct": 8,
+      "skillDmgPct": 4
+    }
+  },
+  "tome_3": {
+    "name": "คัมภีร์ด้ายชะตา",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ],
+    "hp": 12,
+    "mods": {
+      "mpPct": 12,
+      "skillDmgPct": 6
+    }
+  },
+  "gloves_1": {
+    "name": "ถุงมือหนังกระต่าย",
+    "kind": "equip",
+    "slot": "hands",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "atk": 1,
+    "def": 1,
+    "mods": {
+      "attackSpeedPct": 2
+    }
+  },
+  "gloves_2": {
+    "name": "ถุงมือหนังหมาป่า",
+    "kind": "equip",
+    "slot": "hands",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "atk": 2,
+    "def": 2,
+    "mods": {
+      "attackSpeedPct": 4
+    }
+  },
+  "gloves_3": {
+    "name": "ถุงมือหนังเงา",
+    "kind": "equip",
+    "slot": "hands",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "atk": 3,
+    "def": 3,
+    "mods": {
+      "attackSpeedPct": 6
+    }
+  },
+  "amulet_1": {
+    "name": "สร้อยทองแดง",
+    "kind": "equip",
+    "slot": "neck",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "hp": 6,
+    "mods": {
+      "hpPct": 2,
+      "regenPct": 5
+    }
+  },
+  "amulet_2": {
+    "name": "สร้อยเหล็กลายมอส",
+    "kind": "equip",
+    "slot": "neck",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "hp": 12,
+    "mods": {
+      "hpPct": 3,
+      "regenPct": 10
+    }
+  },
+  "amulet_3": {
+    "name": "สร้อยหมอกม่วง",
+    "kind": "equip",
+    "slot": "neck",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "hp": 18,
+    "mods": {
+      "hpPct": 4,
+      "regenPct": 15
+    }
+  },
+  "ring_1": {
+    "name": "แหวนทองแดง",
+    "kind": "equip",
+    "slot": "ring",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "atk": 1,
+    "mods": {
+      "critChance": 1,
+      "skillDmgPct": 1
+    }
+  },
+  "ring_2": {
+    "name": "แหวนเหล็ก",
+    "kind": "equip",
+    "slot": "ring",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "atk": 2,
+    "mods": {
+      "critChance": 2,
+      "skillDmgPct": 2
+    }
+  },
+  "ring_3": {
+    "name": "แหวนหมอก",
+    "kind": "equip",
+    "slot": "ring",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "atk": 3,
+    "mods": {
+      "critChance": 3,
+      "skillDmgPct": 3
+    }
+  },
+  "belt_1": {
+    "name": "เข็มขัดหนัง",
+    "kind": "equip",
+    "slot": "belt",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "hp": 10,
+    "def": 1,
+    "mods": {
+      "hpPct": 1
+    }
+  },
+  "belt_2": {
+    "name": "เข็มขัดหนังหนา",
+    "kind": "equip",
+    "slot": "belt",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "hp": 20,
+    "def": 2,
+    "mods": {
+      "hpPct": 2
+    }
+  },
+  "belt_3": {
+    "name": "เข็มขัดด้ายชะตา",
+    "kind": "equip",
+    "slot": "belt",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "hp": 30,
+    "def": 3,
+    "mods": {
+      "hpPct": 3
+    }
+  },
+  "cloak_1": {
+    "name": "ผ้าคลุมเดินทาง",
+    "kind": "equip",
+    "slot": "cloak",
+    "tier": 1,
+    "level": 1,
+    "icon": "",
+    "price": 12,
+    "def": 2,
+    "mods": {
+      "dodge": 1,
+      "moveSpeedPct": 1
+    }
+  },
+  "cloak_2": {
+    "name": "ผ้าคลุมมอส",
+    "kind": "equip",
+    "slot": "cloak",
+    "tier": 2,
+    "level": 8,
+    "icon": "",
+    "price": 28,
+    "def": 3,
+    "mods": {
+      "dodge": 2,
+      "moveSpeedPct": 2
+    }
+  },
+  "cloak_3": {
+    "name": "ผ้าคลุมไร้สี",
+    "kind": "equip",
+    "slot": "cloak",
+    "tier": 3,
+    "level": 14,
+    "icon": "",
+    "price": 60,
+    "def": 4,
+    "mods": {
+      "dodge": 3,
+      "moveSpeedPct": 3
+    }
+  },
+  "u_bow_thousand": {
+    "name": "ธนูพันดอก",
+    "kind": "equip",
+    "slot": "weapon",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "ทุกการยิงแตกเป็นลูกศรเพิ่มอีก 2 ดอก",
+    "jobs": [
+      "archer"
+    ],
+    "look": "bow",
+    "atk": 20,
+    "mods": {
+      "extraProjectiles": 2,
+      "attackSpeedPct": -10,
+      "critChance": 3
+    }
+  },
+  "u_staff_wildfire": {
+    "name": "คทาไฟป่า",
+    "kind": "equip",
+    "slot": "weapon",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "เวทวงกว้างลุกลามกว้างขึ้นมาก",
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ],
+    "look": "staff",
+    "atk": 19,
+    "mods": {
+      "aoePct": 35,
+      "skillDmgPct": 8
+    }
+  },
+  "u_axe_reaper": {
+    "name": "ขวานเกี่ยววิญญาณ",
+    "kind": "equip",
+    "slot": "weapon",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "ทุกการฟันกวาดโดนศัตรูรอบเป้าหมาย",
+    "jobs": [
+      "wanderer",
+      "squire"
+    ],
+    "look": "axe",
+    "atk": 26,
+    "mods": {
+      "meleeSplash": 45,
+      "lifesteal": 3,
+      "attackSpeedPct": -8
+    }
+  },
+  "u_shield_bastion": {
+    "name": "โล่ป้อมปราการ",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "มึนนานขึ้น และแทบไม่สะเทือน",
+    "jobs": [
+      "wanderer",
+      "squire"
+    ],
+    "def": 12,
+    "hp": 30,
+    "mods": {
+      "dmgReduce": 8,
+      "stunPct": 35
+    }
+  },
+  "u_quiver_rain": {
+    "name": "กระบอกห่าฝน",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 2,
+    "level": 10,
+    "icon": "",
+    "price": 400,
+    "unique": true,
+    "desc": "ลูกศรเพิ่ม 1 ดอกทุกครั้งที่ยิง",
+    "jobs": [
+      "archer"
+    ],
+    "atk": 4,
+    "mods": {
+      "extraProjectiles": 1,
+      "critDmgPct": 25
+    }
+  },
+  "u_tome_eternity": {
+    "name": "คัมภีร์นิรันดร์",
+    "kind": "equip",
+    "slot": "offhand",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "ร่ายได้แทบไม่รู้จบ",
+    "jobs": [
+      "weaver",
+      "acolyte"
+    ],
+    "hp": 15,
+    "mods": {
+      "manaCostPct": 20,
+      "mpPct": 25,
+      "cdrPct": 6
+    }
+  },
+  "u_ring_storm": {
+    "name": "แหวนพายุ",
+    "kind": "equip",
+    "slot": "ring",
+    "tier": 2,
+    "level": 10,
+    "icon": "",
+    "price": 400,
+    "unique": true,
+    "desc": "สายฟ้าลูกโซ่กระโดดเพิ่ม 2 ครั้ง",
+    "atk": 3,
+    "mods": {
+      "chainJumps": 2,
+      "critChance": 3
+    }
+  },
+  "u_ring_blood": {
+    "name": "แหวนโลหิต",
+    "kind": "equip",
+    "slot": "ring",
+    "tier": 2,
+    "level": 10,
+    "icon": "",
+    "price": 400,
+    "unique": true,
+    "desc": "ดูดเลือดจากทุกการโจมตี",
+    "atk": 4,
+    "mods": {
+      "lifesteal": 4,
+      "atkPct": 6
+    }
+  },
+  "u_amulet_dawn": {
+    "name": "สร้อยรุ่งอรุณ",
+    "kind": "equip",
+    "slot": "neck",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "รักษาแรงขึ้นและพรอยู่นานขึ้น",
+    "hp": 25,
+    "mods": {
+      "healPct": 30,
+      "durationPct": 20
+    }
+  },
+  "u_cloak_shadow": {
+    "name": "ผ้าคลุมเงา",
+    "kind": "equip",
+    "slot": "cloak",
+    "tier": 2,
+    "level": 10,
+    "icon": "",
+    "price": 400,
+    "unique": true,
+    "desc": "เบาเหมือนเงา",
+    "def": 3,
+    "mods": {
+      "dodge": 8,
+      "moveSpeedPct": 8
+    }
+  },
+  "u_gloves_twin": {
+    "name": "ถุงมือแฝด",
+    "kind": "equip",
+    "slot": "hands",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "สกิลโจมตีมีโอกาสตีซ้ำสูง",
+    "atk": 4,
+    "mods": {
+      "multiStrike": 15,
+      "attackSpeedPct": 6
+    }
+  },
+  "u_belt_titan": {
+    "name": "เข็มขัดไททัน",
+    "kind": "equip",
+    "slot": "belt",
+    "tier": 3,
+    "level": 18,
+    "icon": "",
+    "price": 600,
+    "unique": true,
+    "desc": "ยิ่งใกล้ตายยิ่งแรง",
+    "hp": 40,
+    "mods": {
+      "hpPct": 12,
+      "lowHpDmgPct": 25
+    }
+  }
 }

@@ -59,6 +59,8 @@ import {
   resourceAt,
   rollAffixes,
   rollDrops,
+  rollGear,
+  tierForLevel,
   sellPrice,
   Slot,
   SLOTS,
@@ -853,6 +855,12 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       if (this.chestTaken.has(c.accountId)) return client.send(Msg.Notice, { text: "คุณเปิดหีบนี้ไปแล้ว" });
       const r = riftRewards(this.map.rift, Math.random);
       if (!this.giveLoot(client, p, c, r.items)) return;
+      {
+        const rift = this.map.rift;
+        const tier = rift.origin === "mossfen" ? 3 : 2;
+        const gear = rift.dungeon || rift.rarity >= 1 || rift.dark;
+        if (gear) this.giveGear(client, c, rollGear(tier, { minRarity: Math.min(3, rift.rarity), bonus: rift.dark ? 1 : 0, uniqueChance: rift.dungeon ? 0.15 : [0, 0.03, 0.08, 0.3][rift.rarity] * (rift.dark ? 2 : 1) }));
+      }
       this.chestTaken.add(c.accountId);
       c.gold += r.gold;
       this.itemsChanged(client, p, c);
@@ -1572,6 +1580,22 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.state.depleted.set(key, true);
     this.depletedUntil.set(key, now + res.respawnMs);
     this.itemsChanged(client, p, c);
+  }
+
+  /** A piece of gear into the bag (or a notice when it is full). */
+  private giveGear(client: Client | undefined, c: PlayerCtl, s: ItemStack): boolean {
+    if (!addStack(c.inv.bag, BAG_SIZE, s)) {
+      client?.send(Msg.Notice, { text: `กระเป๋าเต็ม ${stackName(s)} หล่นหายไป` });
+      return false;
+    }
+    client?.send(Msg.Loot, { items: [{ id: s.id, qty: 1 }] } satisfies LootEvent);
+    if (ITEMS[s.id].unique) this.broadcastSystem(`✨ ${this.nameOfCtl(c)} ได้รับของตำนาน ${ITEMS[s.id].name}!`);
+    return true;
+  }
+
+  private nameOfCtl(c: PlayerCtl) {
+    for (const [sid, x] of this.ctl) if (x === c) return this.state.players.get(sid)?.name ?? "";
+    return "";
   }
 
   /** Puts items in the bag and shows them. False when nothing fitted. */
@@ -2399,6 +2423,13 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       const night = (this.map.id === "brindle" && m.kind === "scarecrow" && isNight() ? NIGHT_BONUS : 1) * (this.swarm.delete(monsterId) ? SWARM_EXP : 1);
       if (monsterId === this.state.bossId) this.bossFalls(p.name);
       this.giveLoot(client, p, c, rollDrops(mc.def.drops, c.inv.bag, Math.random, corruptionBonus(c.corruption)));
+      {
+        const boss = !!mc.def.boss;
+        const tier = tierForLevel(level);
+        const luck = corruptionBonus(c.corruption) * (this.map.pvp ? 2 : 1);
+        if (boss) this.giveGear(client, c, rollGear(tier, { minRarity: 1, bonus: 1, uniqueChance: monsterId === this.state.bossId ? 0.3 : 0.12 }));
+        else if (Math.random() < GEAR_DROP * luck) this.giveGear(client, c, rollGear(tier, { bonus: this.map.pvp ? 1 : 0, uniqueChance: this.map.pvp ? 0.01 : 0.002 }));
+      }
       // the party nearby shares EXP and coins, with a little bonus for each friend
       const sharers = this.sharersOf(id, c, m);
       const share = (1 + PARTY_BONUS * (sharers.length - 1)) / sharers.length;
@@ -2508,6 +2539,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       const r = bossRewards(zone, Math.random);
       c.gold += r.gold;
       this.giveLoot(client, p, c, r.items);
+      this.giveGear(client, c, rollGear(zone === "mossfen" ? 3 : 2, { minRarity: 1, bonus: 1, uniqueChance: 0.2 }));
       if (client) this.itemsChanged(client, p, c);
       client?.send(Msg.Notice, { text: `รางวัลจากการช่วยปราบ: ${r.gold} เหรียญ และของ ${r.items.length} อย่าง` });
       n++;
@@ -2893,6 +2925,9 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.monsterSys.tick(dt);
   }
 }
+
+/** Chance that a normal monster drops a piece of gear. */
+const GEAR_DROP = 0.025;
 
 /** Portal settings from the room options, kept to sane values. */
 function cleanRift(v: unknown): RiftInfo {

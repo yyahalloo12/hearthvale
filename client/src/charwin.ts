@@ -1,4 +1,4 @@
-import { emptyInventory, equipTotals, Inventory, Slot, SLOT_NAMES, stackName } from "../../shared/items";
+import { emptyInventory, equipTotals, ITEMS, Inventory, Slot, SLOT_NAMES, stackName } from "../../shared/items";
 import { passiveMods } from "../../shared/passives";
 import { Job, JOB_NAMES, playerStats, CRIT_CHANCE } from "../../shared/stats";
 import { WALK_SPEED } from "../../shared/constants";
@@ -59,6 +59,7 @@ function slot(s: Slot) {
   if (worn) {
     box.append(itemIcon(worn.id));
     box.classList.add(`q${worn.quality ?? 0}`);
+    if (ITEMS[worn.id].unique) box.classList.add("unique");
     box.onclick = () => unequip(s);
   } else box.append(Object.assign(document.createElement("span"), { className: "empty", textContent: SLOT_NAMES[s] }));
   return box;
@@ -67,8 +68,8 @@ function slot(s: Slot) {
 function render() {
   $("char-title").textContent = `${who.name} · Lv ${who.level} ${JOB_NAMES[who.job] ?? ""}`;
   (document.getElementById("char-doll") as HTMLImageElement).src = who.portrait || "";
-  $("char-left").replaceChildren(slot("head"), slot("body"), slot("feet"));
-  $("char-right").replaceChildren(slot("weapon"));
+  $("char-left").replaceChildren(slot("head"), slot("neck"), slot("body"), slot("cloak"), slot("belt"));
+  $("char-right").replaceChildren(slot("weapon"), slot("offhand"), slot("hands"), slot("ring1"), slot("ring2"), slot("feet"));
   const gear = equipTotals(inv.equip);
   const m = passiveMods(nodes, gear.mods);
   const st = playerStats(who.level, who.job, m, gear.flat);

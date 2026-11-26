@@ -194,3 +194,43 @@ test("saved inventories are cleaned", () => {
   assert.equal(inv.smithing, 100);
   assert.deepEqual(cleanInventory("bad"), emptyInventory());
 });
+
+test("more gear: eleven slots, two rings, random bonuses by rarity, legendary uniques, old saves still load", async () => {
+  const items = await import("../../shared/items");
+  const { SLOTS, ITEMS, rollGear, dropGearIds, uniqueIds, equipItem, cleanInventory, emptyInventory, RECIPES } = items;
+  assert.equal(SLOTS.length, 11);
+  for (const t of [1, 2, 3]) assert.ok(dropGearIds(t).length >= 15, `tier ${t}`);
+  assert.ok(uniqueIds().length >= 12);
+  // every new piece can be crafted, every unique has a picture-worthy description
+  for (const kind of ["shield", "quiver", "tome", "gloves", "amulet", "ring", "belt", "cloak"])
+    for (const t of [1, 2, 3]) assert.ok(RECIPES.some((r) => r.item === `${kind}_${t}`), `${kind}_${t} recipe`);
+  for (const id of uniqueIds()) assert.ok(ITEMS[id].desc && Object.keys(ITEMS[id].mods ?? {}).length);
+  // rarity: better rolls have more bonuses; uniques when asked for
+  let n = 0;
+  const seq = () => (n = (n * 9301 + 49297) % 233280) / 233280;
+  for (let i = 0; i < 200; i++) {
+    const g = rollGear(2, { rnd: seq });
+    assert.equal(Object.keys(g.affixes ?? {}).length, g.quality);
+    assert.equal(ITEMS[g.id].tier, 2);
+  }
+  assert.ok(ITEMS[rollGear(3, { uniqueChance: 1 }).id].unique);
+  assert.ok((rollGear(1, { minRarity: 2 }).quality ?? 0) >= 2);
+  // two rings fill both fingers, a third swaps the first
+  const inv = emptyInventory();
+  for (let i = 0; i < 3; i++) inv.bag.push({ uid: `r${i}`, id: "ring_1", qty: 1, quality: 0, affixes: {} });
+  assert.equal(equipItem(inv, "r0", 1, "wanderer"), null);
+  assert.equal(equipItem(inv, "r1", 1, "wanderer"), null);
+  assert.equal(inv.equip.ring1?.uid, "r0");
+  assert.equal(inv.equip.ring2?.uid, "r1");
+  assert.equal(equipItem(inv, "r2", 1, "wanderer"), null);
+  assert.equal(inv.equip.ring1?.uid, "r2");
+  // off-hands are for their jobs
+  inv.bag.push({ uid: "q", id: "quiver_1", qty: 1, quality: 0, affixes: {} });
+  assert.ok(equipItem(inv, "q", 1, "squire"));
+  assert.equal(equipItem(inv, "q", 1, "sharpshooter"), null);
+  // an old save with four slots still loads, and rings stay on their fingers
+  const old = cleanInventory({ bag: [], storage: [], equip: { weapon: { uid: "w", id: "sword_1", qty: 1 }, ring2: { uid: "x", id: "ring_2", qty: 1 }, neck: { uid: "y", id: "ring_1", qty: 1 } } });
+  assert.equal(old.equip.weapon?.id, "sword_1");
+  assert.equal(old.equip.ring2?.id, "ring_2");
+  assert.equal(old.equip.neck, undefined, "a ring is not a necklace");
+});

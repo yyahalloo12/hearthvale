@@ -9,9 +9,26 @@ import { GameMap, Prop } from "./map";
 import type { Mods, NumMod } from "./passives";
 import { baseJob, type Job } from "./stats";
 
-export type Slot = "weapon" | "head" | "body" | "feet";
-export const SLOTS: Slot[] = ["weapon", "head", "body", "feet"];
-export const SLOT_NAMES: Record<Slot, string> = { weapon: "อาวุธ", head: "หมวก", body: "เกราะ", feet: "รองเท้า" };
+export type Slot = "weapon" | "offhand" | "head" | "body" | "hands" | "feet" | "neck" | "ring1" | "ring2" | "belt" | "cloak";
+export const SLOTS: Slot[] = ["weapon", "offhand", "head", "body", "hands", "feet", "neck", "ring1", "ring2", "belt", "cloak"];
+export const SLOT_NAMES: Record<Slot, string> = {
+  weapon: "อาวุธ",
+  offhand: "มือรอง",
+  head: "หมวก",
+  body: "เกราะ",
+  hands: "ถุงมือ",
+  feet: "รองเท้า",
+  neck: "สร้อย",
+  ring1: "แหวน",
+  ring2: "แหวน",
+  belt: "เข็มขัด",
+  cloak: "ผ้าคลุม",
+};
+/** Where an item may go: rings fit either ring slot. */
+export type ItemSlot = Exclude<Slot, "ring1" | "ring2"> | "ring";
+export function slotsFor(s: ItemSlot): Slot[] {
+  return s === "ring" ? ["ring1", "ring2"] : [s];
+}
 
 export const BAG_SIZE = 30;
 export const STORAGE_SIZE = 80;
@@ -38,7 +55,9 @@ export interface ItemDef {
   /** coins to buy one from the smith */
   buy?: number;
   desc?: string;
-  slot?: Slot;
+  slot?: ItemSlot;
+  /** a legendary one-of-a-kind item with fixed bonuses */
+  unique?: boolean;
   look?: "sword" | "axe" | "bow" | "staff" | "helm" | "cap" | "hat";
   /** who may use it (everyone when left out) */
   jobs?: Job[];
@@ -190,9 +209,12 @@ export function equipItem(inv: Inventory, uid: string, level: number, job: Job):
   if (level < (def.level ?? 1)) return `ต้องเลเวล ${def.level} ขึ้นไป`;
   if (!canUse(def, job)) return "อาชีพของคุณใช้ของชิ้นนี้ไม่ได้";
   const [s] = inv.bag.splice(i, 1);
-  const old = inv.equip[def.slot];
+  // a ring goes on a free finger first
+  const places = slotsFor(def.slot);
+  const slot = places.find((x) => !inv.equip[x]) ?? places[0];
+  const old = inv.equip[slot];
   if (old) inv.bag.push(old);
-  inv.equip[def.slot] = s;
+  inv.equip[slot] = s;
   return null;
 }
 
@@ -242,6 +264,7 @@ export function sellPrice(s: ItemStack): number {
 }
 
 export function stackName(s: ItemStack): string {
+  if (ITEMS[s.id].unique) return `${ITEMS[s.id].name} (ตำนาน)`;
   const q = QUALITY_NAMES[s.quality ?? 0];
   return ITEMS[s.id].name + (q ? ` (${q})` : "");
 }
@@ -275,7 +298,67 @@ const AFFIXES: Partial<Record<NumMod, [number, number]>> = {
   critChance: [1, 2],
   regenPct: [5, 12],
   dodge: [1, 2],
+  critDmgPct: [5, 12],
+  attackSpeedPct: [2, 5],
+  moveSpeedPct: [2, 4],
+  skillDmgPct: [2, 5],
+  cdrPct: [1, 3],
+  lifesteal: [1, 2],
+  dmgReduce: [1, 2],
+  aoePct: [4, 10],
+  durationPct: [4, 10],
+  healPct: [4, 10],
+  manaCostPct: [2, 5],
+  mpPct: [3, 8],
+  stunPct: [5, 12],
+  meleeSplash: [5, 10],
+  multiStrike: [2, 5],
 };
+
+/** Gear that can drop, by tier (uniques apart). */
+export function dropGearIds(tier: number): string[] {
+  return Object.entries(ITEMS)
+    .filter(([, d]) => d.kind === "equip" && !d.unique && d.tier === tier)
+    .map(([id]) => id);
+}
+export function uniqueIds(maxTier = 3): string[] {
+  return Object.entries(ITEMS)
+    .filter(([, d]) => d.unique && d.tier <= maxTier)
+    .map(([id]) => id);
+}
+
+/** Rarity of dropped gear: 0 plain, 1 good, 2 excellent, 3 masterpiece. `bonus` pushes it up. */
+export function rollRarity(rnd = Math.random, bonus = 0): number {
+  const r = rnd();
+  const up = Math.max(0, bonus);
+  if (r < 0.03 + 0.05 * up) return 3;
+  if (r < 0.15 + 0.12 * up) return 2;
+  if (r < 0.45 + 0.15 * up) return 1;
+  return 0;
+}
+
+/**
+ * A piece of gear from a monster or a chest: a random item of this tier with
+ * random bonuses for its rarity, or (with `uniqueChance`) a legendary.
+ */
+export function rollGear(tier: number, opts: { rnd?: () => number; minRarity?: number; bonus?: number; uniqueChance?: number } = {}): ItemStack {
+  const rnd = opts.rnd ?? Math.random;
+  const t = Math.max(1, Math.min(3, Math.round(tier)));
+  if (rnd() < (opts.uniqueChance ?? 0)) {
+    const pool = uniqueIds(t);
+    const id = pool[Math.floor(rnd() * pool.length)];
+    if (id) return { uid: newUid(), id, qty: 1, quality: 3, affixes: {} };
+  }
+  const pool = dropGearIds(t);
+  const id = pool[Math.floor(rnd() * pool.length)];
+  const quality = Math.max(opts.minRarity ?? 0, rollRarity(rnd, opts.bonus ?? 0));
+  return { uid: newUid(), id, qty: 1, quality, affixes: rollAffixes(quality, t, rnd) };
+}
+
+/** Tier of gear that drops from a monster of this level. */
+export function tierForLevel(level: number) {
+  return level >= 16 ? 3 : level >= 8 ? 2 : 1;
+}
 
 /** One bonus per quality step: good 1, excellent 2, masterpiece 3 (GDD 4.2). */
 export function rollAffixes(quality: number, tier: number, rnd = Math.random): ItemStack["affixes"] {
@@ -415,7 +498,7 @@ export function cleanInventory(saved: unknown): Inventory {
   if (Array.isArray(v.storage)) inv.storage = v.storage.map(cleanStack).filter(ok);
   for (const slot of SLOTS) {
     const s = cleanStack(v.equip?.[slot]);
-    if (ok(s) && ITEMS[s.id].slot === slot) inv.equip[slot] = s;
+    if (ok(s) && ITEMS[s.id].slot && slotsFor(ITEMS[s.id].slot!).includes(slot)) inv.equip[slot] = s;
   }
   for (const k of ["smithing", "woodwork", "tailoring"] as const) inv[k] = Math.max(0, Math.min(100, Math.floor(Number(v[k]) || 0)));
   return inv;

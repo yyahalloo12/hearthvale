@@ -122,7 +122,8 @@ export function itemLines(s: ItemStack): string[] {
   const d = ITEMS[s.id];
   const out: string[] = [];
   if (d.slot) {
-    out.push(`${SLOT_NAMES[d.slot]} · Tier ${d.tier}${(d.level ?? 1) > 1 ? ` · ต้อง Lv ${d.level}` : ""}`);
+    if (d.unique) out.push("★ ของตำนาน");
+    out.push(`${d.slot === "ring" ? "แหวน" : SLOT_NAMES[d.slot]} · Tier ${d.tier}${(d.level ?? 1) > 1 ? ` · ต้อง Lv ${d.level}` : ""}`);
     if (d.jobs) out.push(`ใช้ได้: ${d.jobs.map((j) => JOB_NAMES[j]).join(" ")}`);
     const f = itemFlat(s);
     if (f.atk) out.push(`พลังโจมตี +${f.atk}`);
@@ -146,6 +147,7 @@ function slotButton(s: ItemStack | undefined, where: "bag" | "storage" | "equip"
   }
   const d = ITEMS[s.id];
   b.classList.add(`q${s.quality ?? 0}`, `tier${d.tier}`);
+  if (d.unique) b.classList.add("unique");
   if (selected?.uid === s.uid) b.classList.add("sel");
   b.append(itemIcon(s.id));
   if (s.qty > 1) b.append(el("span", "qty", String(s.qty)));
@@ -158,11 +160,16 @@ function slotButton(s: ItemStack | undefined, where: "bag" | "storage" | "equip"
   };
   b.ondblclick = () => {
     if (where === "storage") actions.withdraw(s.uid);
-    else if (where === "equip") actions.unequip(d.slot!);
+    else if (where === "equip") actions.unequip(slotOf(s.uid));
     else if (station === "storage") actions.deposit(s.uid);
     else if (d.slot) actions.equip(s.uid);
   };
   return b;
+}
+
+/** The slot this worn item is in. */
+function slotOf(uid: string): Slot {
+  return (Object.entries(inv.equip).find(([, x]) => x?.uid === uid)?.[0] ?? "weapon") as Slot;
 }
 
 function findSelected(): ItemStack | undefined {
@@ -211,10 +218,10 @@ function renderDetails() {
     return;
   }
   const d = ITEMS[s.id];
-  box.append(el("h3", `qt${s.quality ?? 0}`, stackName(s) + (s.qty > 1 ? ` × ${s.qty}` : "")));
+  box.append(el("h3", d.unique ? "qtu" : `qt${s.quality ?? 0}`, stackName(s) + (s.qty > 1 ? ` × ${s.qty}` : "")));
   for (const t of itemLines(s)) box.append(el("div", "", t));
   const row = el("div", "row");
-  if (selected.where === "equip") row.append(actionButton("ถอด", () => actions.unequip(d.slot!)));
+  if (selected.where === "equip") row.append(actionButton("ถอด", () => actions.unequip(slotOf(s.uid))));
   if (selected.where === "bag" && d.slot) {
     const b = actionButton("สวมใส่", () => actions.equip(s.uid));
     b.disabled = level < (d.level ?? 1) || !canUse(d, job);

@@ -689,6 +689,114 @@ for _id in ("fortress", "chain_pull", "stand_firm", "whirlwind", "bloodboil", "g
             "mass_heal", "barrier", "foresight", "light_hammer", "justice_aura", "judgment"):
     ICONS[f"sk_{_id}"] = globals()[f"sk_{_id}"]
 
+
+# ---- accessories and off-hands (tiers 1-3), legendary uniques ---------------------
+METAL_T = {1: 0xD88A4E, 2: 0xC3CCD6, 3: 0xA9C4F0}
+LEATHER_T = {1: 0x9A6A3E, 2: 0x6E7A5A, 3: 0x5A5068}
+GEM_T = {1: 0xE84A4A, 2: 0x4AA3FF, 3: 0xC39BFF}
+GOLD = 0xF2B82E
+
+
+def g_shield(t, face=None, rim=None):
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler.y = rad(-8)
+    cone("face", (0, 0, 0), 0.66, 0.66, 0.12, toon(f"sf{t}{face}", face or (0x8A5A32 if t == 1 else METAL_T[t]), dark=0.65), p, outline=0.05, rot=(rad(90), 0, 0), seg=32)
+    ring("rim", (0, -0.07, 0), 0.64, 0.06, toon(f"sr{t}{rim}", rim or METAL_T[max(1, t)], dark=0.65), p, outline=0.02, rot=(rad(90), 0, 0))
+    box("bar", (0, -0.09, 0), (1.1, 0.04, 0.16), toon(f"sb{t}", DARK[t]), p, outline=0.03)
+    ball("boss", (0, -0.12, 0), (0.18, 0.08, 0.18), toon("goldb", GOLD, dark=0.7), p, outline=0.03)
+
+
+def g_quiver(t, color=None):
+    p = tilted(-25)
+    L = toon(f"q{t}{color}", color or LEATHER_T[t], dark=0.65)
+    cone("tube", (0, 0, -0.1), 0.26, 0.3, 1.2, L, p, outline=0.05)
+    ring("band", (0, 0, 0.3), 0.29, 0.04, toon(f"qb{t}", METAL_T[t]), p, outline=0.015)
+    for i, x in enumerate((-0.12, 0.0, 0.12)):
+        cone("shaft", (x, 0, 0.7), 0.025, 0.025, 0.5, wood_mat(), p, outline=0.02)
+        box("fl", (x, 0, 0.92), (0.1, 0.02, 0.18), toon("flr", 0xE8484A if i != 1 else 0xFFFFFF), p, outline=0.02, bevel=0)
+
+
+def g_tome(t, cover=None):
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler = (rad(10), rad(-20), 0)
+    C = toon(f"tc{t}{cover}", cover or (0x8A3A3A, 0x3A6A5A, 0x5A3A8A)[t - 1], dark=0.65)
+    box("cover", (0, 0, 0), (0.9, 0.3, 1.1), C, p, outline=0.05, bevel=0.04)
+    box("pages", (0.04, -0.01, 0), (0.82, 0.24, 1.02), toon("pg", 0xF6EED8, dark=0.85), p, outline=0.02, bevel=0.01)
+    box("front", (0, -0.16, 0), (0.9, 0.02, 1.1), C, p, outline=0.03, bevel=0.01)
+    ball("gem", (0, -0.19, 0.05), (0.14, 0.05, 0.14), toon(f"tg{t}", GEM_T[t], dark=0.7, light=1.25), p, outline=0.025)
+    for z in (-0.4, 0.4):
+        box("corner", (0.36, -0.18, z), (0.16, 0.03, 0.16), toon("goldc", GOLD, dark=0.7), p, outline=0.02)
+
+
+def g_gloves(t, color=None):
+    L = toon(f"gl{t}{color}", color or LEATHER_T[t], dark=0.65)
+    for x, a in ((-0.3, 12), (0.3, -12)):
+        p = pivot("p", (x, 0, 0))
+        p.rotation_euler.y = rad(a)
+        box("palm", (0, 0, 0), (0.42, 0.22, 0.5), L, p, outline=0.04, bevel=0.1)
+        for i in range(4):
+            cone("finger", (-0.15 + 0.1 * i, 0, 0.38), 0.05, 0.045, 0.28, L, p, outline=0.025)
+        cone("thumb", (0.24 if x < 0 else -0.24, 0, 0.12), 0.055, 0.05, 0.26, L, p, outline=0.025, rot=(0, rad(-50 if x < 0 else 50), 0))
+        box("cuff", (0, 0, -0.32), (0.48, 0.26, 0.18), toon(f"cuff{t}", METAL_T[t]), p, outline=0.03, bevel=0.05)
+
+
+def g_amulet(t, gem=None):
+    ring("chain", (0, 0, 0.25), 0.5, 0.035, toon("goldch", GOLD, dark=0.7), None, outline=0.015, rot=(rad(90), 0, 0), scale=(1, 1, 0.75))
+    cone("set", (0, -0.02, -0.35), 0.24, 0.24, 0.1, toon(f"set{t}", METAL_T[t], dark=0.65), None, outline=0.03, rot=(rad(90), 0, 0), seg=6)
+    ball("gem", (0, -0.08, -0.35), (0.17, 0.08, 0.2), toon(f"ag{t}{gem}", gem or GEM_T[t], dark=0.7, light=1.25), None, outline=0.03)
+
+
+def g_ring(t, gem=None, band=None):
+    ring("band", (0, 0, -0.1), 0.42, 0.09, toon(f"rb{t}{band}", band or (0xD88A4E, 0xC3CCD6, GOLD)[t - 1], dark=0.65), None, outline=0.03, rot=(rad(75), 0, 0))
+    cone("crown", (0, -0.02, 0.35), 0.16, 0.22, 0.14, toon(f"rc{t}", METAL_T[t]), None, outline=0.03, seg=8)
+    ball("gem", (0, -0.02, 0.5), (0.2, 0.2, 0.17), toon(f"rg{t}{gem}", gem or GEM_T[t], dark=0.7, light=1.25), None, outline=0.03)
+
+
+def g_belt(t, color=None):
+    L = toon(f"bl{t}{color}", color or LEATHER_T[t], dark=0.65)
+    ring("strap", (0, 0, 0), 0.62, 0.09, L, None, outline=0.035, rot=(rad(70), 0, 0), scale=(1, 1, 0.35))
+    box("buckle", (0, -0.24, -0.1), (0.36, 0.06, 0.3), toon(f"bk{t}", METAL_T[t], dark=0.65), None, outline=0.04, bevel=0.03)
+    box("hole", (0, -0.28, -0.1), (0.2, 0.04, 0.16), toon("bkin", 0x3A2414), None, outline=0, bevel=0.01)
+    for x in (-0.45, 0.45):
+        box("pouch", (x, -0.1, -0.25), (0.22, 0.16, 0.24), L, None, outline=0.03, bevel=0.05)
+
+
+def g_cloak(t, color=None):
+    C = toon(f"ck{t}{color}", color or (0x6A8A4A, 0x3A6A8A, 0x6A4A8A)[t - 1], dark=0.65)
+    cone("cape", (0, 0, -0.1), 0.62, 0.22, 1.2, C, None, outline=0.05, scale=(1, 0.35, 1), seg=24)
+    ball("hood", (0, 0.05, 0.55), (0.3, 0.22, 0.26), C, None, outline=0.04)
+    ball("clasp", (0, -0.12, 0.38), 0.09, toon("goldcl", GOLD, dark=0.7), None, outline=0.025)
+    for x in (-0.3, 0.0, 0.3):
+        box("fold", (x, -0.2, -0.3), (0.03, 0.02, 0.6), toon("fold", 0x000000), None, outline=0, bevel=0)
+
+
+def glow(color=0xFFB02E):
+    """The golden shine behind a legendary item."""
+    for i, s in enumerate((0.95, 0.75)):
+        ball("aura", (0, 0.5 + 0.1 * i, 0), (s, 0.05, s), flat(f"aura{i}{color}", color if i else 0xFFE7A3), None, outline=0)
+
+
+GEAR = {"shield": g_shield, "quiver": g_quiver, "tome": g_tome, "gloves": g_gloves, "amulet": g_amulet, "ring": g_ring, "belt": g_belt, "cloak": g_cloak}
+for tier in (1, 2, 3):
+    for kind, fn in GEAR.items():
+        ICONS[f"{kind}_{tier}"] = lambda fn=fn, tier=tier: fn(tier)
+
+UNIQUE_ICONS = {
+    "u_bow_thousand": lambda: (glow(), bow(3), burst(0.5, 0.55, 0xFFE24A, n=5, r=0.2, size=0.08)),
+    "u_staff_wildfire": lambda: (glow(0xFF6A2A), staff(3), sk_fireball() if False else burst(0.45, 0.6, 0xFF8A2A, n=7, r=0.24, size=0.1)),
+    "u_axe_reaper": lambda: (glow(0x9A5AFF), axe(3)),
+    "u_shield_bastion": lambda: (glow(), g_shield(3, face=0x8A94A6, rim=GOLD)),
+    "u_quiver_rain": lambda: (glow(0x4AA3FF), g_quiver(3, color=0x2A4A8A)),
+    "u_tome_eternity": lambda: (glow(0xC39BFF), g_tome(3, cover=0x2A1A4A)),
+    "u_ring_storm": lambda: (glow(0x4AA3FF), g_ring(3, gem=0xFFE24A, band=0x8FD3FF)),
+    "u_ring_blood": lambda: (glow(0xE84A4A), g_ring(3, gem=0xD0283A, band=0x3A1A1A)),
+    "u_amulet_dawn": lambda: (glow(), g_amulet(3, gem=0xFFE7A3)),
+    "u_cloak_shadow": lambda: (glow(0x6A4A8A), g_cloak(3, color=0x2A2238)),
+    "u_gloves_twin": lambda: (glow(), g_gloves(3, color=0xC8453A)),
+    "u_belt_titan": lambda: (glow(), g_belt(3, color=0x8A5A1A)),
+}
+ICONS.update(UNIQUE_ICONS)
+
 N = 96
 frames = []
 for name, build in ICONS.items():
