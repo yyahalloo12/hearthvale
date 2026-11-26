@@ -240,6 +240,38 @@ for (const [a, b, ang, [pool, n1, n2]] of WEDGES) {
   for (const k of [a, b]) link(chain[6], ANG[k] === lo ? cornerOf(k).right : cornerOf(k).left);
 }
 
+// ---- second job sub-trees: 12 nodes each, 8 points of their own (GDD 2.2) ---------
+const SUBS = {
+  warden: ["str", -11, "สายวอร์เดน", [["def", "dr", "hp", "stun"], ["ป้อมเคลื่อนที่", { dmgReduce: 4, defPct: 10 }], ["โซ่เหล็กกล้า", { stunPct: 30, durationPct: 15 }], ["ผู้คุ้มกันนิรันดร์", { dmgReduce: 10, hpPct: 15, atkPct: -15 }, "แข็งดั่งหินผา แต่ตีเบาลง"]]],
+  reaver: ["str", 11, "สายรีเวอร์", [["atk", "splash", "ls", "low"], ["พายุขวาน", { aoePct: 20, meleeSplash: 15 }], ["เลือดเดือดพล่าน", { lifesteal: 3, lowHpDmgPct: 15 }], ["บ้าคลั่งไม่หยุด", { attackSpeedPct: 20, atkPct: 12, defPct: -20 }, "เร็วและแรงขึ้นมาก แต่เกราะบางลง"]]],
+  sharpshooter: ["agi", -11, "สายชาร์ปชูตเตอร์", [["crit", "critd", "agi", "as"], ["ตาเหยี่ยว", { critChance: 6, critDmgPct: 20 }], ["สายฝนลูกศร", { extraProjectiles: 1, aoePct: 15 }], ["นัดเดียวจบ", { critDmgPct: 60, attackSpeedPct: -15 }, "คริติคอลแรงมาก แต่ยิงช้าลง"]]],
+  pathfinder: ["agi", 11, "สายพาธไฟน์เดอร์", [["dur", "stun", "dodge", "move"], ["นายพรานป่า", { durationPct: 25, stunPct: 20 }], ["เงาในพุ่มไม้", { dodge: 6, moveSpeedPct: 8 }], ["กับดักทุกย่างก้าว", { durationPct: 50, aoePct: 25, skillDmgPct: -10 }, "กับดักใหญ่และนานขึ้นมาก แต่ดาเมจลดลง"]]],
+  elementalist: ["int", -11, "สายเอเลเมนทาลิสต์", [["sk", "aoe", "int", "cdr"], ["ธาตุคลั่ง", { skillDmgPct: 12, aoePct: 10 }], ["สายฟ้าแตกกิ่ง", { chainJumps: 2, critChance: 3 }], ["หัวใจธาตุ", { skillDmgPct: 30, manaCostPct: -20 }, "เวทแรงขึ้นมาก แต่ใช้มานามากขึ้น"]]],
+  hexer: ["int", 11, "สายเฮกเซอร์", [["dur", "ls", "sk", "mana"], ["คำสาปลึก", { durationPct: 30, skillDmgPct: 6 }], ["กระหายวิญญาณ", { lifesteal: 3, healPct: 15 }], ["พันธะเลือด", { lifesteal: 6, skillDmgPct: 15, hpPct: -15 }, "ดูดเลือดแรงขึ้นมาก แต่เลือดน้อยลง"]]],
+  oracle: ["fai", -11, "สายออราเคิล", [["heal", "aoe", "mana", "fai"], ["แสงทั่วฟ้า", { healPct: 20, aoePct: 15 }], ["ภาพนิมิต", { durationPct: 25, dodge: 4 }], ["มือพระเจ้า", { healPct: 50, aoePct: 20, atkPct: -25 }, "รักษาแรงและกว้างขึ้นมาก แต่ตีเบาลง"]]],
+  templar: ["fai", 11, "สายเทมพลาร์", [["atk", "def", "stun", "fai"], ["ค้อนศักดิ์สิทธิ์", { stunPct: 25, atkPct: 8 }], ["เกราะแห่งศรัทธา", { defPct: 12, dmgReduce: 3 }], ["นักรบแห่งแสง", { atkPct: 20, healPct: 15, manaCostPct: -15 }, "ตีแรงและรักษาดีขึ้น แต่ใช้มานามากขึ้น"]]],
+};
+for (const [job, [corner, off, title, [pool, n1, n2, key]]] of Object.entries(SUBS)) {
+  const ang = ANG[corner] + off;
+  const root = add(`sj_${job}`, "root", corner, ...pol(ang, 16.2), title, {}, { job, sub: job });
+  // three short branches from the root; the middle one ends in the keystone
+  const ends = [];
+  for (let b = 0; b < 3; b++) {
+    const a = ang - 6 + b * 6;
+    let prev = root;
+    for (let s = 0; s < 4; s++) {
+      const id = `sj_${job}_${b}${s}`;
+      const r = 17.3 + s * 1.05;
+      if (s === 3 && b !== 1) add(id, "notable", corner, ...pol(a, r), ...(b === 0 ? n1 : n2), { sub: job });
+      else if (s === 3) add(id, "keystone", corner, ...pol(a, r + 0.3), key[0], key[1], { sub: job, desc: key[2] });
+      else add(id, "small", corner, ...pol(a + (s % 2 ? 1.5 : -1.5), r), ...SM[pool[(s + b) % pool.length]], { sub: job });
+      link(prev, id);
+      prev = id;
+    }
+    ends.push(prev);
+  }
+}
+
 const out = { nodes, edges };
 writeFileSync(new URL("../shared/data/passives.json", import.meta.url), JSON.stringify(out, null, 0).replace(/\},\{/g, "},\n{").replace(/\],\[/g, "],\n["));
 const count = {};

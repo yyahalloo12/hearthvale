@@ -272,7 +272,7 @@ test("second jobs: from level 30, keep the main skills, add three of their own",
       assert.equal(baseJob(job), main);
       const own = Object.values(SKILLS).filter((d) => d.job === job);
       assert.deepEqual(own.map((d) => d.key).sort(), ["5", "6", "7"], job);
-      assert.equal(rootsFor(job).length, rootsFor(main as Job).length, `${job} starts where ${main} does`);
+      assert.equal(rootsFor(job).length, rootsFor(main as Job).length + 1, `${job} starts where ${main} does, plus its own little tree`);
       assert.ok(playerStats(30, job).maxHp > 0);
     }
   }

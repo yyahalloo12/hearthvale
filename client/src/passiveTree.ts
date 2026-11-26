@@ -12,10 +12,12 @@ import {
   passivePointsEarned,
   PASSIVES,
   refundCost,
+  pointsLeftFor,
   rootsFor,
   SKILL_MODS,
+  SUB_POINTS,
 } from "../../shared/passives";
-import { JOB_NAMES, jobId } from "../../shared/stats";
+import { isMainJob, JOB_NAMES, jobId } from "../../shared/stats";
 
 /**
  * The passive tree window (key P). Draws the whole tree as SVG: drag to move,
@@ -99,8 +101,15 @@ export function setTreePrivate(gold: number, nodes: string[]) {
   refresh();
 }
 
+/** Free points in the big tree (the second job's own tree counts apart). */
 function pointsLeft() {
-  return passivePointsEarned(state.level) - state.nodes.size;
+  return pointsLeftFor("start", state.nodes, state.level, state.job);
+}
+function subLeft() {
+  return isMainJob(state.job) || state.job === "wanderer" ? 0 : pointsLeftFor(`sj_${state.job}`, state.nodes, state.level, state.job);
+}
+function leftFor(id: string) {
+  return pointsLeftFor(id, state.nodes, state.level, state.job);
 }
 
 export function toggleTree(open = $("tree").hidden) {
@@ -320,7 +329,7 @@ function pathTo(id: string): string[] {
 /** Double click: learn this node, or the whole way to it. */
 function quickLearn(id: string) {
   select(id);
-  if (plan.length && plan.length <= pointsLeft()) learnPath();
+  if (plan.length && plan.length <= leftFor(id)) learnPath();
 }
 
 function learnPath() {
@@ -333,7 +342,8 @@ function learnPath() {
 function linesOf(n: PassiveNode): string[] {
   const out = describeMods(n.mods);
   if (n.desc) out.push(n.desc);
-  if (n.size === "root") out.push(n.job === "wanderer" ? "ทุกคนเริ่มจากตรงนี้ได้" : `${JOB_NAMES[jobId(n.job)]}เริ่มจากตรงนี้ได้ด้วย`);
+  if (n.size === "root") out.push(n.job === "wanderer" ? "ทุกคนเริ่มจากตรงนี้ได้" : n.sub ? `ต้นไม้ย่อยของ${JOB_NAMES[jobId(n.job)]} ใช้แต้มขั้นสองแยก ${SUB_POINTS} แต้ม` : `${JOB_NAMES[jobId(n.job)]}เริ่มจากตรงนี้ได้ด้วย`);
+  else if (n.sub) out.push(`ต้นไม้ย่อยของ${JOB_NAMES[jobId(n.sub)]}`);
   return out;
 }
 
@@ -380,8 +390,8 @@ function select(id: string) {
 function refresh() {
   const left = pointsLeft();
   const badge = $("tree-badge");
-  badge.hidden = !state.ready || left <= 0;
-  badge.textContent = String(left);
+  badge.hidden = !state.ready || left + subLeft() <= 0;
+  badge.textContent = String(left + subLeft());
   $("hud-gold").textContent = state.ready ? `🪙 ${state.gold.toLocaleString("th-TH")}` : "";
   $("hud-gold").title = "เหรียญ";
   if ($("tree").hidden || !built) return;
@@ -396,7 +406,8 @@ function refresh() {
     const g = nodeEls.get(n.id)!;
     const open = canReach(n.id, state.nodes, state.job);
     g.classList.toggle("on", on(n.id));
-    g.classList.toggle("open", open && left > 0);
+    g.classList.toggle("open", open && leftFor(n.id) > 0);
+    g.classList.toggle("othersub", !!n.sub && n.sub !== state.job);
     g.classList.toggle("sel", selected === n.id);
     g.classList.toggle("path", onPlan.has(n.id) && selected !== n.id);
     g.classList.toggle("match", matches(n));
@@ -408,7 +419,8 @@ function refresh() {
   }
   for (const b of document.querySelectorAll<HTMLButtonElement>("#tree-filters button")) b.setAttribute("aria-pressed", String(b.dataset.id === filter));
 
-  $("tree-points").textContent = `แต้มเหลือ ${Math.max(0, left)} / ${passivePointsEarned(state.level)}`;
+  $("tree-points").textContent =
+    `แต้มเหลือ ${Math.max(0, left)} / ${passivePointsEarned(state.level)}` + (isMainJob(state.job) || state.job === "wanderer" ? "" : ` · ขั้นสอง ${subLeft()} / ${SUB_POINTS}`);
   $("tree-gold").textContent = `${state.gold.toLocaleString("th-TH")} เหรียญ`;
   renderSelected(left);
 
@@ -455,16 +467,20 @@ function renderSelected(left: number) {
     if (!canRefund(n.id, state.nodes, state.job)) why.textContent = "เป็นทางผ่านของโหนดอื่น ล้างโหนดปลายทางก่อน";
     else if (state.gold < cost) why.textContent = "เหรียญไม่พอ";
     btn.onclick = () => actions.refund(n.id);
+  } else if (n.sub && n.sub !== state.job) {
+    btn.textContent = "เรียนโหนดนี้";
+    why.textContent = `ต้นไม้ย่อยของ${JOB_NAMES[jobId(n.sub)]} (เลือกอาชีพขั้นสองนี้ที่ Lv 30)`;
   } else if (plan.length > 1) {
+    const have = leftFor(n.id);
     btn.textContent = `เรียนทั้งเส้นทาง (${plan.length} แต้ม)`;
-    if (plan.length > left) why.textContent = `แต้มไม่พอ ต้องใช้ ${plan.length} มีอยู่ ${Math.max(0, left)}`;
+    if (plan.length > have) why.textContent = `แต้มไม่พอ ต้องใช้ ${plan.length} มีอยู่ ${Math.max(0, have)}`;
     btn.onclick = () => learnPath();
     const what = describeMods(passiveMods(plan));
     if (what.length) box.append(line(`ทั้งเส้นทางได้: ${what.slice(0, 4).join(", ")}${what.length > 4 ? " ..." : ""}`));
   } else {
     btn.textContent = "เรียนโหนดนี้ (1 แต้ม)";
     if (!canReach(n.id, state.nodes, state.job)) why.textContent = "ยังไปไม่ถึง";
-    else if (left <= 0) why.textContent = "ไม่มีแต้มเหลือ เลเวลอัปเพื่อรับแต้ม";
+    else if (leftFor(n.id) <= 0) why.textContent = n.sub ? "แต้มขั้นสองหมดแล้ว (8 แต้ม)" : "ไม่มีแต้มเหลือ เลเวลอัปเพื่อรับแต้ม";
     btn.onclick = () => actions.learn(n.id);
   }
   btn.disabled = why.textContent !== "";

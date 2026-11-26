@@ -34,8 +34,8 @@ test("the tree has over 200 nodes, unique ids, valid links, and room between nod
 });
 
 test("every node can be learned, each job also through its own gate", () => {
-  const all = PASSIVE_NODES.filter((n) => n.size !== "root").map((n) => n.id);
   for (const job of ["wanderer", "squire", "archer", "weaver", "acolyte", "reaver"]) {
+    const all = PASSIVE_NODES.filter((n) => n.size !== "root" && (!n.sub || n.sub === job)).map((n) => n.id);
     const learned = new Set<string>();
     for (let grew = true; grew; ) {
       grew = false;
@@ -86,4 +86,25 @@ test("bonuses change stats, keystones trade something away", () => {
     assert.equal(killGold(def, 0), def.gold[0]);
     assert.equal(killGold(def, 0.9999), def.gold[1]);
   }
+});
+
+test("each second job has its own 12-node tree with 8 points of its own", async () => {
+  const { SUB_POINTS, pointsLeftFor } = await import("../../shared/passives");
+  for (const job of ["warden", "reaver", "sharpshooter", "pathfinder", "elementalist", "hexer", "oracle", "templar"]) {
+    const mine = PASSIVE_NODES.filter((n) => n.sub === job && n.size !== "root");
+    assert.equal(mine.length, 12, job);
+    assert.ok(mine.some((n) => n.size === "keystone"));
+    assert.ok(rootsFor(job).includes("sj_" + job));
+    assert.ok(!canReach(mine[0].id, new Set(), "squire"), "not for others");
+  }
+  // the warden's points are apart from the big tree's
+  const learned = new Set<string>();
+  assert.equal(pointsLeftFor("sj_warden_00", learned, 1, "warden"), SUB_POINTS);
+  assert.ok(canReach("sj_warden_00", learned, "warden"));
+  for (const id of ["sj_warden_00", "sj_warden_01", "sj_warden_02", "sj_warden_03", "sj_warden_10", "sj_warden_11", "sj_warden_12", "sj_warden_13"]) learned.add(id);
+  assert.equal(pointsLeftFor("sj_warden_20", learned, 1, "warden"), 0);
+  assert.equal(pointsLeftFor("c_str", learned, 1, "warden"), 1, "big tree untouched");
+  // saved sub nodes of another job are dropped
+  assert.equal(cleanNodes(["sj_reaver_00"], 40, "warden").size, 0);
+  assert.equal(cleanNodes([...learned, "sj_warden_20"], 40, "warden").size, 8);
 });

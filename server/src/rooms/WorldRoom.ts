@@ -92,7 +92,7 @@ import { isNight } from "../../../shared/daylight";
 import { GROVE, LANTERNS } from "../../../shared/mossfen";
 import { canStep, inReach, levelOf, reachableFrom, setRegion } from "../../../shared/terrain";
 import { cleanChat, cleanName } from "../../../shared/names";
-import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
+import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, pointsLeftFor, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PARTY_BONUS, PARTY_SHARE_RANGE, PartyAction, PrivateData, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../../shared/protocol";
 import {
@@ -1695,7 +1695,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const id = (msg as { id?: unknown })?.id;
     if (!pc || typeof id !== "string") return;
     const { p, c } = pc;
-    if (c.nodes.size >= passivePointsEarned(p.level)) return client.send(Msg.Notice, { text: "ไม่มีแต้มต้นไม้เหลือ" });
+    if (pointsLeftFor(id, c.nodes, p.level, p.job) <= 0) return client.send(Msg.Notice, { text: "ไม่มีแต้มต้นไม้เหลือ" });
     if (!canReach(id, c.nodes, p.job)) return;
     c.nodes.add(id);
     this.buildChanged(client, p, c);

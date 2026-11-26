@@ -59,7 +59,12 @@ export interface PassiveNode {
   desc?: string;
   /** root nodes: the job whose starting point this is */
   job?: JobName;
+  /** part of this second job's own little tree */
+  sub?: string;
 }
+
+/** Points for a second job's own tree (GDD 2.2). */
+export const SUB_POINTS = 8;
 
 export const PASSIVE_NODES = passivesJson.nodes as unknown as PassiveNode[];
 export const PASSIVE_EDGES = passivesJson.edges as unknown as [string, string][];
@@ -202,7 +207,7 @@ export function refundCost(level: number) {
 /** Everyone can start from the middle; a job also opens its own corner. */
 export function rootsFor(job: JobName): string[] {
   const base = baseJob(job);
-  return PASSIVE_NODES.filter((n) => n.size === "root" && (n.job === "wanderer" || n.job === base)).map((n) => n.id);
+  return PASSIVE_NODES.filter((n) => n.size === "root" && (n.job === "wanderer" || n.job === base || n.job === job)).map((n) => n.id);
 }
 
 /** Starting points plus the learned nodes that connect to them. */
@@ -222,6 +227,7 @@ function reachable(learned: Set<string>, job: JobName): Set<string> {
 export function canReach(id: string, learned: Set<string>, job: JobName): boolean {
   const node = PASSIVES.get(id);
   if (!node || node.size === "root" || learned.has(id)) return false;
+  if (node.sub && node.sub !== job) return false;
   const ok = reachable(learned, job);
   return neighbours.get(id)!.some((n) => ok.has(n));
 }
@@ -235,6 +241,20 @@ export function canRefund(id: string, learned: Set<string>, job: JobName): boole
   return [...rest].every((n) => ok.has(n));
 }
 
+/** Points still free for this node's tree: the big one, or the second job's own. */
+export function pointsLeftFor(id: string, learned: Iterable<string>, level: number, job: JobName): number {
+  const sub = PASSIVES.get(id)?.sub;
+  let main = 0;
+  let mine = 0;
+  for (const n of learned) {
+    const s = PASSIVES.get(n)?.sub;
+    if (!s) main++;
+    else if (s === job) mine++;
+  }
+  if (sub) return sub === job ? SUB_POINTS - mine : 0;
+  return passivePointsEarned(level) - main;
+}
+
 /** Cleans a saved list: known nodes only, connected, and no more than the points earned. */
 export function cleanNodes(saved: unknown, level: number, job: JobName): Set<string> {
   const out = new Set<string>();
@@ -244,7 +264,7 @@ export function cleanNodes(saved: unknown, level: number, job: JobName): Set<str
   for (let grew = true; grew; ) {
     grew = false;
     for (const id of want) {
-      if (out.size < max && canReach(id, out, job)) {
+      if (pointsLeftFor(id, out, level, job) > 0 && canReach(id, out, job)) {
         out.add(id);
         grew = true;
       }

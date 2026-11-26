@@ -652,3 +652,4 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 5
 .cslot.unique { background: radial-gradient(circle at 50% 35%, #6a4a12, #2a1a06) !important; }
 .qtu { color: #d97a00 !important; text-shadow: 0 0 6px rgba(255, 176, 46, 0.6); }
 #charwin { width: 680px; }
+#tree .node.othersub { opacity: 0.4; }
