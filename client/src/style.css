@@ -620,6 +620,10 @@ button.secondary:disabled { opacity: 0.6; cursor: wait; }
 /* world map */
 #worldmap { position: absolute; inset: 40px 80px 40px 80px; z-index: 8; display: flex; flex-direction: column; }
 #worldmap .win-head { gap: 6px; }
+#worldmap .wm-tab { opacity: 0.6; }
+#worldmap .wm-tab.on { opacity: 1; box-shadow: inset 0 -3px 0 #ffd36a; }
+#worldmap.continent #wm-me, #worldmap.continent #wm-in, #worldmap.continent #wm-out { visibility: hidden; }
+#worldmap.continent #worldmap-canvas { cursor: default; }
 #worldmap-canvas { flex: 1; width: 100%; min-height: 0; border-radius: 0 0 8px 8px; cursor: crosshair; touch-action: none; }
 .wm-hint { position: absolute; left: 14px; bottom: 10px; font-size: 12px; color: #f2dfb6; background: rgba(0, 0, 0, 0.55); padding: 4px 10px; border-radius: 10px; pointer-events: none; }
 

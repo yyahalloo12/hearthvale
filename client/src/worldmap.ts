@@ -2,6 +2,8 @@ import { GameMap } from "../../shared/map";
 import { RARITY_COLORS } from "../../shared/rift";
 import { WORLD_BOSS } from "../../shared/events";
 import { minimapBase } from "./minimap";
+import { drawContinent, placeAt } from "./atlas";
+import type { ZoneId } from "../../shared/map";
 
 /**
  * The world map (key M): the whole map turned like the game, with zoom and
@@ -18,6 +20,20 @@ let walk: (x: number, y: number) => void = () => {};
 const view = { zoom: 1, x: 0, y: 0 };
 let started = false;
 let goal: { x: number; y: number } | null = null;
+/** the whole land on parchment, or just this map */
+let continent = false;
+let hover: ZoneId | null = null;
+let fitted = { k: 1, ox: 0, oy: 0 };
+
+function setMode(world: boolean) {
+  continent = world;
+  $("worldmap").classList.toggle("continent", world);
+  const hint = document.getElementById("wm-hint");
+  if (hint) hint.hidden = world;
+  $("wm-world").classList.toggle("on", world);
+  $("wm-here").classList.toggle("on", !world);
+  draw();
+}
 
 export function initWorldMap(go: (x: number, y: number) => void, party: () => Set<string>) {
   walk = go;
@@ -31,6 +47,8 @@ export function initWorldMap(go: (x: number, y: number) => void, party: () => Se
   $("wm-in").onclick = () => zoom(1.3);
   $("wm-out").onclick = () => zoom(1 / 1.3);
   $("wm-me").onclick = () => centreOnMe();
+  $("wm-world").onclick = () => setMode(true);
+  $("wm-here").onclick = () => setMode(false);
   window.addEventListener("keydown", (e) => {
     const el = document.activeElement as HTMLInputElement | null;
     if ((el?.tagName === "INPUT" && el.type !== "checkbox") || el?.tagName === "SELECT" || e.ctrlKey || e.altKey || e.metaKey) return;
@@ -41,6 +59,16 @@ export function initWorldMap(go: (x: number, y: number) => void, party: () => Se
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean } | null = null;
   c.addEventListener("pointerdown", (e) => (drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false }));
   c.addEventListener("pointermove", (e) => {
+    if (continent) {
+      const box = c.getBoundingClientRect();
+      const p = placeAt((e.clientX - box.left - fitted.ox) / fitted.k, (e.clientY - box.top - fitted.oy) / fitted.k);
+      const h = p?.id ?? null;
+      if (h !== hover) {
+        hover = h;
+        draw();
+      }
+      return;
+    }
     if (!drag) return;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
@@ -53,7 +81,7 @@ export function initWorldMap(go: (x: number, y: number) => void, party: () => Se
   c.addEventListener("pointerup", (e) => {
     const d = drag;
     drag = null;
-    if (!d || d.moved || !map) return;
+    if (!d || d.moved || !map || continent) return;
     const box = c.getBoundingClientRect();
     const t = toTile(e.clientX - box.left, e.clientY - box.top);
     if (t.x < 0 || t.y < 0 || t.x >= map.width || t.y >= map.height) return;
@@ -65,6 +93,7 @@ export function initWorldMap(go: (x: number, y: number) => void, party: () => Se
     "wheel",
     (e) => {
       e.preventDefault();
+      if (continent) return;
       const box = c.getBoundingClientRect();
       zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX - box.left, e.clientY - box.top);
     },
@@ -151,9 +180,16 @@ function draw() {
   const base = minimapBase();
   if (!map || !base) return;
   const c = $("worldmap-canvas") as HTMLCanvasElement;
+  if (continent) {
+    const here = (map.rift ? null : map.id) as ZoneId | null;
+    fitted = drawContinent(c, here, performance.now(), hover);
+    $("wm-title").textContent = "แผนที่ทวีป";
+    return;
+  }
   const g = c.getContext("2d")!;
   g.setTransform(1, 0, 0, 1, 0, 0);
-  g.fillStyle = "#14100c";
+  // the same old paper as the continent map, with this map inked on it
+  g.fillStyle = "#e6d2a2";
   g.fillRect(0, 0, c.width, c.height);
   const s = k();
   g.save();
@@ -161,8 +197,18 @@ function draw() {
   g.rotate(Math.PI / 4);
   g.scale(s, s);
   g.imageSmoothingEnabled = false;
+  g.filter = "sepia(0.55) saturate(0.9) contrast(0.95) brightness(1.02)";
   g.drawImage(base, 0, 0);
+  g.filter = "none";
+  g.strokeStyle = "#4a3220";
+  g.lineWidth = 2 / s;
+  g.strokeRect(0, 0, base.width, base.height);
   g.restore();
+  const edge = g.createRadialGradient(c.width / 2, c.height / 2, Math.min(c.width, c.height) * 0.35, c.width / 2, c.height / 2, Math.max(c.width, c.height) * 0.75);
+  edge.addColorStop(0, "rgba(0,0,0,0)");
+  edge.addColorStop(1, "rgba(90,50,20,0.45)");
+  g.fillStyle = edge;
+  g.fillRect(0, 0, c.width, c.height);
 
   const mark = (x: number, y: number, color: string, r: number, label?: string, ring = false) => {
     const p = toScreen(x, y);
@@ -185,9 +231,9 @@ function draw() {
       g.font = "bold 12px Tahoma, sans-serif";
       g.textAlign = "center";
       g.lineWidth = 3;
-      g.strokeStyle = "#000";
+      g.strokeStyle = "#f3e4bc";
       g.strokeText(label, p.x, p.y - r - 6);
-      g.fillStyle = "#fff3c8";
+      g.fillStyle = "#3a2414";
       g.fillText(label, p.x, p.y - r - 6);
     }
   };

@@ -78,7 +78,7 @@ export function lineOfSight(map: GameMap, a: Point, b: Point): boolean {
     const tx = Math.round(x);
     const ty = Math.round(y);
     const prop = map.props[ty]?.[tx];
-    if (prop === Prop.House || prop === Prop.Ruin || prop === Prop.Windmill) return false;
+    if (prop === Prop.House || prop === Prop.Ruin || prop === Prop.Windmill || prop === Prop.Big || prop === Prop.Wall) return false;
     if (heightAt(map, x, y) > top) return false;
   }
   return true;

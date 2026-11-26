@@ -5,7 +5,8 @@ import { GameMap, isHouseAnchor, lookOf, Prop, Tile } from "../../shared/map";
 import { RAMP_DIR } from "../../shared/terrain";
 import { LEVEL_H, place, toScreen } from "./iso";
 import { SCENERY_SCALE } from "./sprites";
-import { groundDetail, groundKey, houseFrame, PROP_SHADOW, propFrame } from "./textures";
+import { BigThing } from "../../shared/map";
+import { cityFrame, groundDetail, groundKey, hash, houseFrame, PROP_SHADOW, propFrame } from "./textures";
 
 /**
  * Draws the land in square pieces. A piece is made the first time it comes into
@@ -35,6 +36,11 @@ interface Piece {
   shown: boolean;
 }
 
+/** Some buildings are drawn larger than their footprint (the castle's meadow is closed anyway). */
+const BIG_SCALE: Record<string, number> = { castle: 1.3, fountain: 1.15 };
+/** In the capital these stations have a keeper standing by with their own name. */
+const KEPT: StationKind[] = ["smith", "storage", "board"];
+
 const STATION_LABEL: Partial<Record<StationKind, string>> = {
   smith: "ช่างฝีมือ",
   storage: "คลังเก็บของ",
@@ -51,6 +57,12 @@ export class Land {
   readonly usable = new Map<string, Usable>();
   private pieces = new Map<string, Piece>();
   private mills: Phaser.GameObjects.Image[] = [];
+  /** street lamps, to light at night */
+  readonly lamps: { img: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image; x: number; y: number }[] = [];
+  private bigAt = new Map<string, BigThing>();
+  /** tall buildings, faded when someone we care about walks behind them */
+  private tall: Phaser.GameObjects.Image[] = [];
+  private night = false;
   private current!: Piece;
 
   constructor(
@@ -58,7 +70,30 @@ export class Land {
     private map: GameMap,
     private isUsedUp: (key: string) => boolean,
     private isLit: (key: string) => boolean,
-  ) {}
+  ) {
+    for (const b of map.bigs ?? []) this.bigAt.set(`${b.x},${b.y}`, b);
+  }
+
+  /** Buildings in front of these points (world pixels, with depth) turn see-through. */
+  fadeFor(points: { x: number; y: number; depth: number }[]) {
+    for (const img of this.tall) {
+      if (!img.displayList) continue;
+      const b = img.getBounds();
+      const hide = points.some((p) => p.depth < img.depth && p.x > b.x + 6 && p.x < b.right - 6 && p.y - 30 > b.y && p.y - 30 < b.bottom - 10);
+      const want = hide ? 0.4 : 1;
+      if (img.alpha !== want) img.setAlpha(img.alpha + Math.sign(want - img.alpha) * Math.min(0.2, Math.abs(want - img.alpha)));
+    }
+  }
+
+  /** Lamps glow after dark (0 = day, 1 = deep night). */
+  setNight(dark: number) {
+    const on = dark > 0.35;
+    if (on !== this.night) {
+      this.night = on;
+      for (const l of this.lamps) l.img.setFrame(on ? "lamp1" : "lamp0");
+    }
+    for (const l of this.lamps) l.glow.setAlpha(on ? Math.min(0.85, dark) * (0.85 + 0.15 * Math.sin(l.x * 3 + l.y + this.scene.time.now / 300)) : 0);
+  }
 
   /** Shows the pieces in view and hides the others. */
   update(view: Phaser.Geom.Rectangle, time: number) {
@@ -155,6 +190,29 @@ export class Land {
     }
 
     const prop = map.props[y][x];
+    if (prop === Prop.Big) {
+      const b = this.bigAt.get(`${x},${y}`);
+      if (b) {
+        const c = place(x + (b.w - 1) / 2, y + (b.h - 1) / 2);
+        const d = toScreen(x + b.w - 1, y + b.h - 1).y;
+        const img = this.keep(scene.add.image(c.x, c.y, "city", b.frame).setScale(SCENERY_SCALE * (BIG_SCALE[b.frame] ?? 1)).setDepth(d));
+        if (b.frame !== "castle" && b.frame !== "fountain") this.tall.push(img);
+        if (b.frame === "fountain") this.fountain(c.x, c.y, d);
+      }
+      return;
+    }
+    const city = cityFrame(map, x, y, this.night);
+    if (city) {
+      const shadow = PROP_SHADOW[prop];
+      if (shadow) this.keep(scene.add.image(p.x, p.y + 2, "c-shadow").setScale(shadow).setDepth(depth + eps * 2));
+      const img = this.keep(scene.add.image(p.x, p.y, city.atlas, city.frame).setScale(SCENERY_SCALE).setDepth(p.depth));
+      if (prop === Prop.Lamp) {
+        const glow = this.keep(scene.add.image(p.x + 7, p.y - 54, "lamp-glow").setDepth(p.depth + 0.5).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0));
+        this.lamps.push({ img, glow, x, y });
+      }
+      if (prop === Prop.Clutter && map.decor?.[y * map.width + x]?.startsWith("banner")) img.setFlipX(hash(x, y, 4) < 0.5);
+      return;
+    }
     if (prop === Prop.House || prop === Prop.Windmill) {
       if (isHouseAnchor(map, x, y)) {
         // centre of the 2x2 footprint, sorted by its front corner
@@ -180,7 +238,24 @@ export class Land {
     const station = stationAt(map, x, y);
     if (res || station) this.usable.set(key, { x, y, img, kind: station ?? "resource" });
     if (res && this.isUsedUp(key)) img.setAlpha(0.35);
-    if (station) this.label(p.x, p.y - (LABEL_UP[station] ?? 40), STATION_LABEL[station] ?? "", p.depth + 1);
+    if (station && !(map.id === "aldermere" && KEPT.includes(station))) this.label(p.x, p.y - (LABEL_UP[station] ?? 40), STATION_LABEL[station] ?? "", p.depth + 1);
+  }
+
+  /** Sparkles of water jumping in the fountain. */
+  private fountain(x: number, y: number, depth: number) {
+    const e = this.keep(
+      this.scene.add.particles(x, y - 50, "sparkle", {
+        lifespan: 700,
+        speedX: { min: -38, max: 38 },
+        speedY: { min: -60, max: -20 },
+        gravityY: 160,
+        scale: { start: 0.5, end: 0.15 },
+        alpha: { start: 0.9, end: 0 },
+        tint: [0xbfe9ff, 0xffffff, 0x8fd3ff],
+        frequency: 45,
+      }),
+    );
+    e.setDepth(depth + 1);
   }
 
   private label(x: number, y: number, text: string, depth: number) {

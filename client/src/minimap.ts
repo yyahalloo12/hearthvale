@@ -31,6 +31,7 @@ const COLORS: Record<number, string> = {
   [Tile.Fern]: "#68a855",
   [Tile.Bridge]: "#9a6a3a",
   [Tile.Spring]: "#b9a0ff",
+  [Tile.Cobble]: "#d8c8a8",
 };
 
 let base: HTMLCanvasElement | null = null;
@@ -52,6 +53,9 @@ export function setMinimap(map: GameMap) {
       g.fillStyle = COLORS[map.tiles[y][x]] ?? "#000";
       if (prop === Prop.Tree) g.fillStyle = lookOf(map) === "hollow" ? "#4b4654" : lookOf(map) === "mossfen" ? "#2c6a46" : "#2f8a3e";
       else if (prop === Prop.House) g.fillStyle = "#c8453a";
+      else if (prop === Prop.Big) g.fillStyle = map.id === "aldermere" && x < 20 && y < 20 ? (x >= 7 && y >= 7 && x < 16 && y < 16 ? "#f4efe4" : "#6fbf5a") : "#b8573a";
+      else if (prop === Prop.Wall) g.fillStyle = "#9a9284";
+      else if (prop === Prop.Stall) g.fillStyle = "#e8b83a";
       else if (prop === Prop.Ruin) g.fillStyle = "#38333f";
       else if (prop === Prop.Anvil || prop === Prop.Chest || prop === Prop.Board) g.fillStyle = "#6b4226";
       else if (prop === Prop.Portal) g.fillStyle = "#b04fe0";

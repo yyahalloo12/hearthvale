@@ -31,6 +31,7 @@ import { clearGoal, initWorldMap, setWorldMap } from "../worldmap";
 import { PartyData } from "../../../shared/protocol";
 import { PlayerView, TIER_TINT } from "../PlayerView";
 import { loadSprites, PLAYER_SHEET, SCENERY_SCALE } from "../sprites";
+import { Town } from "../town";
 import { makeTextures } from "../textures";
 
 
@@ -54,6 +55,7 @@ export class WorldScene extends Phaser.Scene {
   private me: any;
   private gold: number | null = null;
   land!: Land;
+  private town!: Town;
   private veils: Phaser.GameObjects.Image[] = [];
   private gone = new Map<string, Phaser.GameObjects.Graphics>();
   private warning: Phaser.GameObjects.Graphics | null = null;
@@ -91,6 +93,7 @@ export class WorldScene extends Phaser.Scene {
       (key) => !!st.depleted?.has(key),
       (key) => !!st.lit?.has(key),
     );
+    this.town = new Town(this, this.map, this.land);
     this.drawExits();
     this.drawQuiet();
     document.getElementById("mist")!.hidden = this.zone !== "mossfen" || !setting("mist");
@@ -375,6 +378,7 @@ export class WorldScene extends Phaser.Scene {
   private showDaylight() {
     const dark = this.map.pvp || this.map.rift || !setting("night") ? 0 : darkness();
     document.getElementById("night")!.style.opacity = String(dark * 0.5);
+    this.land.setNight(this.map.pvp || this.map.rift ? 0 : darkness());
     this.showEvents();
     this.showTarget();
     if (this.map.pvp || this.map.rift) return setDaytime("");
@@ -929,6 +933,7 @@ export class WorldScene extends Phaser.Scene {
       if (usable) {
         this.setTarget(null);
         this.room.send(Msg.Interact, { x: usable.x, y: usable.y });
+        this.town.greet(usable.x, usable.y);
         const at = place(usable.x, usable.y);
         this.marker.setPosition(at.x, at.y).setVisible(true).setAlpha(1);
         return;
@@ -962,6 +967,9 @@ export class WorldScene extends Phaser.Scene {
   update(time: number, delta: number) {
     for (const v of this.views.values()) v.update(delta);
     for (const m of this.monsters.values()) m.update(delta);
+    this.town.update(delta, time, [...this.views.values()]);
+    const meView = this.views.get(this.room.sessionId);
+    if (meView) this.land.fadeFor([{ x: meView.root.x, y: meView.root.y, depth: meView.root.depth }]);
     // after a jump across the map the camera goes straight there
     const cam = this.cameras.main;
     const target = (cam as any)._follow as { x: number; y: number } | null;

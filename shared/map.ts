@@ -20,6 +20,8 @@ export enum Tile {
   Fern = 10,
   Bridge = 11,
   Spring = 12,
+  /** city streets of round stones */
+  Cobble = 13,
 }
 
 export enum Prop {
@@ -38,6 +40,25 @@ export enum Prop {
   Windmill = 12,
   Lantern = 13,
   Treasure = 14,
+  /** part of a big building drawn once (castle, clock tower, town house, fountain) */
+  Big = 15,
+  /** a street lamp that lights up at night */
+  Lamp = 16,
+  /** small street things: barrels, crates, benches, planters, banners (see map.decor) */
+  Clutter = 17,
+  /** the city wall, joining up like fences */
+  Wall = 18,
+  /** a market stall with a seller behind it */
+  Stall = 19,
+}
+
+/** A building bigger than one tile, drawn once from the city atlas. */
+export interface BigThing {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  frame: string;
 }
 
 export type ZoneId = "brindle" | "mossfen" | "hollow" | "rift" | "aldermere" | "copperhill" | "sunreach" | "thornmarsh" | "greywater";
@@ -84,6 +105,16 @@ export interface GameMap {
   border?: boolean;
   /** where you wake up after falling here (Brindle when left out) */
   home?: ZoneId;
+  /** big buildings, by their back corner tile */
+  bigs?: BigThing[];
+  /** city-atlas frame for each Clutter or Stall tile, by y * width + x */
+  decor?: Record<number, string>;
+}
+
+/** Puts a big building on the map and blocks its tiles. */
+export function addBig(map: GameMap, b: BigThing) {
+  (map.bigs ??= []).push(b);
+  for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) map.props[y][x] = Prop.Big;
 }
 
 /** Which map's colours and trees to use. */

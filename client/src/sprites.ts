@@ -21,6 +21,10 @@ export const PLAYER_SHEET = {
 };
 /** The scenery atlas is drawn at twice its size on screen. */
 export const SCENERY_SCALE = 0.5;
+/** Townsfolk sheets (art/folk.py): 8 facings, 2 idle + 6 walk frames. */
+export const FOLK = ["man", "woman", "noble", "elder", "smith", "merchant", "kid", "girl", "baker", "scholar"] as const;
+export type Folk = (typeof FOLK)[number];
+export const FOLK_COLS = 8;
 export const PLAYER_LAYERS = ["base", "tunic", "helm", "sword", "axe", "bow", "staff"] as const;
 
 export interface MonsterSheet {
@@ -93,6 +97,8 @@ export function loadSprites(scene: Phaser.Scene) {
     if (!scene.textures.exists(key)) scene.load.spritesheet(key, `/art/${key}.png`, { frameWidth: w, frameHeight: h });
   };
   if (!scene.textures.exists("scenery")) scene.load.atlas("scenery", "/art/scenery.png", "/art/scenery.json");
+  if (!scene.textures.exists("city")) scene.load.atlas("city", "/art/city.png", "/art/city.json");
+  for (const f of FOLK) sheet(`folk-${f}`, PLAYER_SHEET.w, PLAYER_SHEET.h);
   for (const l of PLAYER_LAYERS) sheet(`player-${l}`, PLAYER_SHEET.w, PLAYER_SHEET.h);
   for (const [k, s] of Object.entries(MONSTER_SHEETS)) if (!s.tex) sheet(`mon-${k}`, s.w, s.h);
 }

@@ -18,7 +18,8 @@ from kit import *  # noqa: E402,F403
 
 args = sys.argv[sys.argv.index("--") + 1:]
 OUT = os.path.abspath(args[0])
-only = args[1:]
+CITY = "city" in args[1:]
+only = [a for a in args[1:] if a != "city"]
 rad = math.radians
 
 PX = 80  # pixels per unit; the game shows the atlas at half size
@@ -661,24 +662,34 @@ ITEMS = {
     "g-shell": lambda: shells(4),
 }
 
+SIZES = {}
+ATLAS = "scenery"
+SHEET_W = 1600
+if CITY:
+    import city  # noqa: E402
+
+    ITEMS, SIZES, ATLAS, SHEET_W = city.ITEMS, city.SIZES, "city", 2048
+
 frames = []
 for name, build in ITEMS.items():
     if only and not any(name.startswith(o) for o in only):
         continue
+    w, h, look = SIZES.get(name, (W, H, LOOK))
+    anchor = (w / 2, h / 2 + look * math.cos(rad(30)) * PX)
     reset()
     kit._mats.clear()
-    stage(W, H, VIEW, LOOK)
+    stage(w, h, h / PX, look)
     build()
     a = render_array()
     ys, xs = np.where(a[..., 3] > 0.01)
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
-    if x0 == 0 or y0 == 0 or x1 == W or y1 == H:
+    if x0 == 0 or y0 == 0 or x1 == w or y1 == h:
         print("WARNING cut off:", name)
-    frames.append((name, a[y0:y1, x0:x1], (ANCHOR[0] - x0, ANCHOR[1] - y0)))
+    frames.append((name, a[y0:y1, x0:x1], (anchor[0] - x0, anchor[1] - y0)))
 
 # pack: rows of similar height
 frames.sort(key=lambda f: -f[1].shape[0])
-SHEET_W, pad = 1600, 4
+pad = 4
 x = y = row_h = 0
 atlas = {}
 place = []
@@ -701,7 +712,7 @@ sheet = np.zeros((y + row_h, SHEET_W, 4), dtype=np.float32)
 for x, y, img in place:
     sheet[y : y + img.shape[0], x : x + img.shape[1]] = img
 os.makedirs(OUT, exist_ok=True)
-save_sheet([[sheet]], os.path.join(OUT, "scenery.png"))
-with open(os.path.join(OUT, "scenery.json"), "w") as f:
-    json.dump({"frames": atlas, "meta": {"image": "scenery.png", "scale": 1}}, f, indent=1)
+save_sheet([[sheet]], os.path.join(OUT, f"{ATLAS}.png"))
+with open(os.path.join(OUT, f"{ATLAS}.json"), "w") as f:
+    json.dump({"frames": atlas, "meta": {"image": f"{ATLAS}.png", "scale": 1}}, f, indent=1)
 print("frames", len(frames))

@@ -60,6 +60,22 @@ export function makeTextures(scene: Phaser.Scene) {
   tile(scene, "t-grass-2", 0x80cd5e, (g) => speckle(g, 0x92da70, 8, 41));
   tile(scene, "t-path", 0xdcbb84, (g) => speckle(g, 0xc9a56c, 10, 5));
   tile(scene, "t-plaza", 0xa59d8f);
+  // round street stones, warm and worn
+  for (let v = 0; v < 3; v++)
+    tile(scene, `t-cobble-${v}`, 0xb8a888, (g) => {
+      let s = 11 + v * 17;
+      const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+      for (let i = 0; i < 26; i++) {
+        const u = (r() - 0.5) * 0.92;
+        const w = (r() - 0.5) * 0.92;
+        const x = 1 + HW + (u - w) * HW;
+        const y = 1 + HH + (u + w) * HH;
+        g.fillStyle(r() < 0.5 ? 0xcbbd9e : 0xa8987a, 1);
+        g.fillEllipse(x, y, 7 + r() * 3, 3.5 + r() * 1.5);
+        g.fillStyle(0xe2d7bd, 0.6);
+        g.fillEllipse(x - 1, y - 1, 3, 1.4);
+      }
+    });
   tile(scene, "t-water", 0x4fa8e0, (g) => {
     g.fillStyle(0x9bd6fb, 0.75);
     g.fillRoundedRect(HW - 12, HH - 4, 12, 2, 1);
@@ -88,6 +104,20 @@ export function makeTextures(scene: Phaser.Scene) {
   make(scene, "c-shadow", 32, 12, (g) => {
     g.fillStyle(0x000000, 0.25);
     g.fillEllipse(16, 6, 30, 10);
+  });
+  // warm light round a street lamp at night
+  make(scene, "lamp-glow", 120, 120, (g) => {
+    for (let i = 12; i > 0; i--) {
+      g.fillStyle(0xffc860, 0.075);
+      g.fillCircle(60, 60, i * 5);
+    }
+  });
+  // a falling leaf
+  make(scene, "leaf", 10, 6, (g) => {
+    g.fillStyle(0xffffff, 1);
+    g.fillEllipse(5, 3, 9, 4);
+    g.fillStyle(0x000000, 0.25);
+    g.fillRect(1, 3, 8, 1);
   });
   make(scene, "click-marker", 40, 20, (g) => {
     g.lineStyle(2, 0xffffff, 0.9);
@@ -123,6 +153,8 @@ export function groundKey(t: Tile, x: number, y: number, map?: GameMap): string 
       return "t-path";
     case Tile.Plaza:
       return "t-plaza";
+    case Tile.Cobble:
+      return `t-cobble-${pick(x, y, 3, 5)}`;
     case Tile.Water:
       return "t-water";
     case Tile.Sand:
@@ -230,4 +262,48 @@ export const PROP_SHADOW: Partial<Record<Prop, number>> = {
   [Prop.Ruin]: 1.5,
   [Prop.Lantern]: 1.2,
   [Prop.Treasure]: 1.5,
+  [Prop.Lamp]: 0.9,
+  [Prop.Clutter]: 1.3,
+  [Prop.Stall]: 1.7,
 };
+
+/**
+ * The capital's own things, from the city atlas: big buildings are drawn apart;
+ * this covers lamps, walls, clutter and the golden trees.
+ */
+export function cityFrame(map: GameMap, x: number, y: number, lit: boolean): { atlas: "city" | "scenery"; frame: string } | null {
+  const p = map.props[y][x];
+  switch (p) {
+    case Prop.Lamp:
+      return { atlas: "city", frame: lit ? "lamp1" : "lamp0" };
+    case Prop.Wall:
+      return { atlas: "city", frame: wallFrame(map, x, y) };
+    case Prop.Clutter:
+    case Prop.Stall: {
+      const f = map.decor?.[y * map.width + x];
+      if (!f) return null;
+      return { atlas: f.startsWith("stall") ? "scenery" : "city", frame: f };
+    }
+    case Prop.Tree:
+      if (map.id === "aldermere" && hash(x, y, 9) < 0.55) return { atlas: "city", frame: `gold${pick(x, y, 3, 6)}` };
+      return null;
+    default:
+      return null;
+  }
+}
+
+/** City walls join up with their neighbours, and with the towers. */
+function wallFrame(map: GameMap, x: number, y: number): string {
+  const is = (dx: number, dy: number) => {
+    const p = map.props[y + dy]?.[x + dx];
+    return p === Prop.Wall || (p === Prop.Clutter && map.decor?.[(y + dy) * map.width + x + dx] === "walltower");
+  };
+  const r = is(1, 0);
+  const l = is(-1, 0);
+  const d = is(0, 1);
+  const u = is(0, -1);
+  if ((r || l) && (d || u)) return r ? (d ? "wall-c0" : "wall-c2") : d ? "wall-c1" : "wall-c3";
+  if (r && l) return "wall-x";
+  if (d && u) return "wall-y";
+  return r ? "wall-ex" : l ? "wall-eX" : d ? "wall-ey" : "wall-eY";
+}
