@@ -1,0 +1,290 @@
+import { expToNext, isMainJob, Job, JOB_CHANGE_LEVEL, JOB_CHOICES, JOB_NAMES, jobHas, MAX_LEVEL, RESPAWN_DELAY_MS, SECOND_CHOICES, SECOND_JOB_LEVEL, skillPointsEarned, SKILLS } from "../../shared/stats";
+
+import { GLOW_AT } from "../../shared/hollow";
+import icons from "./icons.json";
+import { itemIcon } from "./icons";
+import { setSkillView } from "./skillwin";
+
+/** The DOM parts of the game screen: status panel, skill bar, death box. */
+
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+export interface MeView {
+  name: string;
+  level: number;
+  exp: number;
+  job: string;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  dead: boolean;
+  skills: Map<string, number>;
+  /** effects on you now, as small pictures */
+  buffs: { icon: string; name: string }[];
+}
+
+/** One line on the board of what is going on in this map. */
+export interface MapEvent {
+  icon: string;
+  /** colour of the round gem: rare, epic, dark, boss, sun, night */
+  kind: string;
+  title: string;
+  text: string;
+}
+
+/** A picture for every skill on the action bar. */
+const SKILL_ICON: Record<string, string> = {
+  heavy_strike: "⚔️", guard: "🛡️", charge: "💥", taunt: "📣",
+  double_shot: "🏹", pierce_arrow: "➶", backstep: "💨", mark_weak: "🎯",
+  fireball: "🔥", ice_lance: "❄️", chain_lightning: "⚡", mana_shield: "🔮",
+  holy_light: "🌟", heal: "💚", blessing: "✨", revive: "🕊️",
+  fortress: "🏰", chain_pull: "⛓️", stand_firm: "🚩", whirlwind: "🌪️", bloodboil: "🩸", ground_slam: "💥",
+  long_shot: "🎯", steady_aim: "👁️", arrow_rain: "🌧️", spike_trap: "🌵", smoke_trap: "💨", camouflage: "🌿",
+  meteor: "☄️", blizzard: "🌨️", tri_weave: "🔱", curse_weakness: "💀", poison_mist: "☠️", soul_drain: "👻",
+  mass_heal: "💞", barrier: "🛡️", foresight: "🔮", light_hammer: "🔨", justice_aura: "⚖️", judgment: "⚡",
+};
+
+export interface HudActions {
+  useSkill(id: string): void;
+  learnSkill(id: string): void;
+  changeJob(job: Job): void;
+  respawn(): void;
+}
+
+const cooldownEnds = new Map<string, { end: number; total: number }>();
+let actions: HudActions;
+let lastSkillsKey = "";
+let deathShownAt = 0;
+
+export function initHud(a: HudActions) {
+  actions = a;
+  $("hud").hidden = false;
+  $("skillbar").hidden = false;
+  $("chat").hidden = false;
+  $("mapbox").hidden = false;
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#chat-tabs button"))
+    b.onclick = () => {
+      for (const o of document.querySelectorAll<HTMLButtonElement>("#chat-tabs button")) o.setAttribute("aria-pressed", String(o === b));
+      $("chat-log").dataset.tab = b.dataset.tab;
+      $("chat-log").scrollTop = $("chat-log").scrollHeight;
+    };
+  jobsShownFor = "";
+  $("respawn").onclick = () => actions.respawn();
+  if (!started) requestAnimationFrame(drawCooldowns);
+  started = true;
+}
+
+let started = false;
+let jobsShownFor = "";
+
+/** The buttons for picking a job: the first one at 10, the second at 30. */
+function showJobChoices(job: string) {
+  jobsShownFor = job;
+  const second = isMainJob(job);
+  const list = second ? SECOND_CHOICES[job] : JOB_CHOICES;
+  const jobs = $("job-change");
+  jobs.replaceChildren(
+    Object.assign(document.createElement("div"), { className: "job-title", textContent: second ? `เลือกอาชีพขั้นสองของ${JOB_NAMES[job as Job]} (เปลี่ยนทีหลังไม่ได้)` : "เลือกอาชีพ (เปลี่ยนทีหลังไม่ได้)" }),
+  );
+  for (const { job: j, text } of list) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.append(Object.assign(document.createElement("b"), { textContent: JOB_NAMES[j] }), Object.assign(document.createElement("span"), { textContent: text }));
+    b.onclick = () => actions.changeJob(j);
+    jobs.append(b);
+  }
+}
+
+/** Name of the map, and whether the Hollow bars show. */
+export function setZone(name: string, hollow: boolean) {
+  $("map-name").textContent = name;
+  $("corruption-row").hidden = !hollow;
+  $("death-text").textContent = hollow ? "ของที่พกมาตกอยู่ที่นี่ คุณจะฟื้นที่หมู่บ้าน" : "ฟื้นขึ้นที่ลานกลางหมู่บ้าน";
+  cooldownEnds.clear();
+  document.querySelectorAll<HTMLElement>(".skill .cd").forEach((el) => (el.style.height = "0"));
+}
+
+/** Sun or moon, and how long until it changes. */
+export function setDaytime(text: string) {
+  const el = $("daytime");
+  el.hidden = !text;
+  if (el.textContent !== text) el.textContent = text;
+}
+
+let lastEvents = "";
+/** The board of what is going on in this map (lanterns, night, falling ground...). */
+export function setEvents(list: MapEvent[]) {
+  const key = JSON.stringify(list);
+  if (key === lastEvents) return;
+  lastEvents = key;
+  $("events").hidden = !list.length;
+  $("event-list").replaceChildren(
+    ...list.map((e) => {
+      const row = document.createElement("div");
+      row.className = "ev";
+      const gem = Object.assign(document.createElement("div"), { className: `gem ${e.kind}`, textContent: e.icon });
+      const body = document.createElement("div");
+      body.append(Object.assign(document.createElement("b"), { textContent: e.title }), Object.assign(document.createElement("em"), { textContent: e.text }));
+      row.append(gem, body);
+      return row;
+    }),
+  );
+}
+
+/** The frame at the top that shows what you are fighting. */
+export function setTargetInfo(t: { name: string; sub: string; hp: number; maxHp: number; enemy: boolean } | null) {
+  $("target").hidden = !t;
+  if (!t) return;
+  $("target-name").textContent = t.name;
+  $("target-sub").textContent = t.sub;
+  $("target").classList.toggle("friend", !t.enemy);
+  $("target-fill").style.width = `${(Math.max(0, t.hp) / Math.max(1, t.maxHp)) * 100}%`;
+  $("target-text").textContent = `${Math.max(0, t.hp)} / ${t.maxHp}`;
+}
+
+/** A picture of your character for the round frame. */
+export function setPortrait(src: string) {
+  $<HTMLImageElement>("portrait-img").src = src;
+}
+
+export function setCorruption(value: number, gatesUntil: number) {
+  $("corruption-fill").style.width = `${value}%`;
+  $("corruption-text").textContent = `การกัดกร่อน ${value}%${value >= GLOW_AT ? " ทุกคนเห็นคุณ!" : ""}`;
+  const s = Math.max(0, Math.round((gatesUntil - Date.now()) / 1000));
+  $("gate-timer").textContent = `ประตูย้ายใน ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+export function askEnterHollow(yes: () => void) {
+  const box = $("enter-hollow");
+  box.hidden = false;
+  $("hollow-no").onclick = () => (box.hidden = true);
+  $("hollow-yes").onclick = () => {
+    box.hidden = true;
+    yes();
+  };
+}
+
+export function setOnline(n: number) {
+  $("online").textContent = `👥 ${n}`;
+  $("online").title = `ออนไลน์ในแผนที่นี้ ${n} คน`;
+}
+
+export function startCooldown(skill: string, ms: number) {
+  cooldownEnds.set(skill, { end: performance.now() + ms, total: ms });
+}
+
+function drawCooldowns() {
+  const now = performance.now();
+  for (const [skill, cd] of cooldownEnds) {
+    const el = document.querySelector<HTMLElement>(`.skill[data-skill="${skill}"] .cd`);
+    const left = Math.max(0, cd.end - now);
+    if (el) el.style.height = `${(left / cd.total) * 100}%`;
+    if (!left) cooldownEnds.delete(skill);
+  }
+  requestAnimationFrame(drawCooldowns);
+}
+
+export function updateMe(me: MeView) {
+  $("hud-name").textContent = me.name;
+  $("hud-level").textContent = String(me.level);
+  $("hud-job").textContent = JOB_NAMES[me.job as Job] ?? me.job;
+  const hpPct = (Math.max(0, me.hp) / me.maxHp) * 100;
+  $("hp-fill").style.width = `${hpPct}%`;
+  $("hp-text").textContent = `HP ${Math.max(0, me.hp)} / ${me.maxHp}`;
+  $("mp-bar").hidden = me.maxMp <= 0;
+  if (me.maxMp > 0) {
+    $("mp-fill").style.width = `${(me.mp / me.maxMp) * 100}%`;
+    $("mp-text").textContent = `MP ${me.mp} / ${me.maxMp}`;
+  }
+  const need = expToNext(me.level);
+  $("exp-fill").style.width = me.level >= MAX_LEVEL ? "100%" : `${(me.exp / need) * 100}%`;
+  $("exp-text").textContent = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${((me.exp / need) * 100).toFixed(1)}%`;
+  document.querySelector<HTMLElement>("#plate .bar.exp")!.title = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${me.exp} / ${need}`;
+  $("xp-fill").style.width = $("exp-fill").style.width;
+  $("xp-text").textContent = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `Lv ${me.level} · EXP ${me.exp.toLocaleString("th-TH")} / ${need.toLocaleString("th-TH")} (${((me.exp / need) * 100).toFixed(1)}%)`;
+  const buffKey = me.buffs.map((b) => b.icon).join("");
+  if ($("buffs").dataset.key !== buffKey) {
+    $("buffs").dataset.key = buffKey;
+    $("buffs").replaceChildren(...me.buffs.map((b) => Object.assign(document.createElement("div"), { className: "buff", textContent: b.icon, title: b.name })));
+  }
+
+  const canFirst = me.job === "wanderer" && me.level >= JOB_CHANGE_LEVEL;
+  const canSecond = isMainJob(me.job) && me.level >= SECOND_JOB_LEVEL;
+  $("job-change").hidden = !(canFirst || canSecond);
+  if ((canFirst || canSecond) && jobsShownFor !== me.job) showJobChoices(me.job);
+
+  let spent = 0;
+  me.skills.forEach((v) => (spent += v));
+  const points = skillPointsEarned(me.level) - spent;
+  setSkillView({ job: me.job, level: me.level, skills: me.skills, points });
+  const key = `${me.job}|${points}|${[...me.skills.entries()].join(",")}`;
+  if (key !== lastSkillsKey) {
+    lastSkillsKey = key;
+    renderSkills(me, points);
+  }
+
+  const death = $("death");
+  if (me.dead && death.hidden) {
+    death.hidden = false;
+    deathShownAt = performance.now();
+    $<HTMLButtonElement>("respawn").disabled = true;
+    setTimeout(() => ($<HTMLButtonElement>("respawn").disabled = false), RESPAWN_DELAY_MS);
+  } else if (!me.dead && !death.hidden) {
+    death.hidden = true;
+  }
+  void deathShownAt;
+}
+
+function renderSkills(me: MeView, points: number) {
+  const box = $("skills");
+  box.replaceChildren();
+  const hasJob = me.job !== "wanderer";
+  $("skill-points").textContent = hasJob
+    ? points > 0
+      ? `แต้มสกิลเหลือ ${points} · กด K เพื่อเปิดหน้าต่างสกิล`
+      : ""
+    : me.level < JOB_CHANGE_LEVEL
+      ? `เลือกอาชีพและใช้สกิลได้ที่ Lv ${JOB_CHANGE_LEVEL}`
+      : "";
+  // ten slots, keys 1 to 0; empty ones keep their place
+  const byKey = new Map(Object.entries(SKILLS).filter(([, d]) => jobHas(me.job, d.job)).map(([id, d]) => [d.key, id] as const));
+  for (const slotKey of ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]) {
+    const id = byKey.get(slotKey);
+    if (!id) {
+      const empty = document.createElement("div");
+      empty.className = "skill empty";
+      empty.append(Object.assign(document.createElement("span"), { className: "key", textContent: slotKey }));
+      box.append(empty);
+      continue;
+    }
+    const def = SKILLS[id];
+    const lvl = me.skills.get(id) ?? 0;
+    const slot = document.createElement("div");
+    slot.className = "skill" + (lvl === 0 ? " locked" : "");
+    slot.dataset.skill = id;
+    slot.title = `${def.name} (ขั้น ${lvl}/${def.maxLevel})\n${def.desc}\nคูลดาวน์ ${def.cooldownMs / 1000} วินาที${def.mp ? ` · มานา ${def.mp}` : ""}`;
+    const key = document.createElement("span");
+    key.className = "key";
+    key.textContent = def.key;
+    // the Blender picture when there is one, otherwise a stand-in
+    const name = (icons.index as Record<string, number>)[`sk_${id}`] !== undefined ? itemIcon(`sk_${id}`, "pic") : document.createElement("div");
+    if (!name.classList.contains("ipic")) {
+      name.className = "pic";
+      name.textContent = SKILL_ICON[id] ?? def.name.slice(0, 2);
+    }
+    const lv = document.createElement("span");
+    lv.className = "lv";
+    lv.textContent = `${lvl}/${def.maxLevel}`;
+    const cd = document.createElement("div");
+    cd.className = "cd";
+    slot.append(key, name, lv, cd);
+    slot.onclick = () => lvl > 0 && actions.useSkill(id);
+    box.append(slot);
+  }
+}
+
+/** Skill id bound to a number key, if any. */
+export function skillForKey(key: string, job: string): string | undefined {
+  return Object.entries(SKILLS).find(([, d]) => d.key === key && jobHas(job, d.job))?.[0];
+}

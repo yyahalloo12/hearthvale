@@ -1,0 +1,21 @@
+[
+  {"kind": "wolf", "x": 30, "y": 70, "radius": 5, "count": 5, "respawnMs": 20000},
+  {"kind": "wolf", "x": 16, "y": 18, "radius": 6, "count": 5, "respawnMs": 20000},
+  {"kind": "wolf", "x": 10, "y": 100, "radius": 5, "count": 4, "respawnMs": 20000},
+  {"kind": "wolf", "x": 80, "y": 26, "radius": 6, "count": 6, "respawnMs": 20000},
+  {"kind": "wolf", "x": 20, "y": 82, "radius": 6, "count": 6, "respawnMs": 20000},
+  {"kind": "wolf", "x": 66, "y": 84, "radius": 5, "count": 5, "respawnMs": 20000},
+  {"kind": "wisp", "x": 60, "y": 40, "radius": 5, "count": 5, "respawnMs": 22000},
+  {"kind": "wisp", "x": 22, "y": 15, "radius": 6, "count": 5, "respawnMs": 22000},
+  {"kind": "wisp", "x": 38, "y": 34, "radius": 5, "count": 4, "respawnMs": 22000},
+  {"kind": "wisp", "x": 80, "y": 44, "radius": 6, "count": 6, "respawnMs": 22000},
+  {"kind": "wisp", "x": 46, "y": 88, "radius": 6, "count": 6, "respawnMs": 22000},
+  {"kind": "wisp", "x": 76, "y": 8, "radius": 5, "count": 4, "respawnMs": 22000},
+  {"kind": "bear", "x": 48, "y": 46, "radius": 6, "count": 4, "respawnMs": 30000},
+  {"kind": "bear", "x": 42, "y": 24, "radius": 5, "count": 4, "respawnMs": 30000},
+  {"kind": "bear", "x": 38, "y": 10, "radius": 5, "count": 3, "respawnMs": 30000},
+  {"kind": "bear", "x": 100, "y": 46, "radius": 5, "count": 5, "respawnMs": 30000},
+  {"kind": "bear", "x": 76, "y": 100, "radius": 6, "count": 5, "respawnMs": 30000},
+  {"kind": "bear", "x": 98, "y": 96, "radius": 6, "count": 5, "respawnMs": 30000},
+  {"kind": "treant", "x": 54, "y": 14, "radius": 2, "count": 1, "respawnMs": 600000}
+]

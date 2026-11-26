@@ -1,0 +1,589 @@
+[
+ {
+  "item": "sword_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 5,
+   "wood_1": 2
+  }
+ },
+ {
+  "item": "axe_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 4,
+   "wood_1": 4
+  }
+ },
+ {
+  "item": "helm_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 4,
+   "hide_1": 1
+  }
+ },
+ {
+  "item": "armor_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 8,
+   "hide_1": 3
+  }
+ },
+ {
+  "item": "boots_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 3,
+   "hide_1": 2
+  }
+ },
+ {
+  "item": "sword_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 8,
+   "wood_1": 4
+  }
+ },
+ {
+  "item": "axe_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 7,
+   "wood_1": 6
+  }
+ },
+ {
+  "item": "helm_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 6,
+   "hide_1": 3
+  }
+ },
+ {
+  "item": "armor_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 12,
+   "hide_1": 6
+  }
+ },
+ {
+  "item": "boots_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 5,
+   "hide_1": 4
+  }
+ },
+ {
+  "item": "sword_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 8,
+   "wood_3": 4,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "axe_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 7,
+   "wood_3": 6,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "helm_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 6,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "armor_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 12,
+   "thread_3": 4
+  }
+ },
+ {
+  "item": "boots_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 5,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "bow_1",
+  "craft": "wood",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "wood_1": 6
+  }
+ },
+ {
+  "item": "staff_1",
+  "craft": "wood",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "wood_1": 6
+  }
+ },
+ {
+  "item": "lcap_1",
+  "craft": "tailor",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "hide_1": 3
+  }
+ },
+ {
+  "item": "lcoat_1",
+  "craft": "tailor",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "hide_1": 6
+  }
+ },
+ {
+  "item": "lboots_1",
+  "craft": "tailor",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "hide_1": 3
+  }
+ },
+ {
+  "item": "hat_1",
+  "craft": "tailor",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "herb_1": 4
+  }
+ },
+ {
+  "item": "robe_1",
+  "craft": "tailor",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "herb_1": 8
+  }
+ },
+ {
+  "item": "shoes_1",
+  "craft": "tailor",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "herb_1": 4
+  }
+ },
+ {
+  "item": "bow_2",
+  "craft": "wood",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "wood_2": 10
+  }
+ },
+ {
+  "item": "staff_2",
+  "craft": "wood",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "wood_2": 10
+  }
+ },
+ {
+  "item": "lcap_2",
+  "craft": "tailor",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "hide_2": 5
+  }
+ },
+ {
+  "item": "lcoat_2",
+  "craft": "tailor",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "hide_2": 10
+  }
+ },
+ {
+  "item": "lboots_2",
+  "craft": "tailor",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "hide_2": 5
+  }
+ },
+ {
+  "item": "hat_2",
+  "craft": "tailor",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "herb_2": 6
+  }
+ },
+ {
+  "item": "robe_2",
+  "craft": "tailor",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "herb_2": 13
+  }
+ },
+ {
+  "item": "shoes_2",
+  "craft": "tailor",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "herb_2": 6
+  }
+ },
+ {
+  "item": "bow_3",
+  "craft": "wood",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "wood_3": 11,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "staff_3",
+  "craft": "wood",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "wood_3": 11,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "lcap_3",
+  "craft": "tailor",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "hide_2": 5,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "lcoat_3",
+  "craft": "tailor",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "hide_2": 11,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "lboots_3",
+  "craft": "tailor",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "hide_2": 5,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "hat_3",
+  "craft": "tailor",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "herb_2": 7,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "robe_3",
+  "craft": "tailor",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "herb_2": 14,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "shoes_3",
+  "craft": "tailor",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "herb_2": 7,
+   "thread_3": 2
+  }
+ },
+ {
+  "item": "shield_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 4,
+   "wood_1": 2
+  }
+ },
+ {
+  "item": "shield_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 5,
+   "wood_2": 2
+  }
+ },
+ {
+  "item": "shield_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 6,
+   "wood_3": 2
+  }
+ },
+ {
+  "item": "quiver_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "wood_1": 3,
+   "hide_1": 3
+  },
+  "craft": "wood"
+ },
+ {
+  "item": "quiver_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "wood_2": 3,
+   "hide_2": 4
+  },
+  "craft": "wood"
+ },
+ {
+  "item": "quiver_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "wood_3": 3,
+   "hide_2": 5
+  },
+  "craft": "wood"
+ },
+ {
+  "item": "tome_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "herb_1": 4,
+   "wood_1": 2
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "tome_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "herb_2": 5,
+   "wood_2": 2
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "tome_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "herb_2": 6,
+   "wood_3": 2,
+   "thread_3": 1
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "gloves_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "hide_1": 3,
+   "herb_1": 1
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "gloves_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "hide_2": 4,
+   "herb_2": 1
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "gloves_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "hide_2": 5,
+   "herb_2": 1
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "amulet_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 3
+  }
+ },
+ {
+  "item": "amulet_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 4,
+   "crystal_1": 1
+  }
+ },
+ {
+  "item": "amulet_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 5,
+   "crystal_1": 1
+  }
+ },
+ {
+  "item": "ring_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "ore_1": 3
+  }
+ },
+ {
+  "item": "ring_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "ore_2": 4
+  }
+ },
+ {
+  "item": "ring_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "ore_3": 5
+  }
+ },
+ {
+  "item": "belt_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "hide_1": 4
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "belt_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "hide_2": 5
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "belt_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "hide_2": 6,
+   "thread_3": 1
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "cloak_1",
+  "minSkill": 0,
+  "maxSkill": 40,
+  "needs": {
+   "hide_1": 2,
+   "herb_1": 3
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "cloak_2",
+  "minSkill": 15,
+  "maxSkill": 70,
+  "needs": {
+   "hide_2": 2,
+   "herb_2": 4
+  },
+  "craft": "tailor"
+ },
+ {
+  "item": "cloak_3",
+  "minSkill": 35,
+  "maxSkill": 100,
+  "needs": {
+   "hide_2": 2,
+   "herb_2": 5
+  },
+  "craft": "tailor"
+ }
+]

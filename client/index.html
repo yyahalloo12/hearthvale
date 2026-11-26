@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tales of Hearthvale</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/pixel.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+    <div id="night"></div>
+    <div id="mist" hidden></div>
+
+    <div id="login" class="panel">
+      <header class="title-art"><h1><span>Tales of</span> Hearthvale</h1>
+      <p class="sub">ผู้ผูกด้ายแห่งหมู่บ้านบรินเดิล</p></header>
+      <form id="login-form" autocomplete="off">
+        <h2>เข้าสู่เกม</h2>
+        <label for="name">ชื่อตัวละคร</label>
+        <input id="name" maxlength="16" placeholder="เช่น Ploy" required />
+        <label for="password">รหัสผ่าน</label>
+        <input id="password" type="password" maxlength="64" placeholder="อย่างน้อย 4 ตัว" required autocomplete="current-password" />
+        <label>สีเสื้อ <span class="hint">(ใช้ตอนสร้างตัวละครใหม่)</span></label>
+        <div id="colors"></div>
+        <button type="submit" id="enter">เข้าสู่โลก</button>
+        <button type="button" id="create" class="secondary">สร้างตัวละครใหม่</button>
+        <p id="login-error" class="error" role="alert"></p>
+      </form>
+    </div>
+
+    <div id="hud" hidden>
+      <div id="plate" class="frame">
+        <div id="portrait"><img id="portrait-img" alt="" /></div>
+        <div id="hud-level" title="เลเวล"></div>
+        <div class="info">
+          <div class="name"><span id="hud-name"></span><small id="hud-job"></small></div>
+          <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+          <div class="bar mp" id="mp-bar" hidden><div id="mp-fill"></div><span id="mp-text"></span></div>
+          <div class="bar exp" title="EXP"><div id="exp-fill"></div><span id="exp-text"></span></div>
+        </div>
+      </div>
+      <div id="buffs"></div>
+      <div id="party-frames"></div>
+      <div id="corruption-row" class="frame" hidden>
+        <div class="bar corrupt"><div id="corruption-fill"></div><span id="corruption-text"></span></div>
+        <div id="gate-timer"></div>
+      </div>
+    </div>
+
+    <div id="target" class="frame" hidden>
+      <div class="nm"><span id="target-name"></span> <small id="target-sub"></small></div>
+      <div class="bar hp"><div id="target-fill"></div><span id="target-text"></span></div>
+    </div>
+
+    <div id="mapbox" hidden>
+      <div id="zone-banner"><span id="map-name"></span> <small id="map-xy"></small></div>
+      <div id="minimap-ring">
+        <canvas id="minimap" width="176" height="176" aria-label="แผนที่ย่อ"></canvas><span class="compass">N</span>
+        <button id="mm-in" class="mmbtn" title="ซูมเข้า">+</button>
+        <button id="mm-out" class="mmbtn" title="ซูมออก">−</button>
+        <button id="map-big" class="mapbtn" title="แผนที่โลก (M)">แผนที่</button>
+      </div>
+      <div id="chips"><span class="chip" id="daytime" hidden></span><span class="chip" id="hud-gold"></span><span class="chip" id="online"></span></div>
+    </div>
+
+    <nav id="side-menu" aria-label="เมนู">
+      <button id="settings-open" class="mbtn" hidden title="ตั้งค่าและปุ่มลัด"><span aria-hidden="true">⚙️</span><span class="nav-label">ตั้งค่า</span></button>
+      <button id="party-open" class="mbtn" hidden title="ปาร์ตี้ (O)"><span aria-hidden="true">👥</span><span class="nav-label">ปาร์ตี้</span><b>O</b></button>
+      <button id="map-open" class="mbtn" hidden title="แผนที่โลก (M)"><span aria-hidden="true">🗺️</span><span class="nav-label">แผนที่</span><b>M</b></button>
+      <button id="quest-open" class="mbtn" hidden title="เควสต์ (J)"><span aria-hidden="true">📜</span><span class="nav-label">เควสต์</span><b>J</b></button>
+      <button id="skill-open" class="mbtn" hidden title="สกิล (K)"><span aria-hidden="true">⚔️</span><span class="nav-label">สกิล</span><span id="skill-badge" hidden></span><b>K</b></button>
+      <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)"><span aria-hidden="true">🌳</span><span class="nav-label">พาสซีฟ</span><span id="tree-badge" hidden></span><b>P</b></button>
+      <button id="char-open" class="mbtn" hidden title="ตัวละคร (C)"><span aria-hidden="true">🧙</span><span class="nav-label">ตัวละคร</span><b>C</b></button>
+      <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)"><span aria-hidden="true">🎒</span><span class="nav-label">กระเป๋า</span><b>I</b></button>
+    </nav>
+
+    <div id="xp-strip" title="EXP"><div id="xp-fill"></div><span id="xp-text"></span></div>
+
+    <div id="charwin" class="panel" role="dialog" aria-label="ตัวละคร" hidden>
+      <div class="win-head"><h2 id="char-title"></h2><button id="char-close" aria-label="ปิด">✕</button></div>
+      <div class="char-body">
+        <div class="char-gear">
+          <div id="char-left" class="ccol"></div>
+          <div class="char-stage"><img id="char-doll" alt="" /></div>
+          <div id="char-right" class="ccol"></div>
+        </div>
+        <div class="char-side">
+          <h3>รายละเอียด</h3>
+          <div id="char-details"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="worldmap" class="panel" role="dialog" aria-label="แผนที่โลก" hidden>
+      <div class="win-head"><h2 id="wm-title">แผนที่</h2><button id="wm-here" class="wm-tab on">พื้นที่ปัจจุบัน</button><button id="wm-world" class="wm-tab">ทวีป</button><button id="wm-me">ตำแหน่งฉัน</button><button id="wm-out" aria-label="ซูมออก">−</button><button id="wm-in" aria-label="ซูมเข้า">+</button><button id="worldmap-close" aria-label="ปิด">✕</button></div>
+      <canvas id="worldmap-canvas" aria-label="แผนที่"></canvas>
+      <div class="atlas-compass" aria-hidden="true"><b>N</b><i></i></div>
+      <div class="wm-hint" id="wm-hint">คลิกที่ไหนก็ได้เพื่อเดินไป · ลากเพื่อเลื่อน · ล้อเมาส์เพื่อซูม</div>
+    </div>
+
+    <div id="arenawin" class="panel" aria-label="สนามประลอง" hidden>
+      <div class="win-head"><h2>⚔ สนามประลอง</h2></div>
+      <div class="win-body">
+        <div id="arena-rank"></div>
+        <div id="arena-record" class="hint"></div>
+        <p class="hint">ไม่เสียของ ไม่เสีย EXP แพ้แล้วเดินออกจากลานเลือดเต็ม · ดาเมจปรับตามพลังชีวิตให้สู้กันได้สูสี</p>
+        <div id="arena-state"></div>
+        <form id="arena-duel-form" autocomplete="off"><input id="arena-duel-name" maxlength="16" placeholder="ชื่อคนที่จะท้าดวล" /><button type="submit">ท้าดวล</button></form>
+        <h3>กำลังสู้กัน</h3>
+        <div id="arena-fights"></div>
+        <h3>อันดับในสนามตอนนี้</h3>
+        <div id="arena-top"></div>
+      </div>
+    </div>
+    <div id="arena-count" hidden></div>
+
+    <div id="skillwin" class="panel" role="dialog" aria-label="สกิล" hidden>
+      <div class="win-head"><h2>สกิล</h2><span id="skillwin-points"></span><button id="skillwin-close" aria-label="ปิด">✕</button></div>
+      <div id="skillwin-body" class="win-body"></div>
+    </div>
+
+    <div id="questwin" class="panel" role="dialog" aria-label="เควสต์" hidden>
+      <div class="win-head"><h2>เควสต์</h2><button id="quest-close" aria-label="ปิด">✕</button></div>
+      <div class="win-body">
+        <div id="quest-main"></div>
+        <h3>ภารกิจรายวัน <small>(เปลี่ยนทุกเที่ยงคืน)</small></h3>
+        <div id="quest-daily"></div>
+        <div id="quest-points" class="hint"></div>
+      </div>
+    </div>
+
+    <div id="settings" class="panel" role="dialog" aria-label="ตั้งค่า" hidden>
+      <div class="win-head"><h2>ตั้งค่า</h2><button id="settings-close" aria-label="ปิด">✕</button></div>
+      <div id="settings-list" class="win-body"></div>
+    </div>
+
+    <div id="events" class="parch" hidden>
+      <h3>📜 ในแผนที่นี้</h3>
+      <div id="event-list"></div>
+    </div>
+
+    <div id="enter-hollow" hidden>
+      <div class="panel death-box">
+        <h2>ทางเข้า Hollow</h2>
+        <p>ข้างในผู้เล่นโจมตีกันได้ <b>ตายแล้วของที่สวมและของในกระเป๋าตกทั้งหมด</b> และ 30% ถูกทำลาย</p>
+        <p>ของในคลังและเหรียญปลอดภัย ออกได้ทางประตูสีทองเท่านั้น (ย้ายที่ทุก 15 นาที) ล็อกเอาต์แล้วตัวละครยังค้างอยู่ 30 วินาที</p>
+        <button id="hollow-yes">เข้าไป</button>
+        <button id="hollow-no" class="secondary">ไว้ก่อน</button>
+      </div>
+    </div>
+
+
+    <div id="tree" class="panel" role="dialog" aria-label="ต้นไม้พาสซีฟ" hidden>
+      <div class="tree-head">
+        <h2>ผืนทอแห่งชะตา</h2>
+        <span id="tree-points"></span>
+        <span id="tree-gold"></span>
+        <input id="tree-search" placeholder="ค้นหา เช่น ลูกศร, คริติคอล, ฮีล" autocomplete="off" />
+        <button id="tree-zoom-out" aria-label="ซูมออก">−</button>
+        <button id="tree-zoom-in" aria-label="ซูมเข้า">+</button>
+        <button id="tree-centre">ดูทั้งผืน</button>
+        <button id="tree-close" aria-label="ปิด">✕</button>
+      </div>
+      <div class="tree-body">
+        <div id="tree-canvas">
+          <div id="tree-filters"></div>
+          <div id="tree-legend"><span class="lg small"></span>เล็ก <span class="lg notable"></span>เด่น <span class="lg keystone"></span>หลัก <span class="lg skillmod"></span>เปลี่ยนสกิล <span class="lg path"></span>เส้นทาง</div>
+          <svg><g id="tree-nodes"></g></svg>
+          <div id="tree-tip" hidden></div>
+        </div>
+        <div id="tree-side">
+          <div id="tree-selected"></div>
+          <h3>โบนัสรวม</h3>
+          <div id="tree-total"></div>
+          <h3>ผลกับสกิล</h3>
+          <div id="tree-skill"></div>
+          <h3>ค่าพลัง</h3>
+          <div id="tree-help"></div>
+        </div>
+      </div>
+    </div>
+
+
+    <div id="station" class="panel" role="dialog" aria-label="ร้านและคลัง" hidden>
+      <div class="win-head"><h2 id="station-title"></h2><button id="station-close" aria-label="ปิด">✕</button></div>
+      <div class="win-body">
+        <div id="smith-only">
+          <div id="smith-skill"></div>
+          <label class="crystal"><input type="checkbox" id="use-crystal" /> <span id="crystal-have"></span></label>
+          <div id="craft-tabs"></div>
+          <div id="recipes"></div>
+          <h3>ซื้อเครื่องมือ</h3>
+          <div id="shop"></div>
+        </div>
+        <div id="storage-grid" class="grid" hidden></div>
+      </div>
+    </div>
+
+    <div id="bag" class="panel" role="dialog" aria-label="กระเป๋า" hidden>
+      <div class="win-head"><h2>กระเป๋า</h2><span id="bag-count"></span><span id="bag-gold"></span><button id="bag-close" aria-label="ปิด">✕</button></div>
+      <div class="inv-body">
+        <nav id="inv-tabs" aria-label="หมวดของ"></nav>
+        <div class="inv-mid">
+          <div id="inv-tab-name"></div>
+          <div id="bag-grid" class="grid"></div>
+          <div id="item-details"></div>
+        </div>
+        <div class="inv-hero">
+          <div id="equip-left" class="eqcol"></div>
+          <div class="hero-stage">
+            <div class="hero-glow"></div>
+            <div class="pedestal"></div>
+            <canvas id="hero-canvas" width="400" height="480" aria-label="ตัวละคร"></canvas>
+            <div class="hero-rot"><button id="hero-left" type="button" aria-label="หมุนซ้าย">◀</button><span>หมุน</span><button id="hero-right" type="button" aria-label="หมุนขวา">▶</button></div>
+          </div>
+          <div id="equip-right" class="eqcol"></div>
+          <div id="hero-stats"></div>
+          <button id="stall-new">เปิดแผงลอยขายของ</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="party" class="panel" role="dialog" aria-label="ปาร์ตี้" hidden>
+      <div class="win-head"><h2>ปาร์ตี้ <small id="party-count"></small></h2><button id="party-close" aria-label="ปิด">✕</button></div>
+      <div class="win-body">
+        <form id="party-form" autocomplete="off"><input id="party-name" maxlength="16" placeholder="ชื่อผู้เล่นที่จะชวน" /><button type="submit">ชวน</button></form>
+        <div id="party-list"></div>
+        <p class="hint">แชทปาร์ตี้: พิมพ์ /p ข้อความ · อยู่ห่างกันไม่เกิน 12 ช่องจึงแบ่ง EXP และเหรียญ (คนละ +10%)</p>
+        <button id="party-leave" type="button" hidden>ออกจากปาร์ตี้</button>
+      </div>
+    </div>
+
+    <div id="party-invite" class="frame" hidden>
+      <div>👥 <b id="invite-from"></b> ชวนคุณเข้าปาร์ตี้</div>
+      <button id="invite-yes" type="button">เข้าร่วม</button>
+      <button id="invite-no" type="button" class="no">ไม่ล่ะ</button>
+    </div>
+
+    <div id="market" class="panel" role="dialog" aria-label="ตลาด" hidden>
+      <div class="win-head"><h2 id="market-title"></h2><button id="market-close" aria-label="ปิด">✕</button></div>
+      <div id="market-tabs"></div>
+      <div id="market-body" class="win-body"></div>
+    </div>
+
+    <div id="castbar" hidden><div id="cast-fill"></div><span id="cast-text"></span></div>
+
+    <div id="skillbar" hidden>
+      <div id="job-change" hidden></div>
+      <div id="skill-points"></div>
+      <div id="bar-row">
+        <div id="action-bar" class="frame">
+          <div id="skills"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <div id="death" hidden>
+      <div class="panel death-box">
+        <h2>คุณหมดสติ</h2>
+        <p id="death-text">ฟื้นขึ้นที่ลานกลางหมู่บ้าน</p>
+        <button id="respawn" disabled>ฟื้นคืนชีพ</button>
+      </div>
+    </div>
+
+    <div id="chat" class="parch" hidden>
+      <div id="chat-tabs" role="tablist">
+        <button type="button" data-tab="all" aria-pressed="true">ทั้งหมด</button>
+        <button type="button" data-tab="talk" aria-pressed="false">แชท</button>
+        <button type="button" data-tab="party" aria-pressed="false">ปาร์ตี้</button>
+        <button type="button" data-tab="sys" aria-pressed="false">ระบบ</button>
+      </div>
+      <div id="chat-log" aria-live="polite"></div>
+      <form id="chat-form" autocomplete="off">
+        <input id="chat-input" maxlength="120" placeholder="กด Enter เพื่อพิมพ์" />
+      </form>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

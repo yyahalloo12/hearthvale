@@ -1,0 +1,20 @@
+[
+  {"kind": "shadow", "x": 105, "y": 63, "radius": 5, "count": 5, "respawnMs": 30000},
+  {"kind": "shadow", "x": 83, "y": 100, "radius": 5, "count": 5, "respawnMs": 30000},
+  {"kind": "shadow", "x": 40, "y": 99, "radius": 5, "count": 5, "respawnMs": 30000},
+  {"kind": "shadow", "x": 19, "y": 61, "radius": 5, "count": 5, "respawnMs": 30000},
+  {"kind": "shadow", "x": 41, "y": 24, "radius": 5, "count": 5, "respawnMs": 30000},
+  {"kind": "shadow", "x": 84, "y": 25, "radius": 5, "count": 5, "respawnMs": 30000},
+  {"kind": "shadow", "x": 95, "y": 67, "radius": 4, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 74, "y": 93, "radius": 4, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 42, "y": 88, "radius": 4, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 29, "y": 57, "radius": 4, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 50, "y": 31, "radius": 4, "count": 4, "respawnMs": 30000},
+  {"kind": "shadow", "x": 82, "y": 36, "radius": 4, "count": 4, "respawnMs": 30000},
+  {"kind": "hunter", "x": 62, "y": 62, "radius": 40, "count": 7, "respawnMs": 120000},
+  {"kind": "threadknight", "x": 74, "y": 74, "radius": 5, "count": 4, "respawnMs": 60000},
+  {"kind": "threadknight", "x": 50, "y": 74, "radius": 5, "count": 4, "respawnMs": 60000},
+  {"kind": "threadknight", "x": 50, "y": 50, "radius": 5, "count": 4, "respawnMs": 60000},
+  {"kind": "threadknight", "x": 74, "y": 50, "radius": 5, "count": 4, "respawnMs": 60000},
+  {"kind": "threadknight", "x": 62, "y": 60, "radius": 4, "count": 4, "respawnMs": 60000}
+]
