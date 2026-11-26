@@ -1,6 +1,6 @@
 {
  "cols": 8,
- "rows": 7,
+ "rows": 9,
  "index": {
   "ore_1": 0,
   "ore_2": 1,
@@ -56,6 +56,22 @@
   "lboots_3": 51,
   "hat_3": 52,
   "robe_3": 53,
-  "shoes_3": 54
+  "shoes_3": 54,
+  "sk_heavy_strike": 55,
+  "sk_guard": 56,
+  "sk_charge": 57,
+  "sk_taunt": 58,
+  "sk_double_shot": 59,
+  "sk_pierce_arrow": 60,
+  "sk_backstep": 61,
+  "sk_mark_weak": 62,
+  "sk_fireball": 63,
+  "sk_ice_lance": 64,
+  "sk_chain_lightning": 65,
+  "sk_mana_shield": 66,
+  "sk_holy_light": 67,
+  "sk_heal": 68,
+  "sk_blessing": 69,
+  "sk_revive": 70
  }
 }

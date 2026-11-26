@@ -531,3 +531,6 @@ button.secondary:disabled { opacity: 0.6; cursor: wait; }
 #party-invite button.no { background: #8a6a4a; }
 #chat-log .partyline .who, #chat-log .sys.partyline { color: #1f7a3a; }
 #chat-log[data-tab="party"] > :not(.partyline) { display: none; }
+
+.skill .pic.ipic { display: block; width: 42px; height: 42px; margin: 1px auto 0; }
+.skill.locked .pic.ipic { opacity: 0.5; }

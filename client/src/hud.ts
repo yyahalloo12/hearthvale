@@ -1,6 +1,8 @@
 import { expToNext, Job, JOB_CHANGE_LEVEL, JOB_CHOICES, JOB_NAMES, MAX_LEVEL, RESPAWN_DELAY_MS, skillPointsEarned, SKILLS } from "../../shared/stats";
 
 import { GLOW_AT } from "../../shared/hollow";
+import icons from "./icons.json";
+import { itemIcon } from "./icons";
 
 /** The DOM parts of the game screen: status panel, skill bar, death box. */
 
@@ -234,9 +236,12 @@ function renderSkills(me: MeView, points: number) {
     const key = document.createElement("span");
     key.className = "key";
     key.textContent = def.key;
-    const name = document.createElement("div");
-    name.className = "pic";
-    name.textContent = SKILL_ICON[id] ?? def.name.slice(0, 2);
+    // the Blender picture when there is one, otherwise a stand-in
+    const name = (icons.index as Record<string, number>)[`sk_${id}`] !== undefined ? itemIcon(`sk_${id}`, "pic") : document.createElement("div");
+    if (!name.classList.contains("ipic")) {
+      name.className = "pic";
+      name.textContent = SKILL_ICON[id] ?? def.name.slice(0, 2);
+    }
     const lv = document.createElement("span");
     lv.className = "lv";
     lv.textContent = `${lvl}/${def.maxLevel}`;

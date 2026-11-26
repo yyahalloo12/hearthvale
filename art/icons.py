@@ -321,6 +321,175 @@ for tier in (1, 2, 3):
     for kind, fn in (("bow", bow), ("staff", staff), ("lcap", lcap), ("lcoat", lcoat), ("lboots", lboots), ("hat", hat), ("robe", robe), ("shoes", shoes)):
         ICONS[f"{kind}_{tier}"] = lambda fn=fn, tier=tier: fn(tier)
 
+
+# ---- skill pictures (sk_<skill id>) --------------------------------------------
+
+
+def burst(x, z, color, n=8, r=0.62, size=0.16, y=0.05):
+    """Little pointed rays around a point: impact, light, sparks."""
+    B = flat(f"burst{color}", color)
+    for i in range(n):
+        a = i * 2 * math.pi / n + 0.2
+        cone("ray", (x + r * math.cos(a), y, z + r * math.sin(a)), size, 0.0, size * 2.4, B, None, outline=0.02, rot=(0, math.pi / 2 - a, 0), scale=(1, 0.4, 1), seg=4, bevel=0)
+
+
+def arrow(p, z0=0.0, length=1.6, head=0xD5DCE6, fletch=0xE8484A):
+    cone("shaft", (0, 0, z0), 0.045, 0.045, length, wood_mat(), p, outline=0.03)
+    cone("head", (0, 0, z0 + length / 2 + 0.14), 0.13, 0.0, 0.3, toon(f"ah{head}", head), p, outline=0.035, seg=4, scale=(1, 0.35, 1), bevel=0)
+    for s in (-1, 1):
+        box("fl", (0.08 * s, 0, z0 - length / 2 + 0.16), (0.14, 0.02, 0.26), toon(f"fl{fletch}", fletch), p, outline=0.025, rot=(0, rad(-20 * s), 0), bevel=0)
+
+
+def shield(p, face=0x3F6FC4, rim=0xF2B82E, emblem=0xFFE7A3):
+    cone("face", (0, 0, 0), 0.62, 0.62, 0.12, toon(f"sh{face}", face), p, outline=0.05, rot=(rad(90), 0, 0), seg=32)
+    ring("rim", (0, -0.07, 0), 0.6, 0.06, toon(f"rim{rim}", rim, dark=0.7), p, outline=0.02, rot=(rad(90), 0, 0))
+    ball("boss", (0, -0.1, 0), (0.17, 0.08, 0.17), toon(f"em{emblem}", emblem, dark=0.7), p, outline=0.03)
+
+
+def sk_heavy_strike():
+    p = tilted(-35)
+    M = toon("m", 0xC3CCD6, dark=0.65)
+    box("blade", (0, 0, 0.25), (0.3, 0.09, 1.1), M, p, outline=0.045, bevel=0.03)
+    cone("tip", (0, 0, 0.92), 0.2, 0.0, 0.3, M, p, outline=0.045, scale=(1, 0.36, 1), seg=4, rot=(0, 0, rad(45)), bevel=0)
+    box("guard", (0, 0, -0.34), (0.8, 0.18, 0.16), toon("d", 0x6B7482), p, outline=0.045)
+    cone("grip", (0, 0, -0.6), 0.09, 0.09, 0.4, toon("grip", 0x5A3B22), p, outline=0.04)
+    burst(0.48, 0.5, 0xFFD23A, n=7, r=0.34, size=0.12)
+
+
+def sk_guard():
+    shield(pivot("p", (0, 0, 0)))
+
+
+def sk_charge():
+    p = pivot("p", (0.12, 0, 0))
+    p.rotation_euler.y = rad(-12)
+    shield(p, face=0xC8453A)
+    for i, z in enumerate((-0.4, 0, 0.4)):
+        box("speed", (-0.95 + 0.1 * i, 0.1, z), (0.5 - 0.1 * i, 0.03, 0.06), flat("spd", 0xFFFFFF), None, outline=0.015, bevel=0.01)
+
+
+def sk_taunt():
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler.y = rad(-25)
+    H = toon("horn", 0xE8D2A0, dark=0.7)
+    cone("horn", (0, 0, 0), 0.08, 0.36, 0.9, H, p, outline=0.04, rot=(0, rad(90), 0))
+    ring("band", (-0.22, 0, 0), 0.17, 0.04, toon("gold", 0xF2B82E, dark=0.7), p, outline=0.015, rot=(0, rad(90), 0))
+    for i in range(3):
+        ring("wave", (0.62 + 0.18 * i, 0, 0.1 * i), 0.22 + 0.12 * i, 0.03, flat("wv", 0xFFD23A), None, outline=0.012, rot=(0, rad(90), 0), scale=(1, 1, 0.9))
+
+
+def sk_double_shot():
+    for a, x in ((-28, -0.12), (-52, 0.12)):
+        p = pivot("p", (x, 0, 0))
+        p.rotation_euler.y = rad(a)
+        arrow(p)
+
+
+def sk_pierce_arrow():
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler.y = rad(-70)
+    arrow(p, length=1.9, head=0xA9C4F0, fletch=0x4AA3FF)
+    for x in (-0.25, 0.3):
+        ring("hole", (x, 0, 0.02 * x), 0.26, 0.04, flat("pc", 0x9AD0FF), None, outline=0.015, rot=(0, rad(90), 0))
+
+
+def sk_backstep():
+    B = toon("boot", 0x7A5A3A)
+    box("leg", (0.2, 0, 0.15), (0.32, 0.3, 0.6), B, None, outline=0.045, bevel=0.08)
+    box("foot", (0.0, 0, -0.18), (0.62, 0.32, 0.26), B, None, outline=0.045, bevel=0.1)
+    A = toon("arr", 0x9AF0B0, dark=0.7)
+    for i in range(7):
+        a = rad(200 + i * 22)
+        ball("trail", (-0.15 + 0.62 * math.cos(a), -0.1, 0.25 + 0.5 * math.sin(a)), 0.07 + 0.01 * i, A, None, outline=0.02, seg=12)
+    cone("tip", (-0.7, -0.1, 0.42), 0.17, 0.0, 0.32, A, None, outline=0.03, rot=(0, rad(-60), 0), seg=3, bevel=0)
+
+
+def sk_mark_weak():
+    for r, c in ((0.62, 0xE8484A), (0.44, 0xFFFFFF), (0.26, 0xE8484A)):
+        cone("ring", (0, 0.02 * r, 0), r, r, 0.06, toon(f"t{c}{r}", c, dark=0.75), None, outline=0.03, rot=(rad(90), 0, 0), seg=36)
+    ball("eye", (0, -0.06, 0), (0.11, 0.05, 0.11), flat("bull", 0x2A1A12), None, outline=0)
+    p = pivot("p", (0.25, -0.1, 0.25))
+    p.rotation_euler.y = rad(-135)
+    arrow(p, z0=-0.45, length=0.9)
+
+
+def sk_fireball():
+    ball("core", (0, 0, -0.05), 0.42, toon("fire", 0xFF8A2A, dark=0.7, light=1.25), None, outline=0.04)
+    ball("hot", (-0.08, -0.25, 0.02), (0.2, 0.1, 0.2), flat("hot", 0xFFE27A), None, outline=0)
+    F = toon("flame", 0xFFB02E, dark=0.75, light=1.2)
+    for i, (x, s) in enumerate(((-0.25, 0.7), (0.0, 1.0), (0.25, 0.75))):
+        cone("tongue", (x + 0.15, 0.05, 0.42 + 0.12 * s), 0.18 * s, 0.0, 0.7 * s, F, None, outline=0.035, rot=(0, rad(28), 0), seg=12)
+
+
+def sk_ice_lance():
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler.y = rad(-48)
+    I = toon("ice", 0xBDE8FF, dark=0.72, light=1.2)
+    cone("lance", (0, 0, 0.15), 0.18, 0.0, 1.7, I, p, outline=0.04, seg=6, bevel=0)
+    for z in (-0.35, 0.05):
+        for s in (-1, 1):
+            cone("shard", (0.18 * s, 0, z), 0.08, 0.0, 0.4, I, p, outline=0.03, rot=(0, rad(35 * s), 0), seg=5, bevel=0)
+    burst(0.0, -0.1, 0xE8F8FF, n=6, r=0.62, size=0.08)
+
+
+def sk_chain_lightning():
+    Y = toon("bolt", 0xFFE24A, dark=0.75, light=1.2)
+    pts = [(-0.55, 0.7), (0.05, 0.25), (-0.2, 0.15), (0.35, -0.3), (0.1, -0.35), (0.55, -0.8)]
+    for (x1, z1), (x2, z2) in zip(pts, pts[1:]):
+        L = math.hypot(x2 - x1, z2 - z1)
+        a = math.atan2(z2 - z1, x2 - x1)
+        box("seg", ((x1 + x2) / 2, 0, (z1 + z2) / 2), (L + 0.08, 0.1, 0.16), Y, None, outline=0.04, rot=(0, -a, 0), bevel=0.02)
+    for x, z in ((-0.62, 0.72), (0.58, -0.8)):
+        ball("node", (x, -0.02, z), 0.12, toon("node", 0x9AD0FF), None, outline=0.03)
+
+
+def sk_mana_shield():
+    ball("bubble", (0, 0, 0), 0.66, toon("bub", 0x5AB0FF, dark=0.8, light=1.25), None, outline=0.04)
+    ball("shine", (-0.25, -0.5, 0.28), (0.16, 0.06, 0.1), flat("sh", 0xFFFFFF), None, outline=0)
+    for a in range(4):
+        cone("star", (0, -0.62, 0), 0.08, 0.0, 0.5, flat("st", 0xE8F4FF), None, outline=0.02, rot=(0, rad(45 * a), 0), seg=4, scale=(1, 0.3, 1), bevel=0)
+
+
+def sk_holy_light():
+    ball("sun", (0, 0, 0), 0.36, toon("sun", 0xFFE27A, dark=0.75, light=1.25), None, outline=0.04)
+    burst(0, 0, 0xFFD23A, n=10, r=0.6, size=0.13)
+    for x in (-0.12, 0.12):
+        ball("eye", (x, -0.34, 0.06), (0.04, 0.02, 0.06), flat("se", 0x8A5A18), None, outline=0)
+
+
+def sk_heal():
+    G = toon("cross", 0x4FBF4A, dark=0.7, light=1.2)
+    box("v", (0, 0, 0), (0.36, 0.2, 1.1), G, None, outline=0.05, bevel=0.08)
+    box("h", (0, 0, 0.08), (1.1, 0.2, 0.36), G, None, outline=0.05, bevel=0.08)
+    burst(0.55, 0.55, 0xFFFFFF, n=5, r=0.16, size=0.07)
+
+
+def sk_blessing():
+    ring("halo", (0, 0, 0.42), 0.42, 0.07, toon("halo", 0xFFD23A, dark=0.7, light=1.2), None, outline=0.025, rot=(rad(70), 0, 0))
+    W = toon("wing", 0xFFFFFF, dark=0.82)
+    for s in (-1, 1):
+        for i in range(4):
+            ball("feather", (s * (0.25 + 0.14 * i), 0.05, -0.15 - 0.08 * i), (0.22 - 0.03 * i, 0.06, 0.1), W, None, outline=0.03, rot=(0, rad(s * (25 + 12 * i)), 0), seg=16)
+    ball("orb", (0, -0.05, -0.15), 0.16, toon("orb", 0xFFE7A3, dark=0.75), None, outline=0.03)
+
+
+def sk_revive():
+    F = toon("feather", 0xF6F1FF, dark=0.8)
+    p = pivot("p", (0, 0, 0))
+    p.rotation_euler.y = rad(-35)
+    cone("quill", (0, 0, -0.1), 0.03, 0.02, 1.4, toon("quill", 0xD8C890), p, outline=0.02)
+    for i in range(7):
+        z = -0.35 + i * 0.13
+        w = 0.26 * math.sin((i + 1) / 8 * math.pi)
+        for s in (-1, 1):
+            box("vane", (s * w / 2, 0, z), (w, 0.04, 0.14), F, p, outline=0.02, rot=(0, rad(-25 * s), 0), bevel=0.02)
+    burst(0.45, 0.5, 0x9AF0B0, n=6, r=0.18, size=0.08)
+
+
+for _id in ("heavy_strike", "guard", "charge", "taunt", "double_shot", "pierce_arrow", "backstep", "mark_weak",
+            "fireball", "ice_lance", "chain_lightning", "mana_shield", "holy_light", "heal", "blessing", "revive"):
+    ICONS[f"sk_{_id}"] = globals()[f"sk_{_id}"]
+
 N = 96
 frames = []
 for name, build in ICONS.items():
