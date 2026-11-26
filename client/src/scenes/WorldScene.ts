@@ -21,6 +21,8 @@ import { drawMinimap, setMinimap } from "../minimap";
 import { MonsterView } from "../MonsterView";
 import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
+import { initParty, partySessions, setParty } from "../party";
+import { PartyData } from "../../../shared/protocol";
 import { PlayerView, TIER_TINT } from "../PlayerView";
 import { loadSprites, PLAYER_SHEET, SCENERY_SCALE } from "../sprites";
 import { makeTextures } from "../textures";
@@ -124,6 +126,7 @@ export class WorldScene extends Phaser.Scene {
       stallClose: () => this.room.send(Msg.StallClose),
       stallBuy: (id, uid, qty) => this.room.send(Msg.StallBuy, { id, uid, qty }),
     });
+    initParty((a) => this.room.send(Msg.PartyAct, a));
     this.bindRoom();
     this.bindInput();
     this.room.send(Msg.Sync);
@@ -329,6 +332,7 @@ export class WorldScene extends Phaser.Scene {
       view.setEffects(player.blessed, player.manaShield, player.slowed, player.marked);
       view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
       this.views.set(id, view);
+      view.setFriend(partySessions().has(id));
       if (isMe) {
         this.me = player;
         this.cameras.main.startFollow(view.root, true, 0.15, 0.15);
@@ -444,6 +448,13 @@ export class WorldScene extends Phaser.Scene {
       if (line.from) this.views.get(line.from)?.say(line.text);
     });
     this.room.onMessage(Msg.Notice, (n: { text: string }) => addChatLine({ from: "", name: "", text: n.text }, "notice"));
+    this.room.onMessage(Msg.Party, (d: PartyData) => {
+      setParty(d);
+      const friends = partySessions();
+      for (const [id, v] of this.views) v.setFriend(friends.has(id));
+      if (this.map.pvp && this.targetId && friends.has(this.targetId)) this.setTarget(null);
+    });
+    this.room.onMessage(Msg.PartyInvite, (e: { from: string }) => addChatLine({ from: "", name: "", text: `${e.from} ชวนคุณเข้าปาร์ตี้ (กดเข้าร่วมที่กล่องด้านบน)`, system: true, party: true }));
     this.room.onMessage(Msg.Hit, (h: HitEvent) => this.showHit(h));
     this.room.onMessage(Msg.Cooldown, (c: CooldownEvent) => startCooldown(c.skill, c.ms));
     this.room.onMessage(Msg.ExpGain, (e: { amount: number }) => {
@@ -846,7 +857,7 @@ export class WorldScene extends Phaser.Scene {
     }
     if (time - this.mapTimer > 200) {
       this.mapTimer = time;
-      drawMinimap(this.room.state, this.room.sessionId);
+      drawMinimap(this.room.state, this.room.sessionId, partySessions());
       if (this.map.pvp && this.me) setCorruption(this.me.corruption, (this.room.state as any).gatesUntil);
     }
     if (this.marker.visible) this.marker.setAlpha(0.6 + Math.sin(time / 120) * 0.4);

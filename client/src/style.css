@@ -503,3 +503,31 @@ button.secondary:disabled { opacity: 0.6; cursor: wait; }
   #chat { width: 260px; }
   #mapbox { transform: scale(0.8); transform-origin: top right; }
 }
+
+/* ---- parties ---- */
+#party-frames { margin: 8px 0 0 0; display: grid; gap: 6px; width: 220px; }
+.mate { display: flex; gap: 8px; align-items: center; padding: 5px 8px; position: relative; }
+.mate .face, .prow .face { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 2px solid var(--gold); background: radial-gradient(circle at 50% 40%, #ffe7a3, #c9873a); display: grid; place-items: center; font-size: 16px; }
+.mate .mid, .prow .mid { flex: 1; min-width: 0; }
+.mate .nm { font-size: 12px; font-weight: bold; color: var(--gold-l); text-shadow: 0 1px 1px #000; display: flex; justify-content: space-between; gap: 4px; }
+.mate .bar, .prow .bar { height: 8px; margin-top: 3px; }
+.mate .bar.mp, .prow .bar.mp { height: 5px; margin-top: 2px; }
+.mate .bar > div::after, .prow .bar > div::after { display: none; }
+.mate .where { position: absolute; right: 8px; bottom: -2px; font-size: 9px; color: #e9d3a2; }
+.mate.away { opacity: 0.55; }
+.mate.dead .face { filter: grayscale(1); }
+#party { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); width: 380px; z-index: 6; display: flex; flex-direction: column; font-size: 13px; }
+#party[hidden], #party-invite[hidden], #party-form[hidden], #party-leave[hidden] { display: none; }
+#party h2 small { font-size: 12px; color: #e9d3a2; font-weight: normal; }
+#party-form { display: flex; gap: 6px; margin-bottom: 10px; }
+#party-form input { flex: 1; font-size: 14px; padding: 6px 10px; border: 2px solid var(--gold-d); border-radius: 14px; background: #fffaf0; }
+#party-form button, #party-leave, #party-invite button { font-size: 13px; font-weight: bold; padding: 6px 14px; color: #fff; background: #4f9e54; border: 2px solid var(--wood-dd); border-radius: 14px; cursor: pointer; }
+#party-leave { width: 100%; margin-top: 8px; background: #b0553f; }
+.prow { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #dcc79c; }
+.prow .nm { display: flex; justify-content: space-between; font-weight: bold; }
+.prow small { width: 70px; text-align: right; opacity: 0.8; font-size: 11px; }
+.prow .kick { font-size: 11px; padding: 3px 8px; border-radius: 10px; border: 1.5px solid var(--wood-dd); background: #fffaf0; cursor: pointer; }
+#party-invite { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); z-index: 9; padding: 10px 16px; color: var(--gold-l); font-size: 14px; display: flex; gap: 10px; align-items: center; text-shadow: 0 1px 1px #000; }
+#party-invite button.no { background: #8a6a4a; }
+#chat-log .partyline .who, #chat-log .sys.partyline { color: #1f7a3a; }
+#chat-log[data-tab="party"] > :not(.partyline) { display: none; }

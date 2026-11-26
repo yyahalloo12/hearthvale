@@ -65,6 +65,12 @@ export const Msg = {
   Respawn: "respawn",
   /** client -> server: say something in chat */
   Chat: "chat",
+  /** client -> server: party things {action: invite|accept|decline|leave|kick, name?} */
+  PartyAct: "party_act",
+  /** server -> client: your party now (PartyData) */
+  Party: "party",
+  /** server -> client: somebody asks you to join {from} */
+  PartyInvite: "party_invite",
 
   /** server -> clients: a chat line */
   ChatLine: "chat_line",
@@ -132,6 +138,8 @@ export interface ChatLine {
   name: string;
   text: string;
   system?: boolean;
+  /** said in party chat */
+  party?: boolean;
 }
 
 export interface HitEvent {
@@ -174,3 +182,41 @@ export interface CooldownEvent {
 
 /** Eight facing directions, clockwise from "down" on screen. */
 export type Facing = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+// ---- parties ------------------------------------------------------------------
+
+export const PARTY_MAX = 5;
+/** Members this close to a kill share its EXP and coins. */
+export const PARTY_SHARE_RANGE = 12;
+/** Each extra member nearby adds this much to the whole reward. */
+export const PARTY_BONUS = 0.1;
+
+export interface PartyMember {
+  /** account id */
+  id: number;
+  name: string;
+  level: number;
+  job: string;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  dead: boolean;
+  zone: string;
+  online: boolean;
+  leader: boolean;
+  me: boolean;
+  /** session id when in the same map as you */
+  sid?: string;
+}
+
+export interface PartyData {
+  members: PartyMember[];
+  /** name of whoever asks you to join, if anyone */
+  invite?: string;
+}
+
+export interface PartyAction {
+  action: "invite" | "accept" | "decline" | "leave" | "kick";
+  name?: string;
+}

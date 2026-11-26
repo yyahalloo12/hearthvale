@@ -9,13 +9,13 @@ export function addChatLine(line: ChatLine, kind?: "notice") {
     row.className = "notice";
     row.textContent = line.text;
   } else if (line.system) {
-    row.className = "sys";
+    row.className = line.party ? "sys partyline" : "sys";
     row.textContent = line.text;
   } else {
-    row.className = "talk";
+    row.className = line.party ? "talk partyline" : "talk";
     const who = document.createElement("span");
     who.className = "who";
-    who.textContent = `${line.name}: `;
+    who.textContent = `${line.party ? "[ปาร์ตี้] " : ""}${line.name}: `;
     row.append(who, document.createTextNode(line.text));
   }
   const el = log();

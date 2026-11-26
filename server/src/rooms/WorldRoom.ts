@@ -90,7 +90,7 @@ import { inReach, levelOf, reachableFrom, setRegion } from "../../../shared/terr
 import { cleanChat, cleanName } from "../../../shared/names";
 import { canReach, canRefund, cleanNodes, Mods, passiveMods, passivePointsEarned, PASSIVES, refundCost } from "../../../shared/passives";
 import { findPath, Point } from "../../../shared/pathfinding";
-import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PrivateData, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../../shared/protocol";
+import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, JoinOptions, LootEvent, Msg, OpenStationEvent, PARTY_BONUS, PARTY_SHARE_RANGE, PartyAction, PrivateData, ROOM_OF, TicketOptions, TravelEvent, ZONE_ERROR } from "../../../shared/protocol";
 import {
   ATTACK_RANGE,
   attackRange,
@@ -125,6 +125,8 @@ import { AdminHost, runAdminCommand } from "../game/admin";
 import { MonsterSystem } from "../game/monsters";
 import { dist, faceTowards, planFrom, stepAlong } from "../game/movement";
 import { freeLock, holdsLock, Lock, makeTicket, takeLock, useTicket } from "../game/sessions";
+import * as party from "../game/parties";
+import { PartyError } from "../game/parties";
 import { Bundle, Gate, Player, Stall, WorldState } from "./schema";
 
 export { facingFor } from "../game/movement";
@@ -203,7 +205,7 @@ interface BundleCtl {
   expires: number;
 }
 
-export class WorldRoom extends Room<WorldState> {
+export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   maxClients = MAX_PLAYERS_PER_ROOM;
   map!: GameMap;
   ctl = new Map<string, PlayerCtl>();
@@ -240,6 +242,8 @@ export class WorldRoom extends Room<WorldState> {
     this.monsterSys.spawnAll();
     if (this.map.pvp) this.moveGates(false);
 
+    party.addHost(this);
+    this.clock.setInterval(() => this.tickParties(), 500);
     this.setSimulationInterval((dt) => this.tick(dt), 1000 / TICK_RATE);
     this.setPatchRate(1000 / TICK_RATE);
     this.clock.setInterval(() => this.saveAll(), AUTOSAVE_MS);
@@ -275,6 +279,7 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(Msg.Sync, (client) => this.sendPrivate(client));
     this.onMessage(Msg.Respawn, (client) => this.handleRespawn(client));
     this.onMessage(Msg.Chat, (client, msg) => this.handleChat(client, msg));
+    this.onMessage(Msg.PartyAct, (client, msg) => this.handleParty(client, msg as PartyAction));
 
     for (const b of await loadBundles(this.map.id)) {
       let items: ItemStack[] = [];
@@ -452,6 +457,7 @@ export class WorldRoom extends Room<WorldState> {
         p.y = s.y;
       }
     this.collectGold(client.sessionId);
+    this.tickParties();
     console.log(`[world] join ${p.name} (${client.sessionId}), online ${this.clients.length}`);
   }
 
@@ -483,6 +489,7 @@ export class WorldRoom extends Room<WorldState> {
     this.ctl.delete(id);
     this.monsterSys.forget(id);
     freeLock(c.accountId, c.lock);
+    party.wentOffline(c.accountId);
     if (!this.map.pvp) this.broadcastSystem(`${p.name} ออกจากเกมแล้ว`);
     console.log(`[${this.map.id}] leave ${p.name}, online ${this.clients.length}`);
   }
@@ -630,6 +637,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   async onDispose() {
+    party.removeHost(this);
     await this.saveAll();
   }
 
@@ -1133,7 +1141,8 @@ export class WorldRoom extends Room<WorldState> {
         this.payFor(client, p, c, skill);
         this.state.players.forEach((t, tid) => {
           const tc = this.ctl.get(tid);
-          if (!tc || t.dead || tc.leaving || (tid !== id && (this.map.pvp || dist(p, t) > (def.radius ?? 5)))) return;
+          if (!tc || t.dead || tc.leaving) return;
+          if (tid !== id && (dist(p, t) > (def.radius ?? 5) || (this.map.pvp && !party.sameParty(c.accountId, tc.accountId)))) return;
           tc.blessUntil = until;
           tc.bless = this.amountOf(def, lvl);
           t.blessed = true;
@@ -1160,8 +1169,9 @@ export class WorldRoom extends Room<WorldState> {
         return client.send(Msg.Notice, { text: "ไม่มีที่ให้ถอย" });
       }
       case "heal": {
-        // in the Hollow there are no friends (parties come later)
-        const tid = typeof target === "string" && !this.map.pvp && this.state.players.has(target) ? target : id;
+        // in the Hollow only your party are friends
+        const friend = typeof target === "string" && this.state.players.has(target) && (!this.map.pvp || party.sameParty(c.accountId, this.ctl.get(target)?.accountId ?? -1));
+        const tid = friend ? (target as string) : id;
         const t = this.state.players.get(tid)!;
         const tc = this.ctl.get(tid);
         if (!tc || tc.leaving || t.dead) return client.send(Msg.Notice, { text: "รักษาคนที่ล้มไม่ได้" });
@@ -1179,6 +1189,7 @@ export class WorldRoom extends Room<WorldState> {
         let best: [string, Player] | null = null;
         this.state.players.forEach((t, tid) => {
           const tc = this.ctl.get(tid);
+          if (this.map.pvp && tc && !party.sameParty(c.accountId, tc.accountId)) return;
           if (t.dead && tc && !tc.leaving && this.clientOf(tid) && dist(p, t) <= def.range && (!best || dist(p, t) < dist(p, best[1]))) best = [tid, t];
         });
         if (!best) return client.send(Msg.Notice, { text: "ไม่มีใครล้มอยู่ใกล้ๆ" });
@@ -1473,6 +1484,20 @@ export class WorldRoom extends Room<WorldState> {
     if (!pc) return;
     const text = cleanChat((msg as { text?: unknown })?.text, CHAT_MAX);
     if (!text) return;
+    const cmd = /^\/(p|party|invite|เชิญ|leave)\b\s*(.*)$/i.exec(text);
+    if (cmd) {
+      const word = cmd[1].toLowerCase();
+      if (word === "invite" || word === "เชิญ") return this.handleParty(client, { action: "invite", name: cmd[2] });
+      if (word === "leave") return this.handleParty(client, { action: "leave" });
+      if (!cmd[2]) return;
+      try {
+        party.say(pc.c.accountId, cmd[2]);
+      } catch (e) {
+        if (e instanceof PartyError) client.send(Msg.Notice, { text: e.message });
+        else throw e;
+      }
+      return;
+    }
     if (text.startsWith("/")) {
       // commands are never shown to others
       if (!pc.c.admin) return client.send(Msg.Notice, { text: "ไม่มีคำสั่งนี้" });
@@ -1970,6 +1995,8 @@ export class WorldRoom extends Room<WorldState> {
     if (!this.map.pvp || id === me) return undefined;
     const p = this.state.players.get(id);
     const c = this.ctl.get(id);
+    const mine = this.ctl.get(me);
+    if (mine && c && party.sameParty(mine.accountId, c.accountId)) return undefined;
     return p && c && !p.dead && !c.leaving && c.shieldUntil <= this.clock.currentTime ? p : undefined;
   }
 
@@ -2118,11 +2145,105 @@ export class WorldRoom extends Room<WorldState> {
       const client = this.clients.find((cl) => cl.sessionId === id);
       c.struck.delete(monsterId);
       const night = this.map.id === "brindle" && m.kind === "scarecrow" && isNight() ? NIGHT_BONUS : 1;
-      c.gold += Math.round(killGold(mc.def) * night);
       this.giveLoot(client, p, c, rollDrops(mc.def.drops, c.inv.bag, Math.random, corruptionBonus(c.corruption)));
+      // the party nearby shares EXP and coins, with a little bonus for each friend
+      const sharers = this.sharersOf(id, c, m);
+      const share = (1 + PARTY_BONUS * (sharers.length - 1)) / sharers.length;
+      for (const [sid, sp, sc] of sharers) {
+        const cl = sid === id ? client : this.clientOf(sid);
+        sc.gold += Math.round(killGold(mc.def) * night * share);
+        if (sid !== id) this.sendPrivate(cl);
+        this.gainExp(cl, sp, sc, killExp(Math.round(mc.exp * night * share), level, sp.level));
+      }
       this.sendPrivate(client);
-      this.gainExp(client, p, c, killExp(Math.round(mc.exp * night), level, p.level));
       if (mc.def.boss) this.broadcastSystem(`${p.name} ปราบ${MONSTERS[m.kind]?.name ?? "บอส"}ได้แล้ว!`);
+    }
+  }
+
+  /** Who gets a share of this kill: the killer and party members close by. */
+  private sharersOf(id: string, c: PlayerCtl, at: { x: number; y: number }): [string, Player, PlayerCtl][] {
+    const out: [string, Player, PlayerCtl][] = [[id, this.state.players.get(id)!, c]];
+    const friends = new Set(party.partyMembers(c.accountId));
+    if (friends.size < 2) return out;
+    for (const [sid, sc] of this.ctl) {
+      const sp = this.state.players.get(sid);
+      if (sid === id || !sp || sp.dead || sc.leaving || sc.lingerUntil || !friends.has(sc.accountId)) continue;
+      if (dist(sp, at) <= PARTY_SHARE_RANGE) out.push([sid, sp, sc]);
+    }
+    return out;
+  }
+
+  // ---- parties --------------------------------------------------------------
+
+  sendToAccount(accountId: number, type: string, payload: unknown): boolean {
+    for (const [sid, c] of this.ctl)
+      if (c.accountId === accountId && !c.leaving && !c.lingerUntil) {
+        const client = this.clientOf(sid);
+        if (!client) continue;
+        client.send(type, payload);
+        return true;
+      }
+    return false;
+  }
+
+  private handleParty(client: Client, msg: PartyAction) {
+    const pc = this.get(client);
+    if (!pc || typeof msg?.action !== "string") return;
+    const me = pc.c.accountId;
+    try {
+      switch (msg.action) {
+        case "invite": {
+          const name = typeof msg.name === "string" ? msg.name.trim() : "";
+          const to = name ? party.findOnline(name) : null;
+          if (!to) throw new PartyError("ไม่พบผู้เล่นที่ออนไลน์ชื่อนี้");
+          party.invite(me, to);
+          client.send(Msg.Notice, { text: `ส่งคำชวนเข้าปาร์ตี้ให้ ${party.nameOf(to)} แล้ว` });
+          break;
+        }
+        case "accept":
+          party.accept(me);
+          break;
+        case "decline":
+          party.decline(me);
+          break;
+        case "leave":
+          party.leave(me);
+          break;
+        case "kick":
+          party.kick(me, typeof msg.name === "string" ? msg.name : "");
+          break;
+      }
+    } catch (e) {
+      if (e instanceof PartyError) client.send(Msg.Notice, { text: e.message });
+      else throw e;
+    }
+    this.tickParties();
+  }
+
+  /** Tells the party list where everyone is, and shows each member their party. */
+  private tickParties() {
+    const now = Date.now();
+    this.state.players.forEach((p, sid) => {
+      const c = this.ctl.get(sid);
+      if (!c || c.leaving) return;
+      party.report(c.accountId, {
+        name: p.name, level: p.level, job: p.job, hp: p.hp, maxHp: p.maxHp, mp: p.mp, maxMp: p.maxMp, dead: p.dead,
+        zone: this.map.id, online: !c.lingerUntil, since: c.lingerUntil ? now : 0,
+      });
+    });
+    party.sweep(now);
+    for (const client of this.clients) {
+      const c = this.ctl.get(client.sessionId);
+      if (!c || c.leaving) continue;
+      const data = party.view(c.accountId);
+      for (const m of data.members) {
+        if (m.zone !== this.map.id || !m.online) continue;
+        for (const [sid, mc] of this.ctl) if (mc.accountId === m.id && !mc.leaving) m.sid = sid;
+      }
+      const key = JSON.stringify(data);
+      if ((c as any).partyKey === key) continue;
+      (c as any).partyKey = key;
+      client.send(Msg.Party, data);
     }
   }
 

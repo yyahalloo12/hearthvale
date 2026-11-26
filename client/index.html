@@ -39,6 +39,7 @@
         </div>
       </div>
       <div id="buffs"></div>
+      <div id="party-frames"></div>
       <div id="corruption-row" class="frame" hidden>
         <div class="bar corrupt"><div id="corruption-fill"></div><span id="corruption-text"></span></div>
         <div id="gate-timer"></div>
@@ -122,6 +123,22 @@
       </div>
     </div>
 
+    <div id="party" class="panel" role="dialog" aria-label="ปาร์ตี้" hidden>
+      <div class="win-head"><h2>ปาร์ตี้ <small id="party-count"></small></h2><button id="party-close" aria-label="ปิด">✕</button></div>
+      <div class="win-body">
+        <form id="party-form" autocomplete="off"><input id="party-name" maxlength="16" placeholder="ชื่อผู้เล่นที่จะชวน" /><button type="submit">ชวน</button></form>
+        <div id="party-list"></div>
+        <p class="hint">แชทปาร์ตี้: พิมพ์ /p ข้อความ · อยู่ห่างกันไม่เกิน 12 ช่องจึงแบ่ง EXP และเหรียญ (คนละ +10%)</p>
+        <button id="party-leave" type="button" hidden>ออกจากปาร์ตี้</button>
+      </div>
+    </div>
+
+    <div id="party-invite" class="frame" hidden>
+      <div>👥 <b id="invite-from"></b> ชวนคุณเข้าปาร์ตี้</div>
+      <button id="invite-yes" type="button">เข้าร่วม</button>
+      <button id="invite-no" type="button" class="no">ไม่ล่ะ</button>
+    </div>
+
     <div id="market" class="panel" role="dialog" aria-label="ตลาด" hidden>
       <div class="win-head"><h2 id="market-title"></h2><button id="market-close" aria-label="ปิด">✕</button></div>
       <div id="market-tabs"></div>
@@ -141,6 +158,7 @@
         <div id="menu">
           <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)">🎒<b>กระเป๋า I</b></button>
           <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)">🌳<span id="tree-badge" hidden></span><b>พาสซีฟ P</b></button>
+          <button id="party-open" class="mbtn" hidden title="ปาร์ตี้ (O)">👥<b>ปาร์ตี้ O</b></button>
         </div>
       </div>
     </div>
@@ -157,6 +175,7 @@
       <div id="chat-tabs" role="tablist">
         <button type="button" data-tab="all" aria-pressed="true">ทั้งหมด</button>
         <button type="button" data-tab="talk" aria-pressed="false">แชท</button>
+        <button type="button" data-tab="party" aria-pressed="false">ปาร์ตี้</button>
         <button type="button" data-tab="sys" aria-pressed="false">ระบบ</button>
       </div>
       <div id="chat-log" aria-live="polite"></div>

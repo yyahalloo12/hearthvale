@@ -115,9 +115,19 @@ export class PlayerView {
     this.mark.setVisible(marked);
   }
 
+  private friend = false;
+  private targeted = false;
   /** Red name while we are attacking this player. */
   setTargeted(on: boolean) {
-    this.label.setColor(on ? "#ff6a6a" : this.isMe ? "#fff3a0" : "#ffffff");
+    this.targeted = on;
+    this.label.setColor(on ? "#ff6a6a" : this.isMe ? "#fff3a0" : this.friend ? "#8dff7a" : "#ffffff");
+  }
+
+  /** Green name for party members. */
+  setFriend(on: boolean) {
+    if (this.friend === on) return;
+    this.friend = on;
+    this.setTargeted(this.targeted);
   }
 
   /** Body centre in world pixels, for click picking. */

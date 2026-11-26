@@ -57,7 +57,7 @@ interface Dot {
 }
 
 /** Redraws the map. `players` is everyone in the room; only you and those who glow are shown. */
-export function drawMinimap(state: any, myId: string) {
+export function drawMinimap(state: any, myId: string, friends: Set<string> = new Set()) {
   if (!base || !current) return;
   const c = canvas();
   const g = c.getContext("2d")!;
@@ -107,6 +107,10 @@ export function drawMinimap(state: any, myId: string) {
   state.players?.forEach((p: any, id: string) => {
     if (id !== myId && (p.corruption >= GLOW_AT || p.inSpring) && !p.dead) dot(p, "#ff5a5a", 4);
   });
+  for (const id of friends) {
+    const p = state.players?.get(id);
+    if (p) dot(p, "#6dff5a", 4);
+  }
   const me = state.players?.get(myId);
   if (me) dot(me, "#ffffff", 4);
 }
