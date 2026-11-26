@@ -5,3 +5,6 @@ dist/
 .env
 server/data/
 __pycache__/
+
+*.db
+*.db-*
