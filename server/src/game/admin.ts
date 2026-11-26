@@ -32,6 +32,8 @@ export interface AdminHost {
   spawn(kind: string, count: number, x: number, y: number): number;
   clearMonsters(x: number, y: number, radius: number): number;
   moveGates(): boolean;
+  /** starts an event or wakes the giant; false outside the open maps */
+  event(kind: string): boolean;
   /** a mist portal next to this player; false outside the open maps */
   portal(id: string, rarity: number, dark: boolean): boolean;
   announce(text: string): void;
@@ -46,6 +48,7 @@ export const ADMIN_HELP = [
   "/tp 24 24 · /goto @ชื่อ · /bring @ชื่อ · /village · /forest · /hollow",
   "/spawn hen 3 · /monsters · /clear 10 (ลบมอนสเตอร์ในรัศมี)",
   "/portal 2 (พอร์ทัลระดับ 0-3 ข้างตัว) · /portal 1 dark (พอร์ทัลดำ)",
+  "/event golden · /event swarm · /event boss (เริ่มอีเวนต์หรือปลุกบอสโลก)",
   "/gates (ย้ายประตู Hollow) · /corrupt 60 · /say ข้อความ · /who · /kick @ชื่อ",
 ];
 
@@ -181,6 +184,8 @@ export function runAdminCommand(host: AdminHost, me: string, text: string): stri
       const p = host.posOf(id);
       return [`ลบมอนสเตอร์ ${host.clearMonsters(p.x, p.y, num(args[0] ?? "10", 1, 100)!)} ตัว (เกิดใหม่ตามเวลาปกติ)`];
     }
+    case "event":
+      return [host.event(args[0] ?? "") ? "เริ่มแล้ว" : "ใช้แบบนี้: /event golden|swarm|boss (ในบรินเดิลหรือมอสเฟน)"];
     case "portal": {
       const r = num(args[0] ?? "0", 0, 3)!;
       return [host.portal(id, r, args.includes("dark")) ? "เปิดพอร์ทัลข้างตัวแล้ว" : "เปิดได้ในบรินเดิลหรือมอสเฟนเท่านั้น"];

@@ -121,6 +121,11 @@ export class MonsterSystem {
     for (let i = 0; i < count; i++) this.spawnOne({ kind, x, y, radius, count: 1, respawnMs: Infinity, level, aggro: 14 });
   }
 
+  /** Takes one monster away without a reward (it leaves). */
+  clearOne(id: string) {
+    if (this.ctl.has(id)) this.remove(id);
+  }
+
   /** Game master: monsters that do not come back when killed. Returns how many appeared. */
   summon(kind: string, count: number, x: number, y: number): number {
     const before = this.ctl.size;

@@ -1,4 +1,5 @@
 import { Client, matchMaker, Room, ServerError } from "@colyseus/core";
+import { BOSS_EVERY_MS, BOSS_HP_PER_PLAYER, BOSS_SHARE, BOSS_STAYS_MS, BOSS_WARN_MS, bossRewards, EVENT_GAP_MS, EVENT_MS, EventKind, EVENTS, SWARM_COUNT, SWARM_EXP, WORLD_BOSS } from "../../../shared/events";
 import { buildRift, DARK_CHANCE, OpenZone, PORTAL_EVERY_MS, PORTAL_MAX, PORTAL_OPEN_MS, PORTALS_AT_ONCE, RARITY_NAMES, RIFT_MS, riftName, RiftInfo, riftRewards, riftWaves, rollRarity } from "../../../shared/rift";
 import {
   AUTOSAVE_MS,
@@ -123,7 +124,7 @@ import * as market from "../market";
 import { TradeError } from "../market";
 import type { DatabaseSync } from "node:sqlite";
 import { AdminHost, runAdminCommand } from "../game/admin";
-import { MonsterSystem } from "../game/monsters";
+import { MonsterSystem, SPAWNS } from "../game/monsters";
 import { dist, faceTowards, planFrom, stepAlong } from "../game/movement";
 import { freeLock, holdsLock, Lock, makeTicket, takeLock, useTicket } from "../game/sessions";
 import * as party from "../game/parties";
@@ -227,6 +228,12 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private portalSeq = 1;
   /** inside a portal: when the next wave comes */
   private nextWaveAt = 0;
+  private nextEventAt = 0;
+  private bossWarned = false;
+  private bossUntil = 0;
+  /** damage dealt to the giant, by account */
+  private bossHits = new Map<number, number>();
+  private swarm = new Set<string>();
   private get hollow() {
     return this.map.id === "hollow";
   }
@@ -249,6 +256,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       this.nextWaveAt = Date.now() + 5000;
     }
     this.nextPortalAt = Date.now() + 60_000 + Math.random() * 60_000;
+    this.nextEventAt = Date.now() + EVENT_GAP_MS[0] / 2 + Math.random() * EVENT_GAP_MS[0];
+    this.state.bossAt = Date.now() + BOSS_EVERY_MS / 2;
 
     this.monsterSys = new MonsterSystem({
       map: this.map,
@@ -751,6 +760,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private tickMap() {
     const now = Date.now();
     this.tickPortals(now);
+    this.tickEvents(now);
     if (this.map.rift) this.tickRift(now);
     if (this.map.id === "mossfen") {
       for (const [key, until] of this.state.lit) if (until <= now && !this.state.fogUntil) this.state.lit.delete(key);
@@ -1374,7 +1384,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     }
     if (now < it.doneAt) return;
     this.stopInteract(client, c);
-    const qty = res.qty[0] + Math.floor(Math.random() * (res.qty[1] - res.qty[0] + 1));
+    const qty = (res.qty[0] + Math.floor(Math.random() * (res.qty[1] - res.qty[0] + 1))) * (this.state.eventKind === "golden" ? 2 : 1);
     if (!this.giveLoot(client, p, c, [{ id: res.item, qty }])) return; // bag full: leave the rock for later
     this.state.depleted.set(key, true);
     this.depletedUntil.set(key, now + res.respawnMs);
@@ -2007,6 +2017,17 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     },
     spawn: (kind, count, x, y) => this.monsterSys.summon(kind, count, x, y),
     clearMonsters: (x, y, r) => this.monsterSys.clearNear(x, y, r),
+    event: (kind) => {
+      if (this.map.id !== "brindle" && this.map.id !== "mossfen") return false;
+      if (kind === "boss") {
+        if (this.state.bossId) return false;
+        this.wakeBoss();
+        return true;
+      }
+      if (kind !== "golden" && kind !== "swarm") return false;
+      this.startEvent(kind);
+      return true;
+    },
     portal: (id, rarity, dark) => {
       const p = this.state.players.get(id);
       if (!p || (this.map.id !== "brindle" && this.map.id !== "mossfen")) return false;
@@ -2180,6 +2201,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     // life steal counts only damage the monster could still take
     this.lifesteal(p, c, Math.min(dmg, m.hp));
     const level = m.level;
+    if (monsterId === this.state.bossId) this.bossHits.set(c.accountId, (this.bossHits.get(c.accountId) ?? 0) + Math.min(dmg, m.hp));
     const killed = this.monsterSys.takeDamage(monsterId, id, dmg, stunMs);
     const ev: HitEvent = { from: id, to: monsterId, dmg, crit, skill, killed };
     this.broadcast(Msg.Hit, ev);
@@ -2188,7 +2210,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       c.pendingSkill = null;
       const client = this.clients.find((cl) => cl.sessionId === id);
       c.struck.delete(monsterId);
-      const night = this.map.id === "brindle" && m.kind === "scarecrow" && isNight() ? NIGHT_BONUS : 1;
+      const night = (this.map.id === "brindle" && m.kind === "scarecrow" && isNight() ? NIGHT_BONUS : 1) * (this.swarm.delete(monsterId) ? SWARM_EXP : 1);
+      if (monsterId === this.state.bossId) this.bossFalls(p.name);
       this.giveLoot(client, p, c, rollDrops(mc.def.drops, c.inv.bag, Math.random, corruptionBonus(c.corruption)));
       // the party nearby shares EXP and coins, with a little bonus for each friend
       const sharers = this.sharersOf(id, c, m);
@@ -2202,6 +2225,112 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       this.sendPrivate(client);
       if (mc.def.boss) this.broadcastSystem(`${p.name} ปราบ${MONSTERS[m.kind]?.name ?? "บอส"}ได้แล้ว!`);
     }
+  }
+
+  // ---- events and the giant --------------------------------------------------
+
+  private tickEvents(now: number) {
+    if (this.map.id !== "brindle" && this.map.id !== "mossfen") return;
+    const zone = this.map.id;
+    if (this.state.eventKind && now >= this.state.eventUntil) {
+      this.broadcastSystem(`${EVENTS[this.state.eventKind as EventKind].name} จบแล้ว`);
+      this.state.eventKind = "";
+      this.nextEventAt = now + EVENT_GAP_MS[0] + Math.random() * (EVENT_GAP_MS[1] - EVENT_GAP_MS[0]);
+      for (const id of this.swarm) this.monsterSys.clearOne(id);
+      this.swarm.clear();
+    } else if (!this.state.eventKind && now >= this.nextEventAt) this.startEvent(Math.random() < 0.5 ? "golden" : "swarm");
+
+    const boss = WORLD_BOSS[zone];
+    if (!this.state.bossId && !this.bossWarned && now >= this.state.bossAt - BOSS_WARN_MS) {
+      this.bossWarned = true;
+      this.broadcastSystem(`พื้นดินสั่น... ${MONSTERS[boss.kind].name} จะตื่นที่${boss.place}ในอีก 1 นาที!`);
+    }
+    if (!this.state.bossId && now >= this.state.bossAt) this.wakeBoss();
+    if (this.state.bossId && (now >= this.bossUntil || !this.state.monsters.has(this.state.bossId))) {
+      if (this.state.monsters.has(this.state.bossId)) {
+        this.monsterSys.clearOne(this.state.bossId);
+        this.broadcastSystem(`${MONSTERS[boss.kind].name} กลับไปหลับแล้ว ไม่มีใครปราบได้ทัน`);
+      }
+      this.state.bossId = "";
+      this.state.bossAt = now + BOSS_EVERY_MS;
+      this.bossWarned = false;
+      this.bossHits.clear();
+    }
+  }
+
+  /** Starts an event now (also for game masters and tests). */
+  startEvent(kind: EventKind) {
+    const now = Date.now();
+    this.state.eventKind = kind;
+    this.state.eventUntil = now + EVENT_MS;
+    this.broadcastSystem(`${EVENTS[kind].icon} ${EVENTS[kind].name}! ${EVENTS[kind].text} (5 นาที)`);
+    if (kind === "swarm") {
+      const spawns = SPAWNS[this.map.id];
+      const kinds = [...new Set(spawns.filter((s) => !MONSTERS[s.kind]?.boss).map((s) => s.kind))];
+      for (let i = 0; i < 3; i++) {
+        const at = this.openSpot();
+        if (!at) continue;
+        const before = new Set(this.state.monsters.keys());
+        const kind2 = kinds[Math.floor(Math.random() * kinds.length)];
+        this.monsterSys.wave(kind2, Math.ceil(SWARM_COUNT / 3), at.x, at.y, 4, (MONSTERS[kind2]?.level[1] ?? 1) + 2);
+        for (const id of this.state.monsters.keys()) if (!before.has(id)) this.swarm.add(id);
+      }
+    }
+  }
+
+  /** Somewhere open and away from quiet places. */
+  private openSpot(): Point | null {
+    for (let tries = 0; tries < 200; tries++) {
+      const x = 4 + Math.floor(Math.random() * (this.map.width - 8));
+      const y = 4 + Math.floor(Math.random() * (this.map.height - 8));
+      if (this.standable(x, y) && !this.map.quiet.some((q) => Math.hypot(x - q.x, y - q.y) < q.r + 6) && !isCalm(this.map, x, y)) return { x, y };
+    }
+    return null;
+  }
+
+  /** The giant wakes; the more people around, the tougher it is. */
+  wakeBoss() {
+    const zone = this.map.id as "brindle" | "mossfen";
+    const boss = WORLD_BOSS[zone];
+    const before = new Set(this.state.monsters.keys());
+    this.monsterSys.wave(boss.kind, 1, boss.at.x, boss.at.y, 2, MONSTERS[boss.kind].level[0]);
+    const id = [...this.state.monsters.keys()].find((k) => !before.has(k));
+    if (!id) {
+      this.state.bossAt = Date.now() + 60_000;
+      return;
+    }
+    const m = this.state.monsters.get(id)!;
+    const players = [...this.state.players.values()].filter((p) => !p.dead).length;
+    m.maxHp = m.hp = Math.round(m.maxHp * (1 + BOSS_HP_PER_PLAYER * Math.max(0, players - 1)));
+    this.monsterSys.ctl.get(id)!.spawn.aggro = 7;
+    this.state.bossId = id;
+    this.bossUntil = Date.now() + BOSS_STAYS_MS;
+    this.bossHits.clear();
+    this.broadcastSystem(`👑 ${MONSTERS[boss.kind].name} ตื่นแล้วที่${boss.place}! ช่วยกันปราบ ทุกคนที่ช่วยตีได้รางวัล`);
+  }
+
+  /** Everyone who helped gets the reward, wherever they stand. */
+  private bossFalls(by: string) {
+    const zone = this.map.id as "brindle" | "mossfen";
+    const total = [...this.bossHits.values()].reduce((a, b) => a + b, 0);
+    let n = 0;
+    for (const [sid, c] of this.ctl) {
+      const p = this.state.players.get(sid);
+      const hit = this.bossHits.get(c.accountId) ?? 0;
+      if (!p || c.leaving || hit < total * BOSS_SHARE) continue;
+      const client = this.clientOf(sid);
+      const r = bossRewards(zone, Math.random);
+      c.gold += r.gold;
+      this.giveLoot(client, p, c, r.items);
+      if (client) this.itemsChanged(client, p, c);
+      client?.send(Msg.Notice, { text: `รางวัลจากการช่วยปราบ: ${r.gold} เหรียญ และของ ${r.items.length} อย่าง` });
+      n++;
+    }
+    this.broadcastSystem(`👑 ${MONSTERS[WORLD_BOSS[zone].kind].name} ถูกปราบแล้ว! (${by} ปิดท้าย) ผู้ช่วย ${n} คนได้รางวัล`);
+    this.state.bossId = "";
+    this.state.bossAt = Date.now() + BOSS_EVERY_MS;
+    this.bossWarned = false;
+    this.bossHits.clear();
   }
 
   // ---- mist portals ----------------------------------------------------------

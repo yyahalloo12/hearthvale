@@ -26,6 +26,12 @@ export class MonsterView {
   private facing = 0;
   private frame = -1;
 
+  private baseTint: number | null = null;
+  private plain() {
+    if (this.baseTint !== null) this.sprite.setTint(this.baseTint);
+    else this.sprite.clearTint();
+  }
+
   constructor(private scene: Phaser.Scene, readonly kind: string, level: number, x: number, y: number) {
     this.x = this.targetX = x;
     this.y = this.targetY = y;
@@ -35,7 +41,9 @@ export class MonsterView {
     this.ring = scene.add.image(0, 0, "target-ring").setVisible(false);
     if (def?.boss) this.ring.setScale(1.5);
     const shadow = scene.add.image(0, 0, "c-shadow").setScale(this.size.r / 16, 1);
-    this.sprite = scene.add.image(0, 0, `mon-${kind}`, 0).setOrigin(0.5, sheet?.originY ?? 1).setScale(sheet?.scale ?? 1);
+    this.sprite = scene.add.image(0, 0, `mon-${sheet?.tex ?? kind}`, 0).setOrigin(0.5, sheet?.originY ?? 1).setScale(sheet?.scale ?? 1);
+    this.baseTint = sheet?.tint ?? null;
+    if (this.baseTint !== null) this.sprite.setTint(this.baseTint);
     const label = scene.add
       .text(0, -this.size.h - 6, `${def?.name ?? kind} Lv${level}`, {
         fontFamily: "Tahoma, sans-serif",
@@ -83,7 +91,7 @@ export class MonsterView {
   setEffects(slowed: boolean, marked: boolean) {
     this.slowed = slowed;
     if (slowed) this.sprite.setTint(0x9fd0ff);
-    else this.sprite.clearTint();
+    else this.plain();
     this.mark.setVisible(marked);
   }
 
@@ -98,7 +106,7 @@ export class MonsterView {
 
   flash() {
     this.sprite.setTintFill(0xffffff);
-    this.scene.time.delayedCall(70, () => (this.slowed ? this.sprite.setTint(0x9fd0ff) : this.sprite.clearTint()));
+    this.scene.time.delayedCall(70, () => (this.slowed ? this.sprite.setTint(0x9fd0ff) : this.plain()));
   }
 
   /** Point (world pixels) where hit numbers should appear. */

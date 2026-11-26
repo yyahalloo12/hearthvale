@@ -94,6 +94,12 @@ export class Portal extends Schema {
 
 export class WorldState extends Schema {
   @type({ map: Portal }) portals = new MapSchema<Portal>();
+  /** the event going on now ("" for none) and when it ends */
+  @type("string") eventKind = "";
+  @type("float64") eventUntil = 0;
+  /** when the giant wakes next, and its monster id while it is up */
+  @type("float64") bossAt = 0;
+  @type("string") bossId = "";
   /** inside a portal: which wave, how many, when it closes, and whether all are beaten */
   @type("uint8") riftWave = 0;
   @type("uint8") riftWaves = 0;

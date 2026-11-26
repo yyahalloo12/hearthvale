@@ -113,6 +113,8 @@ export function drawMinimap(state: any, myId: string, friends: Set<string> = new
     const p = state.players?.get(id);
     if (p) dot(p, "#6dff5a", 4);
   }
+  const boss = state.bossId ? state.monsters?.get(state.bossId) : null;
+  if (boss) dot(boss, "#ff2a2a", 7);
   const me = state.players?.get(myId);
   if (me) dot(me, "#ffffff", 4);
 }

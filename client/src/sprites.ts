@@ -31,6 +31,9 @@ export interface MonsterSheet {
   /** rough size on screen, for clicking and labels */
   height: number;
   r: number;
+  /** uses another monster's pictures (giants are big, tinted copies) */
+  tex?: string;
+  tint?: number;
 }
 const mon = (w: number, h: number, view: number, look: number, scale: number, height: number, r: number): MonsterSheet => ({
   w,
@@ -54,6 +57,8 @@ export const MONSTER_SHEETS: Record<string, MonsterSheet> = {
   treant: mon(296, 296, 3.7, 1.2, 0.82, 150, 56),
   threadknight: mon(176, 184, 2.95, 0.9, 0.76, 78, 32),
 };
+MONSTER_SHEETS.scarecrowking = { ...MONSTER_SHEETS.scarecrow, scale: 1.75, height: 150, r: 48, tex: "scarecrow", tint: 0xffc08a };
+MONSTER_SHEETS.bearking = { ...MONSTER_SHEETS.bear, scale: 1.9, height: 150, r: 62, tex: "bear", tint: 0xffd36a };
 
 /** Loads all sheets once; later maps reuse them. */
 export function loadSprites(scene: Phaser.Scene) {
@@ -62,5 +67,5 @@ export function loadSprites(scene: Phaser.Scene) {
   };
   if (!scene.textures.exists("scenery")) scene.load.atlas("scenery", "/art/scenery.png", "/art/scenery.json");
   for (const l of PLAYER_LAYERS) sheet(`player-${l}`, PLAYER_SHEET.w, PLAYER_SHEET.h);
-  for (const [k, s] of Object.entries(MONSTER_SHEETS)) sheet(`mon-${k}`, s.w, s.h);
+  for (const [k, s] of Object.entries(MONSTER_SHEETS)) if (!s.tex) sheet(`mon-${k}`, s.w, s.h);
 }

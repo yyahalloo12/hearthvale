@@ -4,6 +4,7 @@ import { GLOW_AT } from "../../../shared/hollow";
 import { findStation, ITEMS, STATION_RANGE } from "../../../shared/items";
 import { darkness, isNight, untilChange } from "../../../shared/daylight";
 import { setRegion } from "../../../shared/terrain";
+import { EventKind, EVENTS, WORLD_BOSS } from "../../../shared/events";
 import { PORTAL_MAX, riftName, RiftInfo, RARITY_COLORS } from "../../../shared/rift";
 import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
 import { GameMap, isCalm, isWalkable, ZoneId } from "../../../shared/map";
@@ -270,6 +271,16 @@ export class WorldScene extends Phaser.Scene {
       if (st.cracking) list.push({ icon: "⚠️", kind: "dark", title: "พื้นกำลังจะถล่ม!", text: "ออกจากพื้นสีแดงก่อนจะตกลงไป (เสียเลือด 40%)" });
       list.push({ icon: "🚪", kind: "boss", title: "ประตูทางออกสีทอง", text: `ย้ายที่ใน ${this.clock(st.gatesUntil - Date.now())}` });
       list.push({ icon: "🌈", kind: "epic", title: "บ่อสี 3 แห่ง", text: "ล้างการกัดกร่อน แต่ทุกคนเห็นคุณบนแผนที่" });
+    }
+    if (st.eventKind) {
+      const e = EVENTS[st.eventKind as EventKind];
+      list.unshift({ icon: e.icon, kind: "boss", title: e.name, text: `${e.text} · เหลือ ${this.clock(st.eventUntil - Date.now())}` });
+    }
+    if (this.map.id === "brindle" || this.map.id === "mossfen") {
+      const boss = WORLD_BOSS[this.map.id];
+      const m = st.bossId ? st.monsters?.get(st.bossId) : null;
+      if (m) list.unshift({ icon: "👑", kind: "dark", title: `${MONSTERS[boss.kind].name} ตื่นแล้ว!`, text: `ที่${boss.place} (${boss.at.x}, ${boss.at.y}) · เลือด ${Math.ceil((m.hp / m.maxHp) * 100)}%` });
+      else if (st.bossAt) list.push({ icon: "👑", kind: "night", title: MONSTERS[boss.kind].name, text: `จะตื่นที่${boss.place}ใน ${this.clock(st.bossAt - Date.now())}` });
     }
     if (this.map.rift) {
       const r = this.map.rift;
