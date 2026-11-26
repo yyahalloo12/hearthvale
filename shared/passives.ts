@@ -195,8 +195,8 @@ export function passiveMods(learned: Iterable<string>, extra: Partial<Record<Num
 }
 
 /** One point per level (GDD 2.2); story quests will add about ten more later. */
-export function passivePointsEarned(level: number) {
-  return level;
+export function passivePointsEarned(level: number, bonus = 0) {
+  return level + bonus;
 }
 
 /** Coins to give back one node: the higher the level, the more it costs. */
@@ -242,7 +242,7 @@ export function canRefund(id: string, learned: Set<string>, job: JobName): boole
 }
 
 /** Points still free for this node's tree: the big one, or the second job's own. */
-export function pointsLeftFor(id: string, learned: Iterable<string>, level: number, job: JobName): number {
+export function pointsLeftFor(id: string, learned: Iterable<string>, level: number, job: JobName, bonus = 0): number {
   const sub = PASSIVES.get(id)?.sub;
   let main = 0;
   let mine = 0;
@@ -252,11 +252,11 @@ export function pointsLeftFor(id: string, learned: Iterable<string>, level: numb
     else if (s === job) mine++;
   }
   if (sub) return sub === job ? SUB_POINTS - mine : 0;
-  return passivePointsEarned(level) - main;
+  return passivePointsEarned(level, bonus) - main;
 }
 
 /** Cleans a saved list: known nodes only, connected, and no more than the points earned. */
-export function cleanNodes(saved: unknown, level: number, job: JobName): Set<string> {
+export function cleanNodes(saved: unknown, level: number, job: JobName, bonus = 0): Set<string> {
   const out = new Set<string>();
   if (!Array.isArray(saved)) return out;
   const want = saved.filter((id): id is string => typeof id === "string" && PASSIVES.has(id));
@@ -264,7 +264,7 @@ export function cleanNodes(saved: unknown, level: number, job: JobName): Set<str
   for (let grew = true; grew; ) {
     grew = false;
     for (const id of want) {
-      if (pointsLeftFor(id, out, level, job) > 0 && canReach(id, out, job)) {
+      if (pointsLeftFor(id, out, level, job, bonus) > 0 && canReach(id, out, job)) {
         out.add(id);
         grew = true;
       }

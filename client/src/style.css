@@ -653,3 +653,18 @@ kbd { display: inline-block; min-width: 18px; padding: 1px 6px; border-radius: 5
 .qtu { color: #d97a00 !important; text-shadow: 0 0 6px rgba(255, 176, 46, 0.6); }
 #charwin { width: 680px; }
 #tree .node.othersub { opacity: 0.4; }
+
+/* ---- quests ---- */
+#questwin { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); width: 460px; max-height: calc(100% - 160px); z-index: 7; display: flex; flex-direction: column; font-size: 13px; }
+#questwin[hidden] { display: none; }
+#quest-main h3 { margin: 4px 0; font-size: 17px; color: var(--wood-dark); }
+#quest-main .kind { opacity: 0.7; font-size: 12px; }
+#quest-main .story { line-height: 1.55; margin: 6px 0 8px; }
+#questwin .qbar { height: 10px; margin: 4px 0 6px; }
+#questwin .reward { font-size: 12px; color: #8a5a00; font-weight: bold; }
+#questwin h3 small { font-weight: normal; opacity: 0.7; font-size: 12px; }
+.qrow { padding: 8px 0; border-bottom: 1px solid #dcc79c; display: grid; gap: 2px; }
+.qrow small { opacity: 0.75; }
+.qrow.done { opacity: 0.55; }
+.gem.quest { display: none; }
+.ev:has(.gem.quest) b { color: #6a3a00; }

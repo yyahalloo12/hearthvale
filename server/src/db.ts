@@ -26,6 +26,7 @@ export interface CharacterRow {
   inv: string; // JSON: bag, gear, storage, crafting skill
   zone: string;
   corruption: number;
+  quests: string; // JSON: story step, dailies, quest points
   /** 1 = game master (from the account; see setAdmin) */
   admin: number;
   x: number;
@@ -166,6 +167,7 @@ async function open(): Promise<DB> {
   if (!have.has("inv")) db.exec("ALTER TABLE characters ADD COLUMN inv TEXT NOT NULL DEFAULT '{}'");
   if (!have.has("zone")) db.exec("ALTER TABLE characters ADD COLUMN zone TEXT NOT NULL DEFAULT 'brindle'");
   if (!have.has("corruption")) db.exec("ALTER TABLE characters ADD COLUMN corruption REAL NOT NULL DEFAULT 0");
+  if (!have.has("quests")) db.exec("ALTER TABLE characters ADD COLUMN quests TEXT NOT NULL DEFAULT '{}'");
   return db;
 }
 
@@ -209,7 +211,7 @@ export async function loadCharacter(accountId: number): Promise<CharacterRow | n
     .get(accountId) as unknown as CharacterRow) ?? null;
 }
 
-export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin">;
+export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin" | "quests"> & { quests?: string };
 
 export async function saveCharacter(c: CharacterSave) {
   // Written at once when the database is open, so an older save can never land on top of a newer one.
@@ -261,7 +263,7 @@ export async function loadBundles(zone: string, now = Date.now()): Promise<Bundl
 
 export function writeCharacter(d: DB, c: CharacterSave) {
   d.prepare(
-    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, updated_at = datetime('now')
+    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, quests = ?, updated_at = datetime('now')
      WHERE account_id = ?`,
-  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.zone, c.corruption, c.x, c.y, c.account_id);
+  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.zone, c.corruption, c.x, c.y, c.quests ?? "{}", c.account_id);
 }

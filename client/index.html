@@ -66,6 +66,7 @@
       <button id="settings-open" class="mbtn" hidden title="ตั้งค่าและปุ่มลัด">⚙️</button>
       <button id="party-open" class="mbtn" hidden title="ปาร์ตี้ (O)">👥<b>O</b></button>
       <button id="map-open" class="mbtn" hidden title="แผนที่โลก (M)">🗺️<b>M</b></button>
+      <button id="quest-open" class="mbtn" hidden title="เควสต์ (J)">📜<b>J</b></button>
       <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)">🌳<span id="tree-badge" hidden></span><b>P</b></button>
       <button id="char-open" class="mbtn" hidden title="ตัวละคร (C)">🧙<b>C</b></button>
       <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)">🎒<b>I</b></button>
@@ -92,6 +93,16 @@
       <div class="win-head"><h2 id="wm-title">แผนที่</h2><button id="wm-me">ตำแหน่งฉัน</button><button id="wm-out">−</button><button id="wm-in">+</button><button id="worldmap-close" aria-label="ปิด">✕</button></div>
       <canvas id="worldmap-canvas"></canvas>
       <div class="wm-hint">คลิกที่ไหนก็ได้เพื่อเดินไป · ลากเพื่อเลื่อน · ล้อเมาส์เพื่อซูม</div>
+    </div>
+
+    <div id="questwin" class="panel" role="dialog" aria-label="เควสต์" hidden>
+      <div class="win-head"><h2>เควสต์</h2><button id="quest-close" aria-label="ปิด">✕</button></div>
+      <div class="win-body">
+        <div id="quest-main"></div>
+        <h3>ภารกิจรายวัน <small>(เปลี่ยนทุกเที่ยงคืน)</small></h3>
+        <div id="quest-daily"></div>
+        <div id="quest-points" class="hint"></div>
+      </div>
     </div>
 
     <div id="settings" class="panel" role="dialog" aria-label="ตั้งค่า" hidden>

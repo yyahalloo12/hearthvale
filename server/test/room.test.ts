@@ -127,13 +127,15 @@ test("killing a hen gives EXP, and EXP is still there after logging in again", a
 test("passive nodes: learn, spend points, pay to give back, and save", async () => {
   const c = new Client(`ws://localhost:${PORT}`);
   let a: Room<any> = await c.joinOrCreate("world", { name: "Weaver", password: "weave", create: true });
+  // past the story step that gives a passive point, so the counting below is plain
+  (matchMaker.getLocalRoomById(a.roomId) as unknown as WorldRoom).ctl.get(a.sessionId)!.quests.main = 2;
   let priv: any = null;
   const notices: string[] = [];
   a.onMessage(Msg.Private, (d: any) => (priv = d));
   a.onMessage(Msg.Notice, (n: any) => notices.push(n.text));
   a.send(Msg.Sync);
   await until(() => priv !== null);
-  assert.deepEqual(priv, { gold: 0, nodes: [], inv: emptyInventory() });
+  assert.deepEqual({ gold: priv.gold, nodes: priv.nodes, inv: priv.inv }, { gold: 0, nodes: [], inv: emptyInventory() });
 
   // not next to a starting point: ignored. Level 1 has one point.
   a.send(Msg.LearnPassive, { id: "r4" });
@@ -171,7 +173,7 @@ test("passive nodes: learn, spend points, pay to give back, and save", async () 
   a.onMessage(Msg.Private, (d: any) => (back = d));
   a.send(Msg.Sync);
   await until(() => back !== null);
-  assert.deepEqual(back, { gold: 950, nodes: ["c_str", "r4"], inv: emptyInventory() });
+  assert.deepEqual({ gold: back.gold, nodes: back.nodes, inv: back.inv }, { gold: 950, nodes: ["c_str", "r4"], inv: emptyInventory() });
   await a.leave();
 });
 

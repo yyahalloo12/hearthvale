@@ -49,6 +49,9 @@ test("a swarm brings extra monsters worth more EXP, and they leave when it ends"
   // a swarm kill pays 1.5x
   const p = w.state.players.get(a.r.sessionId)!;
   const c = w.ctl.get(a.r.sessionId)!;
+  // no quest rewards mixed into the numbers
+  c.quests.main = 99;
+  for (const d of c.quests.daily) d.done = true;
   const id = [...swarm][0];
   const m = w.state.monsters.get(id)!;
   m.hp = 1;

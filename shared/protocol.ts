@@ -167,6 +167,7 @@ export interface PrivateData {
   gold: number;
   nodes: string[];
   inv: Inventory;
+  quests: import("./quests").QuestState;
 }
 
 export interface LootEvent {

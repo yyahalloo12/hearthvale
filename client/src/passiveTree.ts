@@ -62,7 +62,7 @@ export interface TreeActions {
   refund(id: string): void;
 }
 
-const state = { level: 1, job: "wanderer", gold: 0, nodes: new Set<string>(), ready: false };
+const state = { level: 1, job: "wanderer", gold: 0, nodes: new Set<string>(), ready: false, bonus: 0 };
 const view = { x: 0, y: 0, zoom: 1 };
 let actions: TreeActions;
 let selected: string | null = null;
@@ -94,7 +94,8 @@ export function setTreeCharacter(level: number, job: string) {
   refresh();
 }
 
-export function setTreePrivate(gold: number, nodes: string[]) {
+export function setTreePrivate(gold: number, nodes: string[], bonus = 0) {
+  state.bonus = bonus;
   state.gold = gold;
   state.nodes = new Set(nodes);
   state.ready = true;
@@ -103,13 +104,13 @@ export function setTreePrivate(gold: number, nodes: string[]) {
 
 /** Free points in the big tree (the second job's own tree counts apart). */
 function pointsLeft() {
-  return pointsLeftFor("start", state.nodes, state.level, state.job);
+  return pointsLeftFor("start", state.nodes, state.level, state.job, state.bonus);
 }
 function subLeft() {
   return isMainJob(state.job) || state.job === "wanderer" ? 0 : pointsLeftFor(`sj_${state.job}`, state.nodes, state.level, state.job);
 }
 function leftFor(id: string) {
-  return pointsLeftFor(id, state.nodes, state.level, state.job);
+  return pointsLeftFor(id, state.nodes, state.level, state.job, state.bonus);
 }
 
 export function toggleTree(open = $("tree").hidden) {
@@ -420,7 +421,7 @@ function refresh() {
   for (const b of document.querySelectorAll<HTMLButtonElement>("#tree-filters button")) b.setAttribute("aria-pressed", String(b.dataset.id === filter));
 
   $("tree-points").textContent =
-    `แต้มเหลือ ${Math.max(0, left)} / ${passivePointsEarned(state.level)}` + (isMainJob(state.job) || state.job === "wanderer" ? "" : ` · ขั้นสอง ${subLeft()} / ${SUB_POINTS}`);
+    `แต้มเหลือ ${Math.max(0, left)} / ${passivePointsEarned(state.level, state.bonus)}` + (isMainJob(state.job) || state.job === "wanderer" ? "" : ` · ขั้นสอง ${subLeft()} / ${SUB_POINTS}`);
   $("tree-gold").textContent = `${state.gold.toLocaleString("th-TH")} เหรียญ`;
   renderSelected(left);
 

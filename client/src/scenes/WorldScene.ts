@@ -25,6 +25,7 @@ import { makeMonsterTextures } from "../monsterTextures";
 import { initPassiveTree, setTreeCharacter, setTreePrivate } from "../passiveTree";
 import { initParty, partySessions, setParty } from "../party";
 import { initSettings, onSettings, setting } from "../settings";
+import { initQuests, questTracker, setQuests } from "../quests";
 import { initCharWin, setCharacter, setCharPortrait, setCharPrivate } from "../charwin";
 import { clearGoal, initWorldMap, setWorldMap } from "../worldmap";
 import { PartyData } from "../../../shared/protocol";
@@ -138,6 +139,7 @@ export class WorldScene extends Phaser.Scene {
     });
     initParty((a) => this.room.send(Msg.PartyAct, a));
     initSettings();
+    initQuests();
     bindMinimapZoom();
     initCharWin((slot) => this.room.send(Msg.Unequip, { slot }));
     initWorldMap((x, y) => {
@@ -335,6 +337,7 @@ export class WorldScene extends Phaser.Scene {
         list.push({ icon: p.dark ? "☠" : "🌀", kind: p.dark ? "dark" : ["sun", "rare", "epic", "boss"][p.rarity], title: riftName(p), text: `อีก ${far} ช่อง · ปิดใน ${this.clock(p.until - Date.now())} · ${p.inside}/${PORTAL_MAX} คน` });
       });
     void CRACK_WARN_MS;
+    if (!this.map.rift) list.unshift(...questTracker().map((t) => ({ icon: "", kind: "quest", title: t.title, text: t.text })));
     setEvents(list);
   }
 
@@ -542,7 +545,8 @@ export class WorldScene extends Phaser.Scene {
     this.room.onMessage(Msg.Private, (d: PrivateData) => {
       const gained = this.gold === null ? 0 : d.gold - this.gold;
       this.gold = d.gold;
-      setTreePrivate(d.gold, d.nodes);
+      setTreePrivate(d.gold, d.nodes, d.quests?.points ?? 0);
+      setQuests(d.quests);
       setCharPrivate(d.inv, d.nodes);
       setInventory(d.inv, d.gold);
       setMarketInventory(d.inv, d.gold);

@@ -1,5 +1,6 @@
 import { Client, matchMaker, Room, ServerError } from "@colyseus/core";
 import { BOSS_EVERY_MS, BOSS_HP_PER_PLAYER, BOSS_SHARE, BOSS_STAYS_MS, BOSS_WARN_MS, bossRewards, EVENT_GAP_MS, EVENT_MS, EventKind, EVENTS, SWARM_COUNT, SWARM_EXP, WORLD_BOSS } from "../../../shared/events";
+import { catchUp, cleanQuests, goalCount, MAIN_QUESTS, Quest, QuestEvent, QuestState, QUESTS, Reward, stepFor } from "../../../shared/quests";
 import { buildRift, DUNGEON_MS, DUNGEON_ROOMS, DUNGEON_Y, DUNGEONS, DARK_CHANCE, OpenZone, PORTAL_EVERY_MS, PORTAL_MAX, PORTAL_OPEN_MS, PORTALS_AT_ONCE, RARITY_NAMES, RIFT_MS, riftName, RiftInfo, riftRewards, riftWaves, rollRarity } from "../../../shared/rift";
 import {
   AUTOSAVE_MS,
@@ -200,6 +201,7 @@ interface PlayerCtl {
   stall: string | null;
   /** monsters already hit once (for the "first strike" keystone) */
   struck: Set<string>;
+  quests: QuestState;
 }
 
 interface AuthData {
@@ -437,7 +439,16 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     } catch {
       /* bad JSON: no nodes */
     }
-    const nodes = cleanNodes(savedNodes, p.level, p.job);
+    let savedQuests: unknown = null;
+    try {
+      savedQuests = JSON.parse(c.quests ?? "{}");
+    } catch {
+      /* bad JSON: a fresh start */
+    }
+    const quests = cleanQuests(savedQuests);
+    // older characters (no quests saved yet) skip the steps far below them
+    if (!(savedQuests && typeof savedQuests === "object" && "main" in savedQuests)) catchUp(quests, Math.min(MAX_LEVEL, Math.max(1, c.level)));
+    const nodes = cleanNodes(savedNodes, p.level, p.job, quests.points);
     let savedInv: unknown = null;
     try {
       savedInv = JSON.parse(c.inv);
@@ -502,6 +513,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       interact: null,
       stall: null,
       struck: new Set(),
+      quests,
     });
     p.gm = c.admin === 1;
     p.shielded = this.map.pvp;
@@ -516,6 +528,11 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       }
     this.collectGold(client.sessionId);
     this.tickParties();
+    {
+      const ctl = this.ctl.get(client.sessionId)!;
+      this.questEvent(client, p, ctl, { type: "visit", zone: this.map.id });
+      this.questCheck(client, p, ctl);
+    }
     console.log(`[world] join ${p.name} (${client.sessionId}), online ${this.clients.length}`);
   }
 
@@ -720,6 +737,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       // the dead wake up in the village; inside a portal we count as standing by it outside
       zone: p.dead ? "brindle" : this.map.rift ? this.map.rift.origin : this.map.id,
       corruption: p.dead ? 0 : c.corruption,
+      quests: JSON.stringify(c.quests),
       x: this.map.rift && !p.dead ? this.map.rift.at.x : ok ? tile.x : -1,
       y: this.map.rift && !p.dead ? this.map.rift.at.y : ok ? tile.y : -1,
     };
@@ -865,6 +883,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       c.gold += r.gold;
       this.itemsChanged(client, p, c);
       client.send(Msg.Notice, { text: `เปิดหีบรางวัล ได้ ${r.gold} เหรียญและของอีก ${r.items.length} อย่าง` });
+      this.questEvent(client, p, c, { type: "rift", dungeon: !!this.map.rift.dungeon });
     } else if (kind === "treasure") {
       if (!this.state.fogUntil) return;
       if (this.chestTaken.has(c.accountId)) return client.send(Msg.Notice, { text: "คุณเปิดหีบรอบนี้ไปแล้ว" });
@@ -878,6 +897,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       c.gold += 120;
       this.itemsChanged(client, p, c);
       client.send(Msg.Notice, { text: "เปิดหีบลานสมบัติแล้ว" });
+      this.questEvent(client, p, c, { type: "station", kind: "treasure" });
     }
   }
 
@@ -910,10 +930,81 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     return playerStats(p.level, p.job as Job, c.mods, c.gear);
   }
 
+  // ---- quests ----------------------------------------------------------------
+
+  /** Something happened that may move a quest on. */
+  private questEvent(client: Client | undefined, p: Player, c: PlayerCtl, e: QuestEvent) {
+    const q = c.quests;
+    let changed = false;
+    const main = MAIN_QUESTS[q.main];
+    if (main) {
+      const step = stepFor(main.goal, e);
+      if (step > 0) {
+        q.mainProgress += step;
+        changed = true;
+        if (q.mainProgress >= goalCount(main.goal)) this.finishMain(client, p, c);
+      }
+    }
+    for (const d of q.daily) {
+      if (d.done) continue;
+      const quest = QUESTS.get(d.id);
+      if (!quest) continue;
+      const step = stepFor(quest.goal, e);
+      if (step <= 0) continue;
+      d.progress += step;
+      changed = true;
+      if (d.progress >= goalCount(quest.goal)) {
+        d.done = true;
+        this.giveReward(client, p, c, quest);
+        client?.send(Msg.Notice, { text: `✅ ภารกิจรายวันสำเร็จ: ${quest.name}` });
+      }
+    }
+    if (changed) this.sendPrivate(client);
+  }
+
+  /** Steps that are about the character as it is (job, level, nodes) finish on their own. */
+  private questCheck(client: Client | undefined, p: Player, c: PlayerCtl) {
+    for (let guard = 0; guard < MAIN_QUESTS.length; guard++) {
+      const main = MAIN_QUESTS[c.quests.main];
+      if (!main) return;
+      const g = main.goal;
+      const done =
+        (g.type === "job" && (g.second ? !isMainJob(p.job) && p.job !== "wanderer" : p.job !== "wanderer")) ||
+        (g.type === "level" && p.level >= g.level) ||
+        (g.type === "passive" && c.nodes.size >= g.count) ||
+        (g.type === "visit" && this.map.id === g.zone);
+      if (!done) return;
+      this.finishMain(client, p, c);
+    }
+  }
+
+  private finishMain(client: Client | undefined, p: Player, c: PlayerCtl) {
+    const main = MAIN_QUESTS[c.quests.main];
+    if (!main) return;
+    c.quests.main++;
+    c.quests.mainProgress = 0;
+    this.giveReward(client, p, c, main);
+    client?.send(Msg.Notice, { text: `📜 เควสต์หลักสำเร็จ: ${main.name}` });
+    const next = MAIN_QUESTS[c.quests.main];
+    if (next) client?.send(Msg.Notice, { text: `📜 เควสต์ใหม่: ${next.name}` });
+    this.save(p, c).catch(() => {});
+    this.questCheck(client, p, c);
+  }
+
+  private giveReward(client: Client | undefined, p: Player, c: PlayerCtl, q: Quest) {
+    const r: Reward = q.reward;
+    if (r.gold) c.gold += r.gold;
+    if (r.items) this.giveLoot(client, p, c, r.items);
+    if (r.points) c.quests.points += r.points;
+    if (r.gear) this.giveGear(client, c, rollGear(r.gear.tier, { minRarity: r.gear.minRarity, uniqueChance: r.gear.unique ?? 0 }));
+    if (r.exp) this.gainExp(client, p, c, r.exp);
+    if (client) this.itemsChanged(client, p, c);
+  }
+
   private sendPrivate(client: Client | undefined) {
     const c = client && this.ctl.get(client.sessionId);
     if (!c) return;
-    const data: PrivateData = { gold: c.gold, nodes: [...c.nodes], inv: c.inv };
+    const data: PrivateData = { gold: c.gold, nodes: [...c.nodes], inv: c.inv, quests: c.quests };
     client.send(Msg.Private, data);
   }
 
@@ -1090,6 +1181,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       this.buildChanged(client, p, c);
       this.applyStats(p, c, true);
       this.broadcastSystem(`${p.name} เลื่อนขั้นเป็น${JOB_NAMES[second.job]}แล้ว!`);
+      this.questEvent(client, p, c, { type: "job", second: true });
       return;
     }
     if (p.job !== "wanderer") return;
@@ -1109,6 +1201,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.buildChanged(client, p, c);
     this.applyStats(p, c, true);
     this.broadcastSystem(`${p.name} ได้เป็น${JOB_NAMES[choice.job]}แล้ว!`);
+    this.questEvent(client, p, c, { type: "job", second: false });
   }
 
   // ---- skills ---------------------------------------------------------------
@@ -1577,6 +1670,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.stopInteract(client, c);
     const qty = (res.qty[0] + Math.floor(Math.random() * (res.qty[1] - res.qty[0] + 1))) * (this.state.eventKind === "golden" ? 2 : 1);
     if (!this.giveLoot(client, p, c, [{ id: res.item, qty }])) return; // bag full: leave the rock for later
+    this.questEvent(client, p, c, { type: "gather", item: res.item, qty });
     this.state.depleted.set(key, true);
     this.depletedUntil.set(key, now + res.respawnMs);
     this.itemsChanged(client, p, c);
@@ -1695,10 +1789,11 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const id = (msg as { id?: unknown })?.id;
     if (!pc || typeof id !== "string") return;
     const { p, c } = pc;
-    if (pointsLeftFor(id, c.nodes, p.level, p.job) <= 0) return client.send(Msg.Notice, { text: "ไม่มีแต้มต้นไม้เหลือ" });
+    if (pointsLeftFor(id, c.nodes, p.level, p.job, c.quests.points) <= 0) return client.send(Msg.Notice, { text: "ไม่มีแต้มต้นไม้เหลือ" });
     if (!canReach(id, c.nodes, p.job)) return;
     c.nodes.add(id);
     this.buildChanged(client, p, c);
+    this.questEvent(client, p, c, { type: "passive" });
   }
 
   private handleRefundPassive(client: Client, msg: unknown) {
@@ -2142,7 +2237,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
         p.level = level;
         p.exp = 0;
         // no more nodes or skills than the new level allows
-        c.nodes = cleanNodes([...c.nodes], level, p.job);
+        c.nodes = cleanNodes([...c.nodes], level, p.job, c.quests.points);
         if (this.skillPointsLeft(p) < 0) p.skills.clear();
         this.applyStats(p, c, false);
         if (!p.dead) p.hp = p.maxHp;
@@ -2435,6 +2530,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       const share = (1 + PARTY_BONUS * (sharers.length - 1)) / sharers.length;
       for (const [sid, sp, sc] of sharers) {
         const cl = sid === id ? client : this.clientOf(sid);
+        this.questEvent(cl, sp, sc, { type: "kill", kind: m.kind });
         sc.gold += Math.round(killGold(mc.def) * night * share);
         if (sid !== id) this.sendPrivate(cl);
         this.gainExp(cl, sp, sc, killExp(Math.round(mc.exp * night * share), level, sp.level));
@@ -2542,6 +2638,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       this.giveGear(client, c, rollGear(zone === "mossfen" ? 3 : 2, { minRarity: 1, bonus: 1, uniqueChance: 0.2 }));
       if (client) this.itemsChanged(client, p, c);
       client?.send(Msg.Notice, { text: `รางวัลจากการช่วยปราบ: ${r.gold} เหรียญ และของ ${r.items.length} อย่าง` });
+      this.questEvent(client, p, c, { type: "worldboss" });
       n++;
     }
     this.broadcastSystem(`👑 ${MONSTERS[WORLD_BOSS[zone].kind].name} ถูกปราบแล้ว! (${by} ปิดท้าย) ผู้ช่วย ${n} คนได้รางวัล`);
@@ -2807,6 +2904,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     if (before < GLOW_AT && c.corruption >= GLOW_AT) client?.send(Msg.Notice, { text: "การกัดกร่อนเกินครึ่งแล้ว ทุกคนเห็นคุณบนแผนที่!" });
     if (client && this.state.gates.some((g) => dist(g, p) < 0.7)) {
       this.broadcastSystem(`${p.name} หนีออกจาก Hollow ได้แล้ว`);
+      this.questEvent(client, p, c, { type: "escape" });
       this.travel(client, p, c, "brindle", { x: 25, y: 7 });
       return true;
     }
