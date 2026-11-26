@@ -1,6 +1,6 @@
 import { Client, matchMaker, Room, ServerError } from "@colyseus/core";
 import { BOSS_EVERY_MS, BOSS_HP_PER_PLAYER, BOSS_SHARE, BOSS_STAYS_MS, BOSS_WARN_MS, bossRewards, EVENT_GAP_MS, EVENT_MS, EventKind, EVENTS, SWARM_COUNT, SWARM_EXP, WORLD_BOSS } from "../../../shared/events";
-import { buildRift, DARK_CHANCE, OpenZone, PORTAL_EVERY_MS, PORTAL_MAX, PORTAL_OPEN_MS, PORTALS_AT_ONCE, RARITY_NAMES, RIFT_MS, riftName, RiftInfo, riftRewards, riftWaves, rollRarity } from "../../../shared/rift";
+import { buildRift, DUNGEON_MS, DUNGEON_ROOMS, DUNGEON_Y, DUNGEONS, DARK_CHANCE, OpenZone, PORTAL_EVERY_MS, PORTAL_MAX, PORTAL_OPEN_MS, PORTALS_AT_ONCE, RARITY_NAMES, RIFT_MS, riftName, RiftInfo, riftRewards, riftWaves, rollRarity } from "../../../shared/rift";
 import {
   AUTOSAVE_MS,
   CHAT_COOLDOWN_MS,
@@ -224,6 +224,8 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private depletedUntil = new Map<string, number>();
   /** open maps: the mist portals standing now */
   private portalCtl = new Map<string, { info: RiftInfo; roomId: string | null; making: Promise<string> | null; entered: Set<number> }>();
+  /** dungeon instances, one per party (by its first member's account) */
+  private dungeonRuns = new Map<number, { info: RiftInfo; roomId: string | null; making: Promise<string> | null; entered: Set<number>; until: number }>();
   private nextPortalAt = 0;
   private portalSeq = 1;
   /** inside a portal: when the next wave comes */
@@ -246,16 +248,27 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     this.map = options?.zone === "rift" ? buildRift(cleanRift(options.rift)) : buildZone(zoneId(options?.zone));
     this.setState(new WorldState());
     this.state.mapName = this.map.name;
+    // ground that connects: in a dungeon, counting the rooms behind its gates
+    const shut = new Set(this.map.closed);
+    if (this.map.rift?.dungeon) this.map.closed.clear();
     this.reach = reachableFrom(this.map, this.map.spawn);
+    for (const k of shut) this.map.closed.add(k);
     for (const id of Object.keys(this.map.regions)) if (this.map.regions[id].some((k) => this.map.closed.has(k))) this.state.closed.set(id, true);
     this.crackAt = Date.now() + CRACK_EVERY_MS;
     this.autoDispose = !!this.map.rift; // the world stays alive (monsters keep living) with nobody online; a portal's island does not
     if (this.map.rift) {
       this.state.riftWaves = riftWaves(this.map.rift).length;
-      this.state.riftEnds = Date.now() + RIFT_MS;
+      this.state.riftEnds = Date.now() + (this.map.rift.dungeon ? DUNGEON_MS : RIFT_MS);
+      for (const id of Object.keys(this.map.regions)) this.state.closed.set(id, true);
       this.nextWaveAt = Date.now() + 5000;
     }
     this.nextPortalAt = Date.now() + 60_000 + Math.random() * 60_000;
+    if (this.map.id === "brindle" || this.map.id === "mossfen") {
+      const d = DUNGEONS[this.map.id];
+      const door = new Portal();
+      Object.assign(door, { x: d.at.x, y: d.at.y, rarity: 2, dark: false, until: 8.64e15, inside: 0, dungeon: true });
+      this.state.portals.set("dungeon", door);
+    }
     this.nextEventAt = Date.now() + EVENT_GAP_MS[0] / 2 + Math.random() * EVENT_GAP_MS[0];
     this.state.bossAt = Date.now() + BOSS_EVERY_MS / 2;
 
@@ -2338,14 +2351,15 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   /** Open maps grow a portal now and then; old ones close. */
   private tickPortals(now: number) {
     if (this.map.id !== "brindle" && this.map.id !== "mossfen") return;
+    for (const [id, run] of this.dungeonRuns) if (run.until <= now) this.dungeonRuns.delete(id);
     for (const [id, p] of this.state.portals)
-      if (p.until <= now) {
+      if (p.until <= now && !p.dungeon) {
         this.state.portals.delete(id);
         this.portalCtl.delete(id);
       }
     if (now < this.nextPortalAt) return;
     this.nextPortalAt = now + PORTAL_EVERY_MS[0] + Math.random() * (PORTAL_EVERY_MS[1] - PORTAL_EVERY_MS[0]);
-    if (this.state.portals.size < PORTALS_AT_ONCE) this.openPortal(rollRarity(Math.random()), Math.random() < DARK_CHANCE);
+    if ([...this.state.portals.values()].filter((p) => !p.dungeon).length < PORTALS_AT_ONCE) this.openPortal(rollRarity(Math.random()), Math.random() < DARK_CHANCE);
   }
 
   /** A new portal somewhere out in the wild. Returns its id. */
@@ -2383,6 +2397,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
 
   private async enterPortal(client: Client, p: Player, c: PlayerCtl, id: string) {
     const portal = this.state.portals.get(id);
+    if (portal?.dungeon) return this.enterDungeon(client, p, c, portal);
     const ctl = this.portalCtl.get(id);
     if (!portal || !ctl || portal.until <= Date.now()) return client.send(Msg.Notice, { text: "พอร์ทัลปิดไปแล้ว" });
     if (dist(p, portal) > 2) return;
@@ -2405,6 +2420,38 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     }
     if (!this.ctl.has(client.sessionId)) return;
     this.travel(client, p, c, "rift", undefined, { roomId: ctl.roomId, info: ctl.info });
+  }
+
+  /** The dungeon door: your party shares one run; strangers get their own. */
+  private async enterDungeon(client: Client, p: Player, c: PlayerCtl, door: Portal) {
+    const zone = this.map.id as OpenZone;
+    const d = DUNGEONS[zone];
+    if (dist(p, door) > 2) return;
+    if (p.level < d.minLevel) return client.send(Msg.Notice, { text: `${d.name} เข้าได้ตั้งแต่เลเวล ${d.minLevel}` });
+    if (c.lastCombatAt > 0 && this.clock.currentTime - c.lastCombatAt < OUT_OF_COMBAT_MS) return client.send(Msg.Notice, { text: "เข้าระหว่างต่อสู้ไม่ได้" });
+    const members = party.partyMembers(c.accountId);
+    const now = Date.now();
+    let key = members.find((m) => this.dungeonRuns.has(m) && this.dungeonRuns.get(m)!.until > now) ?? c.accountId;
+    let run = this.dungeonRuns.get(key);
+    if (!run || run.until <= now || (!run.entered.has(c.accountId) && !members.some((m) => run!.entered.has(m)))) {
+      key = c.accountId;
+      run = { info: { seed: Math.floor(Math.random() * 1e9), origin: zone, rarity: 2, dark: false, at: { x: door.x, y: door.y + 1 }, dungeon: true }, roomId: null, making: null, entered: new Set(), until: now + DUNGEON_MS };
+      this.dungeonRuns.set(key, run);
+    }
+    if (!run.entered.has(c.accountId) && run.entered.size >= 5) return client.send(Msg.Notice, { text: "ดันเจี้ยนรอบนี้เต็มแล้ว (5 คน)" });
+    run.entered.add(c.accountId);
+    try {
+      if (!run.roomId) {
+        run.making ??= matchMaker.createRoom(ROOM_OF.rift, { zone: "rift", rift: run.info }).then((r) => r.roomId);
+        run.roomId = await run.making;
+      }
+    } catch (e) {
+      console.error("[dungeon] could not open", e);
+      run.making = null;
+      return client.send(Msg.Notice, { text: "ประตูติดขัด ลองใหม่อีกครั้ง" });
+    }
+    if (!this.ctl.has(client.sessionId)) return;
+    this.travel(client, p, c, "rift", undefined, { roomId: run.roomId, info: run.info });
   }
 
   /** Inside a portal: waves, the chest, and the end. */
@@ -2431,6 +2478,15 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     }
     const levelOfWave = (kind: string, bonus: number) => (MONSTERS[kind]?.level[1] ?? 1) + bonus;
     const c = this.map.width / 2;
+    if (rift.dungeon) {
+      const i = this.state.riftWave;
+      if (i > 0) this.setClosed(`gate${i - 1}`, false);
+      for (const w of waves[i]) this.monsterSys.wave(w.kind, w.count + Math.max(0, this.clients.length - 1), DUNGEON_ROOMS[i], DUNGEON_Y, 3, levelOfWave(w.kind, w.levelBonus));
+      this.state.riftWave++;
+      this.nextWaveAt = now + 2500;
+      this.broadcastSystem(i === 0 ? "ห้องแรกมีศัตรู!" : `ประตูห้องที่ ${i + 1} เปิดแล้ว`);
+      return;
+    }
     for (const w of waves[this.state.riftWave]) {
       const a = Math.random() * Math.PI * 2;
       this.monsterSys.wave(w.kind, w.count + Math.max(0, this.clients.length - 1), Math.round(c + Math.cos(a) * 7), Math.round(c - 2 + Math.sin(a) * 5), 4, levelOfWave(w.kind, w.levelBonus));
@@ -2670,5 +2726,6 @@ function cleanRift(v: unknown): RiftInfo {
     rarity: Math.max(0, Math.min(RARITY_NAMES.length - 1, Math.floor(Number(r.rarity) || 0))),
     dark: !!r.dark,
     at,
+    dungeon: !!r.dungeon,
   };
 }

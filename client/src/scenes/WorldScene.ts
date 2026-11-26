@@ -208,6 +208,25 @@ export class WorldScene extends Phaser.Scene {
   /** Fog over the grove's ramp, or a hole where the ground fell. */
   private showRegion(id: string, closed: boolean) {
     setRegion(this.map, id, closed);
+    if (id.startsWith("gate")) {
+      this.gone.get(id)?.destroy();
+      this.gone.delete(id);
+      if (!closed) return this.cameras.main.shake(200, 0.004);
+      const g = this.add.graphics().setDepth(-9989);
+      for (const k of this.map.regions[id]) {
+        const p = place(k % this.map.width, Math.floor(k / this.map.width));
+        g.fillStyle(0x3a2a22, 1);
+        g.fillRect(p.x - 10, p.y - 46, 20, 46);
+        g.fillStyle(0x8a6a4a, 1);
+        g.fillRect(p.x - 7, p.y - 43, 14, 40);
+        g.lineStyle(2, 0x2a1a12, 1);
+        g.lineBetween(p.x - 7, p.y - 30, p.x + 7, p.y - 30);
+        g.lineBetween(p.x - 7, p.y - 16, p.x + 7, p.y - 16);
+      }
+      g.setDepth(place(this.map.regions[id][0] % this.map.width, Math.floor(this.map.regions[id][0] / this.map.width)).depth + 1);
+      this.gone.set(id, g);
+      return;
+    }
     if (id === "fog") {
       this.veils.forEach((v) => v.destroy());
       this.veils = [];
@@ -288,11 +307,12 @@ export class WorldScene extends Phaser.Scene {
       list.push(st.riftCleared
         ? { icon: "🎁", kind: "boss", title: "ปราบครบแล้ว!", text: "เปิดหีบรางวัลกลางเกาะ (คนละครั้ง) แล้วเดินกลับทางเข้า" }
         : { icon: "⚔️", kind: r.dark ? "dark" : "epic", title: `ระลอก ${st.riftWave}/${st.riftWaves}`, text: `เหลือมอนสเตอร์ ${st.monsters?.size ?? 0} ตัว` });
-      list.push({ icon: "⏳", kind: "night", title: "พอร์ทัลปิดใน " + this.clock(st.riftEnds - Date.now()), text: "หมดเวลาแล้วจะถูกส่งกลับออกไป" });
+      list.push({ icon: "⏳", kind: "night", title: (r.dungeon ? "ดันเจี้ยนปิดใน " : "พอร์ทัลปิดใน ") + this.clock(st.riftEnds - Date.now()), text: r.dungeon ? "ปราบทีละห้อง ประตูถัดไปจะเปิดเอง" : "หมดเวลาแล้วจะถูกส่งกลับออกไป" });
       if (r.dark) list.push({ icon: "☠", kind: "dark", title: "พอร์ทัลดำ", text: "ผู้เล่นนอกปาร์ตี้ตีกันได้ ตายแล้วของตกหมด" });
     } else
       st.portals?.forEach((p: any) => {
         const me = this.me;
+        if (p.dungeon) return;
         const far = me ? Math.round(Math.hypot(p.x - me.x, p.y - me.y)) : 0;
         list.push({ icon: p.dark ? "☠" : "🌀", kind: p.dark ? "dark" : ["sun", "rare", "epic", "boss"][p.rarity], title: riftName(p), text: `อีก ${far} ช่อง · ปิดใน ${this.clock(p.until - Date.now())} · ${p.inside}/${PORTAL_MAX} คน` });
       });
@@ -779,12 +799,12 @@ export class WorldScene extends Phaser.Scene {
     const at = place(p.x, p.y);
     const color = p.dark ? 0x3a1c4a : RARITY_COLORS[p.rarity];
     const glow = this.add.image(0, -30, "sparkle").setTint(p.dark ? 0xff3a6a : color).setScale(5).setAlpha(0.45).setBlendMode(Phaser.BlendModes.ADD);
-    const img = this.scenery(0, 0, "portal").setTint(p.dark ? 0x6a4a7a : color);
+    const img = this.scenery(0, 0, p.dungeon ? "gate" : "portal").setTint(p.dungeon ? 0xffffff : p.dark ? 0x6a4a7a : color);
     const label = this.add
       .text(0, -92, "", { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: p.dark ? "#ff9ab0" : "#ffffff", stroke: "#000", strokeThickness: 3, align: "center" })
       .setOrigin(0.5, 1);
     const box = this.add.container(at.x, at.y, [glow, img, label]).setDepth(at.depth);
-    const show = () => label.setText(`${riftName(p)}\n${p.inside}/${PORTAL_MAX} คน`);
+    const show = () => label.setText(p.dungeon ? `🗝️ ${riftName({ ...p, origin: this.map.id })}\nปาร์ตี้ละไม่เกิน 5 คน` : `${riftName(p)}\n${p.inside}/${PORTAL_MAX} คน`);
     show();
     getStateCallbacks(this.room)(p).listen("inside", show);
     this.tweens.add({ targets: glow, scale: 6, alpha: 0.25, duration: 900, yoyo: true, repeat: -1 });

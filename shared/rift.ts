@@ -17,7 +17,19 @@ export interface RiftInfo {
   dark: boolean;
   /** where the portal stood, to come back to */
   at: { x: number; y: number };
+  /** a dungeon: rooms behind gates instead of an island */
+  dungeon?: boolean;
 }
+
+/** The fixed dungeon door in each open map. */
+export const DUNGEONS: Record<OpenZone, { at: { x: number; y: number }; name: string; minLevel: number }> = {
+  brindle: { at: { x: 20, y: 60 }, name: "ห้องใต้ดินกังหันลม", minLevel: 5 },
+  mossfen: { at: { x: 96, y: 22 }, name: "ถ้ำรากไม้เก่า", minLevel: 14 },
+};
+export const DUNGEON_MS = 20 * 60_000;
+/** centres of the rooms, west to east */
+export const DUNGEON_ROOMS = [8, 23, 38, 53];
+export const DUNGEON_Y = 11;
 
 /** Everyone who ever went in counts, party or not. */
 export const PORTAL_MAX = 7;
@@ -44,14 +56,21 @@ export function rollRarity(r: number): number {
   return RARITY_ODDS.length - 1;
 }
 
-export function riftName(info: Pick<RiftInfo, "rarity" | "dark">) {
+export function riftName(info: Pick<RiftInfo, "rarity" | "dark"> & { dungeon?: boolean; origin?: OpenZone }) {
+  if (info.dungeon) return `ดันเจี้ยน ${DUNGEONS[info.origin ?? "brindle"].name}`;
   return `${info.dark ? "พอร์ทัลดำ" : "พอร์ทัลหมอก"} (${RARITY_NAMES[info.rarity] ?? ""})`;
 }
 
 /** Waves of monsters for this rift. The last wave of an epic or better one has a boss. */
-export function riftWaves(info: Pick<RiftInfo, "origin" | "rarity" | "dark">) {
+export function riftWaves(info: Pick<RiftInfo, "origin" | "rarity" | "dark"> & { dungeon?: boolean }) {
   const kinds = info.origin === "mossfen" ? ["wolf", "wisp", "bear"] : ["rat", "scarecrow", "scarecrow"];
   const boss = info.origin === "mossfen" ? "treant" : "henqueen";
+  if (info.dungeon)
+    return DUNGEON_ROOMS.map((_, i) => {
+      const wave = [{ kind: kinds[Math.min(i, kinds.length - 1)], count: 4 + i, levelBonus: 4 }];
+      if (i === DUNGEON_ROOMS.length - 1) wave.push({ kind: boss, count: 1, levelBonus: 6 });
+      return wave;
+    });
   const n = 2 + info.rarity;
   const bonus = [1, 3, 5, 8][info.rarity] + (info.dark ? 3 : 0);
   const waves: { kind: string; count: number; levelBonus: number }[][] = [];
@@ -84,8 +103,62 @@ export function riftRewards(info: Pick<RiftInfo, "origin" | "rarity" | "dark">, 
 
 export const RIFT_SIZE = 40;
 
+/** A dungeon: four rooms in a row, each gate opens when its room is clear. */
+export function buildDungeon(info: RiftInfo): GameMap {
+  const W = 62;
+  const H = 22;
+  const rand = rng(info.seed);
+  const floor = Tile.Path;
+  const map: GameMap = {
+    id: "rift",
+    name: riftName(info),
+    pvp: false,
+    width: W,
+    height: H,
+    tiles: grid<Tile>(W, H, Tile.Void),
+    props: grid<Prop>(W, H, Prop.None),
+    level: grid(W, H, 0),
+    ramp: grid(W, H, 0),
+    regions: {},
+    closed: new Set(),
+    springs: [],
+    quiet: [],
+    spawn: { x: DUNGEON_ROOMS[0] - 3, y: DUNGEON_Y },
+    safe: { x: -100, y: -100, r: 0 },
+    exits: [{ x: DUNGEON_ROOMS[0] - 5, y: DUNGEON_Y, to: info.origin, at: info.at, label: "ทางออก" }],
+    rift: info,
+  };
+  const set = (x: number, y: number, t: Tile) => {
+    if (x > 0 && y > 0 && x < W - 1 && y < H - 1) map.tiles[y][x] = t;
+  };
+  // rooms
+  for (const cx of DUNGEON_ROOMS)
+    for (let y = DUNGEON_Y - 6; y <= DUNGEON_Y + 6; y++)
+      for (let x = cx - 6; x <= cx + 6; x++) if (Math.abs(x - cx) + Math.abs(y - DUNGEON_Y) * 0.8 <= 8.5) set(x, y, rand() < 0.1 ? Tile.Sand : floor);
+  // corridors with a gate in the middle of each
+  for (let i = 0; i < DUNGEON_ROOMS.length - 1; i++) {
+    const gate: number[] = [];
+    for (let x = DUNGEON_ROOMS[i] + 5; x <= DUNGEON_ROOMS[i + 1] - 5; x++)
+      for (let y = DUNGEON_Y - 1; y <= DUNGEON_Y + 1; y++) {
+        set(x, y, floor);
+        if (x === Math.round((DUNGEON_ROOMS[i] + DUNGEON_ROOMS[i + 1]) / 2)) gate.push(y * W + x);
+      }
+    map.regions[`gate${i}`] = gate;
+  }
+  // pillars of old stone in the rooms
+  for (const cx of DUNGEON_ROOMS.slice(0, -1))
+    for (const [dx, dy] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) map.props[DUNGEON_Y + dy][cx + dx] = Prop.Ruin;
+  // the last room: a raised dais with the chest
+  const last = DUNGEON_ROOMS[DUNGEON_ROOMS.length - 1];
+  mesa(map, last + 1, DUNGEON_Y, 3, 3, "w");
+  map.props[DUNGEON_Y][last + 2] = Prop.Treasure;
+  for (const id of Object.keys(map.regions)) for (const k of map.regions[id]) map.closed.add(k);
+  return map;
+}
+
 /** The island inside: a round clearing, a hill, a chest in the middle. */
 export function buildRift(info: RiftInfo): GameMap {
+  if (info.dungeon) return buildDungeon(info);
   const S = RIFT_SIZE;
   const rand = rng(info.seed);
   const c = S / 2;

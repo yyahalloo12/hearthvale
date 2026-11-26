@@ -152,3 +152,44 @@ test("a portal lets seven people in, whoever they are", async () => {
   await until(() => first.notices.some((n) => n.includes("เต็ม")), 2000, "full notice");
   await first.r.leave();
 });
+
+test("a dungeon: rooms open one by one, the party shares one run", async () => {
+  const { buildDungeon, DUNGEON_ROOMS } = await import("../../shared/rift");
+  // every room and the chest can be reached once the gates are open
+  const m = buildDungeon({ seed: 3, origin: "brindle", rarity: 2, dark: false, at: { x: 1, y: 1 }, dungeon: true });
+  const shut = reachableFrom(m, m.spawn);
+  assert.ok(!shut.has(11 * m.width + DUNGEON_ROOMS[1]), "second room is behind a gate");
+  m.closed.clear();
+  const open = reachableFrom(m, m.spawn);
+  for (const x of DUNGEON_ROOMS) assert.ok(open.has(11 * m.width + x), `room at ${x}`);
+
+  const a = await enter("DunA");
+  const w = a.w;
+  const door = w.state.portals.get("dungeon")!;
+  assert.ok(door?.dungeon);
+  const pa = w.state.players.get(a.r.sessionId)!;
+  pa.level = 20;
+  pa.x = door.x;
+  pa.y = door.y + 1;
+  a.r.send(Msg.EnterRift, { id: "dungeon" });
+  await until(() => a.travel.length > 0, 4000, "travel");
+  const t = a.travel[0];
+  assert.ok(t.rift?.dungeon);
+  await a.r.leave();
+  const inside = await join(a.client, await a.client.joinById<any>(t.roomId!, { ticket: t.ticket }));
+  const d = inside.w;
+  assert.equal(d.state.closed.size, DUNGEON_ROOMS.length - 1, "all gates shut");
+  const me = d.state.players.get(inside.r.sessionId)!;
+  for (let i = 0; i < DUNGEON_ROOMS.length; i++) {
+    (d as any).nextWaveAt = 0;
+    await until(() => d.state.riftWave === i + 1 && d.state.monsters.size > 0, 3000, `room ${i + 1}`);
+    assert.equal(d.state.closed.size, DUNGEON_ROOMS.length - 1 - i, "gates open as rooms are cleared");
+    for (const mid of [...d.state.monsters.keys()]) {
+      d.state.monsters.get(mid)!.hp = 1;
+      (d as any).playerHitsMonster(inside.r.sessionId, me, d.ctl.get(inside.r.sessionId)!, mid, 1);
+    }
+  }
+  (d as any).nextWaveAt = 0;
+  await until(() => d.state.riftCleared, 3000, "cleared");
+  await inside.r.leave();
+});

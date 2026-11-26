@@ -90,6 +90,8 @@ export class Portal extends Schema {
   @type("float64") until = 0;
   /** how many have gone in (max 7) */
   @type("uint8") inside = 0;
+  /** a dungeon door: always there, one island per party */
+  @type("boolean") dungeon = false;
 }
 
 export class WorldState extends Schema {
