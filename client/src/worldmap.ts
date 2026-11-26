@@ -28,7 +28,7 @@ let fitted = { k: 1, ox: 0, oy: 0 };
 function setMode(world: boolean) {
   continent = world;
   $("worldmap").classList.toggle("continent", world);
-  const hint = document.getElementById("wm-hint");
+  const hint = document.querySelector<HTMLElement>(".wm-hint");
   if (hint) hint.hidden = world;
   $("wm-world").classList.toggle("on", world);
   $("wm-here").classList.toggle("on", !world);
