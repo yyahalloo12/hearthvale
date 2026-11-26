@@ -74,6 +74,46 @@ export interface GameMap {
   closed: Set<number>;
   /** round pools that wash corruption away (Hollow) */
   springs: { x: number; y: number; r: number }[];
+  /** quiet places for gathering: monsters never come in or chase anyone inside */
+  quiet: QuietZone[];
+}
+
+export interface QuietZone {
+  x: number;
+  y: number;
+  r: number;
+  name: string;
+}
+
+/** No monster comes here: the village and the quiet gathering places. */
+export function isCalm(map: GameMap, x: number, y: number) {
+  return isSafe(map, x, y) || map.quiet.some((q) => Math.hypot(x - q.x, y - q.y) < q.r);
+}
+
+/**
+ * More rocks and bushes in a quiet place, each with free ground all around so
+ * nothing gets walled in.
+ */
+export function sprinkle(map: GameMap, q: QuietZone, rand: () => number, chance: number, inner = 0) {
+  for (let y = Math.floor(q.y - q.r); y <= q.y + q.r; y++)
+    for (let x = Math.floor(q.x - q.r); x <= q.x + q.r; x++) {
+      const d = Math.hypot(x - q.x, y - q.y);
+      if (d >= q.r - 1 || d < inner || x < 2 || y < 2 || x > map.width - 3 || y > map.height - 3) continue;
+      const t = map.tiles[y][x];
+      if (t !== Tile.Grass && t !== Tile.Flowers && t !== Tile.Moss && t !== Tile.Fern) continue;
+      if (map.ramp[y][x] || nearRamp(map, x, y)) continue;
+      let free = true;
+      for (let dy = -1; dy <= 1 && free; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const tt = map.tiles[y + dy][x + dx];
+          if (map.props[y + dy][x + dx] !== Prop.None || tt === Tile.Path || tt === Tile.Plaza || tt === Tile.Water || tt === Tile.Bridge || map.level[y + dy][x + dx] !== map.level[y][x]) {
+            free = false;
+            break;
+          }
+        }
+      if (!free || rand() >= chance) continue;
+      map.props[y][x] = rand() < 0.5 ? Prop.Rock : Prop.Bush;
+    }
 }
 
 import { grid, mesa, river, road } from "./terrain";
@@ -109,6 +149,7 @@ export function buildBrindleVillage(): GameMap {
     regions: {},
     closed: new Set(),
     springs: [],
+    quiet: [{ x: 24.5, y: 24.5, r: 24, name: "ชานหมู่บ้าน" }],
     exits: [{ x: 80, y: 24, to: "mossfen", at: { x: 5, y: 44 }, label: "ป่ามอสเฟน (Lv 10+)" }],
   };
   for (let y = 0; y < SIZE; y++)
@@ -156,6 +197,8 @@ export function buildBrindleVillage(): GameMap {
       else if (rand() < 0.022) map.props[y][x] = Prop.Rock;
       else if (rand() < 0.022) map.props[y][x] = Prop.Bush;
     }
+  // the village outskirts are for gathering: a few more rocks and herbs
+  sprinkle(map, map.quiet[0], rng(4242), 0.05, 13);
   return map;
 }
 
@@ -248,7 +291,7 @@ function buildOldVillage() {
   props[5][24] = Prop.Portal;
 
   // Roads stay open to the map edge except the outermost tree ring.
-  return { id: "brindle" as const, name: "Brindle Village", pvp: false, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 10 } };
+  return { id: "brindle" as const, name: "Brindle Village", pvp: false, tiles, props, spawn: { x: cx + 2, y: cy + 2 }, safe: { x: cx + 0.5, y: cy + 0.5, r: 14 } };
 }
 
 /** The "main" prop tile of a 2x2 building (house, windmill) is its top-left tile. */

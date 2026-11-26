@@ -1,16 +1,14 @@
 [
-  {"kind": "hen", "x": 10, "y": 10, "radius": 5, "count": 6, "respawnMs": 8000},
-  {"kind": "hen", "x": 22, "y": 8, "radius": 4, "count": 4, "respawnMs": 8000},
-  {"kind": "hen", "x": 50, "y": 10, "radius": 5, "count": 5, "respawnMs": 8000},
-  {"kind": "hen", "x": 14, "y": 52, "radius": 5, "count": 5, "respawnMs": 8000},
-  {"kind": "rat", "x": 36, "y": 38, "radius": 6, "count": 6, "respawnMs": 12000},
-  {"kind": "rat", "x": 41, "y": 22, "radius": 4, "count": 4, "respawnMs": 12000},
-  {"kind": "rat", "x": 50, "y": 34, "radius": 6, "count": 6, "respawnMs": 12000},
+  {"kind": "hen", "x": 58, "y": 10, "radius": 5, "count": 6, "respawnMs": 8000},
+  {"kind": "hen", "x": 8, "y": 62, "radius": 5, "count": 5, "respawnMs": 8000},
+  {"kind": "hen", "x": 64, "y": 32, "radius": 4, "count": 5, "respawnMs": 8000},
+  {"kind": "rat", "x": 72, "y": 30, "radius": 6, "count": 6, "respawnMs": 12000},
+  {"kind": "rat", "x": 66, "y": 44, "radius": 5, "count": 5, "respawnMs": 12000},
   {"kind": "rat", "x": 34, "y": 76, "radius": 5, "count": 5, "respawnMs": 12000},
-  {"kind": "rat", "x": 72, "y": 32, "radius": 6, "count": 6, "respawnMs": 12000},
-  {"kind": "scarecrow", "x": 26, "y": 41, "radius": 4, "count": 6, "respawnMs": 20000},
+  {"kind": "rat", "x": 50, "y": 64, "radius": 5, "count": 5, "respawnMs": 12000},
   {"kind": "scarecrow", "x": 52, "y": 52, "radius": 5, "count": 6, "respawnMs": 20000},
-  {"kind": "scarecrow", "x": 72, "y": 52, "radius": 6, "count": 7, "respawnMs": 20000},
+  {"kind": "scarecrow", "x": 72, "y": 54, "radius": 6, "count": 7, "respawnMs": 20000},
   {"kind": "scarecrow", "x": 12, "y": 76, "radius": 4, "count": 5, "respawnMs": 20000},
-  {"kind": "henqueen", "x": 10, "y": 38, "radius": 2, "count": 1, "respawnMs": 300000}
+  {"kind": "scarecrow", "x": 62, "y": 76, "radius": 4, "count": 5, "respawnMs": 20000},
+  {"kind": "henqueen", "x": 40, "y": 64, "radius": 2, "count": 1, "respawnMs": 300000}
 ]

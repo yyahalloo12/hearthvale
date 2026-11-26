@@ -1,4 +1,4 @@
-import { GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
+import { GameMap, isCalm, isWalkable, ZoneId } from "../../../shared/map";
 import { findPath, Point } from "../../../shared/pathfinding";
 import { inReach } from "../../../shared/terrain";
 import { ATTACK_RANGE, MonsterDef, MONSTERS, monsterStats } from "../../../shared/stats";
@@ -74,7 +74,8 @@ export class MonsterSystem {
   private spawnOne(spawn: SpawnDef) {
     const def = MONSTERS[spawn.kind];
     if (!def) throw new Error(`unknown monster kind ${spawn.kind}`);
-    const at = this.randomTileNear(spawn, spawn.radius);
+    // a game master may call monsters into the village; normal ones stay out
+    const at = this.randomTileNear(spawn, spawn.radius, !Number.isFinite(spawn.respawnMs));
     if (!at) return;
     const level = def.level[0] + Math.floor(Math.random() * (def.level[1] - def.level[0] + 1));
     const st = monsterStats(def, level);
@@ -137,11 +138,11 @@ export class MonsterSystem {
     if (c && Number.isFinite(c.spawn.respawnMs)) this.respawns.push({ at: this.host.now() + c.spawn.respawnMs, spawn: c.spawn });
   }
 
-  private randomTileNear(c: { x: number; y: number }, r: number): Point | null {
+  private randomTileNear(c: { x: number; y: number }, r: number, calmToo = false): Point | null {
     for (let i = 0; i < 40; i++) {
       const x = Math.round(c.x + (Math.random() * 2 - 1) * r);
       const y = Math.round(c.y + (Math.random() * 2 - 1) * r);
-      if (isWalkable(this.host.map, x, y) && this.host.reach.has(y * this.host.map.width + x)) return { x, y };
+      if (isWalkable(this.host.map, x, y) && this.host.reach.has(y * this.host.map.width + x) && (calmToo || !isCalm(this.host.map, x, y))) return { x, y };
     }
     return null;
   }
@@ -268,7 +269,7 @@ export class MonsterSystem {
 
       if (c.state === "chase") {
         const p = c.targetId ? this.host.playerAt(c.targetId) : undefined;
-        if (!p || p.dead || dist(m, c.home) > c.def.leash || isSafe(this.host.map, p.x, p.y)) {
+        if (!p || p.dead || dist(m, c.home) > c.def.leash || isCalm(this.host.map, p.x, p.y)) {
           this.goHome(c);
         } else {
           const d = dist(m, p);

@@ -5,7 +5,7 @@ import { findStation, ITEMS, STATION_RANGE } from "../../../shared/items";
 import { darkness, isNight, untilChange } from "../../../shared/daylight";
 import { setRegion } from "../../../shared/terrain";
 import { BoardData, STALL_RANGE, StallData } from "../../../shared/market";
-import { GameMap, isWalkable, ZoneId } from "../../../shared/map";
+import { GameMap, isCalm, isWalkable, ZoneId } from "../../../shared/map";
 import { buildZone, ZONE_NAMES } from "../../../shared/zones";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
 import { ENEMY_SKILLS, Job, SKILLS } from "../../../shared/stats";
@@ -79,6 +79,7 @@ export class WorldScene extends Phaser.Scene {
       (key) => !!st.lit?.has(key),
     );
     this.drawExits();
+    this.drawQuiet();
     document.getElementById("mist")!.hidden = this.zone !== "mossfen";
     this.veils = [];
     this.gone.clear();
@@ -133,6 +134,35 @@ export class WorldScene extends Phaser.Scene {
   /** A scenery frame with its foot on this point (the atlas knows where that is). */
   private scenery(x: number, y: number, frame: string) {
     return this.add.image(x, y, "scenery", frame).setScale(SCENERY_SCALE);
+  }
+
+  /** A dotted ring on the ground around each quiet place, with its name. */
+  private drawQuiet() {
+    for (const q of this.map.quiet) {
+      const g = this.add.graphics().setDepth(-9000);
+      const n = Math.round(q.r * 9);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const x = q.x + Math.cos(a) * q.r;
+        const y = q.y + Math.sin(a) * q.r;
+        if (x < 1 || y < 1 || x > this.map.width - 2 || y > this.map.height - 2) continue;
+        const p = place(x, y);
+        g.fillStyle(0x2d5a1e, 0.45);
+        g.fillEllipse(p.x, p.y + 2, 20, 10);
+        g.fillStyle(0xfdfff0, 0.95);
+        g.fillEllipse(p.x, p.y, 16, 8);
+      }
+      for (const a of [Math.PI * 0.25, Math.PI * 1.25]) {
+        const x = q.x + Math.cos(a) * q.r;
+        const y = q.y + Math.sin(a) * q.r;
+        if (x < 2 || y < 2 || x > this.map.width - 3 || y > this.map.height - 3) continue;
+        const p = place(x, y);
+        this.add
+          .text(p.x, p.y - 8, `🌿 ${q.name}`, { fontFamily: "Tahoma, sans-serif", fontSize: "12px", color: "#eaffd8", stroke: "#1f3a14", strokeThickness: 3 })
+          .setOrigin(0.5, 1)
+          .setDepth(-8999);
+      }
+    }
   }
 
   private drawExits() {
@@ -216,6 +246,10 @@ export class WorldScene extends Phaser.Scene {
     const st = this.room.state as any;
     const list: MapEvent[] = [];
     const me = this.me;
+    if (me && isCalm(this.map, me.x, me.y)) {
+      const q = this.map.quiet.find((z) => Math.hypot(me.x - z.x, me.y - z.y) < z.r);
+      list.push({ icon: "🌿", kind: "sun", title: q ? q.name : "หมู่บ้าน", text: "ที่สงบ: มอนสเตอร์ไม่เข้ามาและเลิกไล่ เก็บของได้สบาย" });
+    } else if (this.map.quiet.length) list.push({ icon: "🌿", kind: "rare", title: "ที่สงบสำหรับเก็บของ", text: `${this.map.quiet.map((q) => q.name).join(", ")} (วงจุดขาวบนพื้นและแผนที่)` });
     if (this.map.id === "brindle") {
       list.push(isNight() ? { icon: "🌙", kind: "night", title: "กลางคืน: หุ่นไล่กาให้ ×1.5", text: `EXP และเหรียญเพิ่ม · เช้าใน ${this.clock(untilChange())}` } : { icon: "☀️", kind: "sun", title: "กลางวัน", text: `ค่ำใน ${this.clock(untilChange())} แล้วหุ่นไล่กาจะให้ EXP ×1.5` });
       list.push({ icon: "🌬️", kind: "rare", title: "กังหันลมบนเนินใต้", text: me?.windy ? "ลมกำลังพัดส่งคุณ เดินเร็วขึ้น 20%" : "คลิกกังหันลม เดินเร็วขึ้น 20% นาน 3 นาที" });

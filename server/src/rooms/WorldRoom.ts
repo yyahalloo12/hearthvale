@@ -82,7 +82,7 @@ import {
   StallItem,
   wholeNumber,
 } from "../../../shared/market";
-import { GameMap, isSafe, isWalkable, ZoneId } from "../../../shared/map";
+import { GameMap, isCalm, isSafe, isWalkable, ZoneId } from "../../../shared/map";
 import { buildZone, ZONE_NAMES, zoneId } from "../../../shared/zones";
 import { isNight } from "../../../shared/daylight";
 import { GROVE, LANTERNS } from "../../../shared/mossfen";
@@ -1978,7 +1978,7 @@ export class WorldRoom extends Room<WorldState> {
     let bestD = range;
     this.state.players.forEach((p, id) => {
       const ct = this.ctl.get(id);
-      if (p.dead || !ct || ct.leaving || ct.shieldUntil > this.clock.currentTime || isSafe(this.map, p.x, p.y)) return;
+      if (p.dead || !ct || ct.leaving || ct.shieldUntil > this.clock.currentTime || isCalm(this.map, p.x, p.y)) return;
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= bestD) {
         bestD = d;

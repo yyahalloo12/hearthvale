@@ -90,6 +90,16 @@ export function drawMinimap(state: any, myId: string) {
     g.fillStyle = color;
     for (const k of current!.regions[id] ?? []) g.fillRect(k % current!.width, Math.floor(k / current!.width), 1, 1);
   };
+  // quiet places: no monsters
+  g.lineWidth = 1.6 / k;
+  g.setLineDash([3 / k, 2 / k]);
+  g.strokeStyle = "rgba(220, 255, 200, 0.95)";
+  for (const q of current.quiet) {
+    g.beginPath();
+    g.arc(q.x, q.y, q.r, 0, Math.PI * 2);
+    g.stroke();
+  }
+  g.setLineDash([]);
   if (state.cracking) tiles(state.cracking, "#ff4a4a");
   state.closed?.forEach((_v: boolean, id: string) => tiles(id, current!.pvp ? "#0d0b12" : "#e6f2ea"));
   for (const e of current.exits) dot(e, "#b8f0b0", 4);

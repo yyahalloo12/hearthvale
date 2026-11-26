@@ -1,5 +1,5 @@
 /** Mossfen Forest (GDD 5.2): levels 10-20, peaceful, west entrance from Brindle. */
-import { GameMap, nearRamp, Prop, rng, Tile } from "./map";
+import { GameMap, nearRamp, Prop, rng, sprinkle, Tile } from "./map";
 import { grid, mesa, oval, river, road, setRegion } from "./terrain";
 
 const BIG = 112;
@@ -27,6 +27,10 @@ export function buildMossfen(): GameMap {
     regions: {},
     closed: new Set(),
     springs: [],
+    quiet: [
+      { x: 12, y: 44, r: 12, name: "ทางเข้าป่า" },
+      { x: 60, y: 62, r: 9, name: "ลานไม้เงียบ" },
+    ],
     exits: [{ x: 2, y: old.door, to: "brindle", at: { x: 77, y: 24 }, label: "หมู่บ้านบรินเดิล" }],
   };
   for (let y = 0; y < BIG; y++)
@@ -88,6 +92,7 @@ export function buildMossfen(): GameMap {
     if (map.level[y][x] === 2 && !map.ramp[y][x] && !nearRamp(map, x, y)) map.props[y][x] = i % 2 ? Prop.Rock : Prop.Bush;
   }
   setRegion(map, "fog", true);
+  for (const [i, q] of map.quiet.entries()) sprinkle(map, q, rng(900 + i), 0.06);
   return map;
 }
 

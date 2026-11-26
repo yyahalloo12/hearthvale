@@ -70,6 +70,7 @@ export function buildHollow(): HollowMap {
     regions: {},
     closed: new Set(),
     springs: [],
+    quiet: [],
     gateSpots: [],
     entries: [],
   };

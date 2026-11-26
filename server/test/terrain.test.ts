@@ -39,7 +39,7 @@ const until = async (cond: () => boolean, ms = 4000, what = "") => {
 function flat(n: number): GameMap {
   return {
     id: "brindle", name: "t", pvp: false, width: n, height: n, tiles: grid<Tile>(n, n, Tile.Grass), props: grid<Prop>(n, n, Prop.None),
-    spawn: { x: 1, y: 1 }, safe: { x: -9, y: -9, r: 0 }, exits: [], level: grid(n, n, 0), ramp: grid(n, n, 0), regions: {}, closed: new Set(), springs: [],
+    spawn: { x: 1, y: 1 }, safe: { x: -9, y: -9, r: 0 }, exits: [], level: grid(n, n, 0), ramp: grid(n, n, 0), regions: {}, closed: new Set(), springs: [], quiet: [],
   };
 }
 
@@ -284,4 +284,35 @@ test("scarecrows pay more at night", async () => {
     Date.now = real;
   }
   await s.r.leave();
+});
+
+test("monsters live away from the village and the quiet gathering places", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { buildZone } = await import("../../shared/zones");
+  const { isCalm, isWalkable } = await import("../../shared/map");
+  const { reachableFrom } = await import("../../shared/terrain");
+  for (const [z, f] of [["brindle", "spawns"], ["mossfen", "spawns_mossfen"], ["hollow", "spawns_hollow"]] as const) {
+    const m = buildZone(z);
+    const reach = reachableFrom(m, m.spawn);
+    const zones = [...m.quiet, ...(m.safe.r ? [m.safe] : [])];
+    for (const s of JSON.parse(readFileSync(new URL(`../../shared/data/${f}.json`, import.meta.url), "utf8"))) {
+      for (const q of zones) assert.ok(Math.hypot(s.x - q.x, s.y - q.y) >= q.r + s.radius + 4, `${z} ${s.kind} at ${s.x},${s.y} is too close to a quiet place`);
+      let free = 0;
+      for (let y = s.y - s.radius; y <= s.y + s.radius; y++)
+        for (let x = s.x - s.radius; x <= s.x + s.radius; x++) if (isWalkable(m, x, y) && reach.has(y * m.width + x) && !isCalm(m, x, y)) free++;
+      assert.ok(free >= s.count * 2, `${z} ${s.kind} at ${s.x},${s.y} has no room`);
+    }
+    // every quiet place can be reached and has things to gather
+    for (const q of m.quiet) {
+      let res = 0;
+      let open = 0;
+      for (let y = Math.floor(q.y - q.r); y <= q.y + q.r; y++)
+        for (let x = Math.floor(q.x - q.r); x <= q.x + q.r; x++) {
+          if (Math.hypot(x - q.x, y - q.y) >= q.r) continue;
+          if (m.props[y]?.[x] === Prop.Rock || m.props[y]?.[x] === Prop.Bush) res++;
+          if (reach.has(y * m.width + x)) open++;
+        }
+      assert.ok(res >= 15 && open > 100, `${z} ${q.name}: ${res} rocks/bushes, ${open} open tiles`);
+    }
+  }
 });
