@@ -241,7 +241,8 @@ function refresh() {
   const badge = $("tree-badge");
   badge.hidden = !state.ready || left <= 0;
   badge.textContent = String(left);
-  $("hud-gold").textContent = state.ready ? `${state.gold.toLocaleString("th-TH")} เหรียญ` : "";
+  $("hud-gold").textContent = state.ready ? `🪙 ${state.gold.toLocaleString("th-TH")}` : "";
+  $("hud-gold").title = "เหรียญ";
   if ($("tree").hidden || !built) return;
 
   const roots = new Set(rootsFor(state.job));

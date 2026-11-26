@@ -27,25 +27,39 @@
       </form>
     </div>
 
-    <div id="hud" class="panel" hidden>
-      <div class="hud-top">
-        <span id="hud-name"></span>
-        <span id="hud-level"></span>
+    <div id="hud" hidden>
+      <div id="plate" class="frame">
+        <div id="portrait"><img id="portrait-img" alt="" /></div>
+        <div id="hud-level" title="เลเวล"></div>
+        <div class="info">
+          <div class="name"><span id="hud-name"></span><small id="hud-job"></small></div>
+          <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
+          <div class="bar mp" id="mp-bar" hidden><div id="mp-fill"></div><span id="mp-text"></span></div>
+          <div class="bar exp" title="EXP"><div id="exp-fill"></div><span id="exp-text"></span></div>
+        </div>
       </div>
-      <div id="hud-job"></div>
-      <div class="bar hp"><div id="hp-fill"></div><span id="hp-text"></span></div>
-      <div class="bar mp" id="mp-bar" hidden><div id="mp-fill"></div><span id="mp-text"></span></div>
-      <div class="bar exp"><div id="exp-fill"></div><span id="exp-text"></span></div>
-      <div id="hud-gold"></div>
-      <div id="corruption-row" hidden>
+      <div id="buffs"></div>
+      <div id="corruption-row" class="frame" hidden>
         <div class="bar corrupt"><div id="corruption-fill"></div><span id="corruption-text"></span></div>
         <div id="gate-timer"></div>
       </div>
-      <div id="daytime"></div>
-      <div id="hud-meta"><span id="map-name"></span> · <span id="online"></span></div>
     </div>
 
-    <canvas id="minimap" width="170" height="170" hidden aria-label="แผนที่ย่อ"></canvas>
+    <div id="target" class="frame" hidden>
+      <div class="nm"><span id="target-name"></span> <small id="target-sub"></small></div>
+      <div class="bar hp"><div id="target-fill"></div><span id="target-text"></span></div>
+    </div>
+
+    <div id="mapbox" hidden>
+      <div id="minimap-ring"><canvas id="minimap" width="176" height="176" aria-label="แผนที่ย่อ"></canvas><span class="compass">N</span></div>
+      <div id="zone-banner"><span id="map-name"></span></div>
+      <div id="chips"><span class="chip" id="daytime" hidden></span><span class="chip" id="hud-gold"></span><span class="chip" id="online"></span></div>
+    </div>
+
+    <div id="events" class="parch" hidden>
+      <h3>📜 ในแผนที่นี้</h3>
+      <div id="event-list"></div>
+    </div>
 
     <div id="enter-hollow" hidden>
       <div class="panel death-box">
@@ -57,7 +71,6 @@
       </div>
     </div>
 
-    <button id="tree-open" hidden>ต้นไม้พาสซีฟ (P)<span id="tree-badge" hidden></span></button>
 
     <div id="tree" class="panel" role="dialog" aria-label="ต้นไม้พาสซีฟ" hidden>
       <div class="tree-head">
@@ -82,7 +95,6 @@
       </div>
     </div>
 
-    <button id="bag-open" hidden>กระเป๋า (I)</button>
 
     <div id="station" class="panel" role="dialog" aria-label="ร้านและคลัง" hidden>
       <div class="win-head"><h2 id="station-title"></h2><button id="station-close" aria-label="ปิด">✕</button></div>
@@ -121,7 +133,16 @@
     <div id="skillbar" hidden>
       <div id="job-change" hidden></div>
       <div id="skill-points"></div>
-      <div id="skills"></div>
+      <div id="bar-row">
+        <div id="action-bar" class="frame">
+          <div id="skills"></div>
+          <div class="bar exp" id="bar-exp"><div id="bar-exp-fill"></div></div>
+        </div>
+        <div id="menu">
+          <button id="bag-open" class="mbtn" hidden title="กระเป๋า (I)">🎒<b>กระเป๋า I</b></button>
+          <button id="tree-open" class="mbtn" hidden title="ต้นไม้พาสซีฟ (P)">🌳<span id="tree-badge" hidden></span><b>พาสซีฟ P</b></button>
+        </div>
+      </div>
     </div>
 
     <div id="death" hidden>
@@ -132,7 +153,12 @@
       </div>
     </div>
 
-    <div id="chat" hidden>
+    <div id="chat" class="parch" hidden>
+      <div id="chat-tabs" role="tablist">
+        <button type="button" data-tab="all" aria-pressed="true">ทั้งหมด</button>
+        <button type="button" data-tab="talk" aria-pressed="false">แชท</button>
+        <button type="button" data-tab="sys" aria-pressed="false">ระบบ</button>
+      </div>
       <div id="chat-log" aria-live="polite"></div>
       <form id="chat-form" autocomplete="off">
         <input id="chat-input" maxlength="120" placeholder="กด Enter เพื่อพิมพ์" />

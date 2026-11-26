@@ -10,7 +10,9 @@ import { buildZone, ZONE_NAMES } from "../../../shared/zones";
 import { ChatLine, CooldownEvent, GatheringEvent, HitEvent, LootEvent, Msg, OpenStationEvent, PrivateData, TravelEvent } from "../../../shared/protocol";
 import { ENEMY_SKILLS, Job, SKILLS } from "../../../shared/stats";
 import { addChatLine } from "../chat";
-import { askEnterHollow, initHud, setCorruption, setDaytime, setOnline, setZone, skillForKey, startCooldown, updateMe } from "../hud";
+import { askEnterHollow, initHud, MapEvent, setCorruption, setDaytime, setEvents, setOnline, setPortrait, setTargetInfo, setZone, skillForKey, startCooldown, updateMe } from "../hud";
+import { MONSTERS } from "../../../shared/stats";
+import { CRACK_WARN_MS } from "../../../shared/hollow";
 import { closeStation, initInventory, openStation, openStationKind, setInventory, setItemLevel, showGathering } from "../inventory";
 import { place, setIsoMap, toTile } from "../iso";
 import { FALLEN, Land } from "../land";
@@ -204,20 +206,65 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /** Dusk, night and dawn outside the Hollow, with fireflies. */
+  private clock(ms: number) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
+  /** What is going on in this map, for the board on the right. */
+  private showEvents() {
+    const st = this.room.state as any;
+    const list: MapEvent[] = [];
+    const me = this.me;
+    if (this.map.id === "brindle") {
+      list.push(isNight() ? { icon: "🌙", kind: "night", title: "กลางคืน: หุ่นไล่กาให้ ×1.5", text: `EXP และเหรียญเพิ่ม · เช้าใน ${this.clock(untilChange())}` } : { icon: "☀️", kind: "sun", title: "กลางวัน", text: `ค่ำใน ${this.clock(untilChange())} แล้วหุ่นไล่กาจะให้ EXP ×1.5` });
+      list.push({ icon: "🌬️", kind: "rare", title: "กังหันลมบนเนินใต้", text: me?.windy ? "ลมกำลังพัดส่งคุณ เดินเร็วขึ้น 20%" : "คลิกกังหันลม เดินเร็วขึ้น 20% นาน 3 นาที" });
+    } else if (this.map.id === "mossfen") {
+      const lit = st.lit?.size ?? 0;
+      list.push(st.fogUntil ? { icon: "🏮", kind: "epic", title: "ลานสมบัติเปิดแล้ว!", text: `หมอกกลับมาใน ${this.clock(st.fogUntil - Date.now())} · เปิดหีบได้คนละครั้ง` } : { icon: "🏮", kind: "rare", title: `โคมหิน ${lit}/3`, text: "จุดให้ครบใน 90 วินาที หมอกจะเปิดทางขึ้นลานสมบัติ" });
+      list.push(isNight() ? { icon: "🌙", kind: "night", title: "กลางคืน", text: `เช้าใน ${this.clock(untilChange())}` } : { icon: "☀️", kind: "sun", title: "กลางวัน", text: `ค่ำใน ${this.clock(untilChange())}` });
+    } else if (this.map.pvp) {
+      if (st.cracking) list.push({ icon: "⚠️", kind: "dark", title: "พื้นกำลังจะถล่ม!", text: "ออกจากพื้นสีแดงก่อนจะตกลงไป (เสียเลือด 40%)" });
+      list.push({ icon: "🚪", kind: "boss", title: "ประตูทางออกสีทอง", text: `ย้ายที่ใน ${this.clock(st.gatesUntil - Date.now())}` });
+      list.push({ icon: "🌈", kind: "epic", title: "บ่อสี 3 แห่ง", text: "ล้างการกัดกร่อน แต่ทุกคนเห็นคุณบนแผนที่" });
+    }
+    void CRACK_WARN_MS;
+    setEvents(list);
+  }
+
+  /** The frame at the top: what you are fighting now. */
+  private showTarget() {
+    const id = this.targetId;
+    const st = this.room.state as any;
+    const m = id ? st.monsters?.get(id) : null;
+    if (m) return setTargetInfo({ name: MONSTERS[m.kind]?.name ?? m.kind, sub: `Lv ${m.level}`, hp: m.hp, maxHp: m.maxHp, enemy: true });
+    const p = id ? st.players?.get(id) : null;
+    if (p) return setTargetInfo({ name: p.name, sub: `Lv ${p.level}`, hp: p.hp, maxHp: p.maxHp, enemy: this.map.pvp });
+    setTargetInfo(null);
+  }
+
+  private portraitAt = 0;
+  /** A picture of our own character for the round frame, taken now and then. */
+  private takePortrait(time: number) {
+    const v = this.views.get(this.room.sessionId);
+    if (!v || time < this.portraitAt) return;
+    this.portraitAt = time + 4000;
+    const cam = this.cameras.main;
+    const x = Math.round((v.root.x - cam.worldView.x) * cam.zoom) - 48;
+    const y = Math.round((v.root.y - cam.worldView.y) * cam.zoom) - 78;
+    if (x < 0 || y < 0 || x + 96 > this.scale.width || y + 96 > this.scale.height) return;
+    this.game.renderer.snapshotArea(x, y, 96, 96, (img) => {
+      if (img instanceof HTMLImageElement) setPortrait(img.src);
+    });
+  }
+
   private showDaylight() {
     const dark = this.map.pvp ? 0 : darkness();
     document.getElementById("night")!.style.opacity = String(dark * 0.5);
+    this.showEvents();
+    this.showTarget();
     if (this.map.pvp) return setDaytime("");
-    const clock = (ms: number) => {
-      const s = Math.max(0, Math.round(ms / 1000));
-      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-    };
-    const fog = (this.room.state as any).fogUntil as number;
-    const lit = (this.room.state as any).lit?.size ?? 0;
-    setDaytime(
-      `${isNight() ? "🌙 กลางคืน" : "☀️ กลางวัน"} อีก ${clock(untilChange())}` +
-        (fog ? ` · 🏮 ลานสมบัติเปิดอีก ${clock(fog - Date.now())}` : lit ? ` · 🏮 โคม ${lit}/3` : ""),
-    );
+    setDaytime(`${isNight() ? "🌙" : "☀️"} ${this.clock(untilChange())}`);
     const want = dark > 0.5 ? 14 : 0;
     const view = this.cameras.main.worldView;
     while (this.fireflies.length < want) {
@@ -461,6 +508,16 @@ export class WorldScene extends Phaser.Scene {
       maxMp: p.maxMp,
       dead: p.dead,
       skills: new Map(p.skills.entries()),
+      buffs: [
+        p.shielded && { icon: "🔰", name: "เพิ่งมาถึง: ยังไม่โดนโจมตี" },
+        p.windy && { icon: "🌬️", name: "ลมจากกังหัน: เดินเร็วขึ้น 20%" },
+        p.guarding && { icon: "🛡️", name: "ตั้งการ์ด" },
+        p.blessed && { icon: "✨", name: "พรคุ้มกัน" },
+        p.manaShield && { icon: "🔮", name: "โล่มานา" },
+        p.inSpring && { icon: "🌈", name: "บ่อสี: ล้างการกัดกร่อน แต่ทุกคนเห็นคุณ" },
+        p.slowed && { icon: "🐌", name: "ถูกทำให้ช้า" },
+        p.marked && { icon: "🎯", name: "ถูกมาร์กจุดอ่อน" },
+      ].filter(Boolean) as { icon: string; name: string }[],
     });
   }
 
@@ -750,6 +807,7 @@ export class WorldScene extends Phaser.Scene {
     if (time - this.landTimer > 100) {
       this.landTimer = time;
       this.land.update(this.cameras.main.worldView, time);
+      this.takePortrait(time);
       this.showDaylight();
     }
     if (time - this.mapTimer > 200) {

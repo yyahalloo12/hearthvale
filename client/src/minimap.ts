@@ -49,7 +49,6 @@ export function setMinimap(map: GameMap) {
         g.fillRect(x, y, 1, 1);
       }
     }
-  canvas().hidden = false;
 }
 
 interface Dot {
@@ -65,12 +64,15 @@ export function drawMinimap(state: any, myId: string) {
   const S = c.width;
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.clearRect(0, 0, S, S);
-  // turned 45 degrees, like the world on screen
-  const k = S / (current.width * Math.SQRT2);
+  // turned 45 degrees, like the world on screen, and centred on you
+  const centre = state.players?.get(myId) ?? { x: current.width / 2, y: current.height / 2 };
+  const k = 2.6;
+  g.fillStyle = current.pvp ? "#211d2a" : current.id === "mossfen" ? "#1f4a36" : "#2c5a34";
+  g.fillRect(0, 0, S, S);
   g.translate(S / 2, S / 2);
   g.rotate(Math.PI / 4);
   g.scale(k, k);
-  g.translate(-current.width / 2, -current.height / 2);
+  g.translate(-centre.x, -centre.y);
   g.imageSmoothingEnabled = false;
   g.drawImage(base, 0, 0);
   const dot = (p: Dot, color: string, r: number) => {

@@ -12,6 +12,7 @@ export function addChatLine(line: ChatLine, kind?: "notice") {
     row.className = "sys";
     row.textContent = line.text;
   } else {
+    row.className = "talk";
     const who = document.createElement("span");
     who.className = "who";
     who.textContent = `${line.name}: `;

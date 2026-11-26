@@ -17,7 +17,26 @@ export interface MeView {
   maxMp: number;
   dead: boolean;
   skills: Map<string, number>;
+  /** effects on you now, as small pictures */
+  buffs: { icon: string; name: string }[];
 }
+
+/** One line on the board of what is going on in this map. */
+export interface MapEvent {
+  icon: string;
+  /** colour of the round gem: rare, epic, dark, boss, sun, night */
+  kind: string;
+  title: string;
+  text: string;
+}
+
+/** A picture for every skill on the action bar. */
+const SKILL_ICON: Record<string, string> = {
+  heavy_strike: "⚔️", guard: "🛡️", charge: "💥", taunt: "📣",
+  double_shot: "🏹", pierce_arrow: "➶", backstep: "💨", mark_weak: "🎯",
+  fireball: "🔥", ice_lance: "❄️", chain_lightning: "⚡", mana_shield: "🔮",
+  holy_light: "🌟", heal: "💚", blessing: "✨", revive: "🕊️",
+};
 
 export interface HudActions {
   useSkill(id: string): void;
@@ -36,6 +55,13 @@ export function initHud(a: HudActions) {
   $("hud").hidden = false;
   $("skillbar").hidden = false;
   $("chat").hidden = false;
+  $("mapbox").hidden = false;
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#chat-tabs button"))
+    b.onclick = () => {
+      for (const o of document.querySelectorAll<HTMLButtonElement>("#chat-tabs button")) o.setAttribute("aria-pressed", String(o === b));
+      $("chat-log").dataset.tab = b.dataset.tab;
+      $("chat-log").scrollTop = $("chat-log").scrollHeight;
+    };
   const jobs = $("job-change");
   jobs.replaceChildren(Object.assign(document.createElement("div"), { className: "job-title", textContent: "เลือกอาชีพ (เปลี่ยนทีหลังไม่ได้)" }));
   for (const { job, text } of JOB_CHOICES) {
@@ -63,7 +89,45 @@ export function setZone(name: string, hollow: boolean) {
 
 /** Sun or moon, and how long until it changes. */
 export function setDaytime(text: string) {
-  if ($("daytime").textContent !== text) $("daytime").textContent = text;
+  const el = $("daytime");
+  el.hidden = !text;
+  if (el.textContent !== text) el.textContent = text;
+}
+
+let lastEvents = "";
+/** The board of what is going on in this map (lanterns, night, falling ground...). */
+export function setEvents(list: MapEvent[]) {
+  const key = JSON.stringify(list);
+  if (key === lastEvents) return;
+  lastEvents = key;
+  $("events").hidden = !list.length;
+  $("event-list").replaceChildren(
+    ...list.map((e) => {
+      const row = document.createElement("div");
+      row.className = "ev";
+      const gem = Object.assign(document.createElement("div"), { className: `gem ${e.kind}`, textContent: e.icon });
+      const body = document.createElement("div");
+      body.append(Object.assign(document.createElement("b"), { textContent: e.title }), Object.assign(document.createElement("em"), { textContent: e.text }));
+      row.append(gem, body);
+      return row;
+    }),
+  );
+}
+
+/** The frame at the top that shows what you are fighting. */
+export function setTargetInfo(t: { name: string; sub: string; hp: number; maxHp: number; enemy: boolean } | null) {
+  $("target").hidden = !t;
+  if (!t) return;
+  $("target-name").textContent = t.name;
+  $("target-sub").textContent = t.sub;
+  $("target").classList.toggle("friend", !t.enemy);
+  $("target-fill").style.width = `${(Math.max(0, t.hp) / Math.max(1, t.maxHp)) * 100}%`;
+  $("target-text").textContent = `${Math.max(0, t.hp)} / ${t.maxHp}`;
+}
+
+/** A picture of your character for the round frame. */
+export function setPortrait(src: string) {
+  $<HTMLImageElement>("portrait-img").src = src;
 }
 
 export function setCorruption(value: number, gatesUntil: number) {
@@ -84,7 +148,8 @@ export function askEnterHollow(yes: () => void) {
 }
 
 export function setOnline(n: number) {
-  $("online").textContent = `ออนไลน์ ${n} คน`;
+  $("online").textContent = `👥 ${n}`;
+  $("online").title = `ออนไลน์ในแผนที่นี้ ${n} คน`;
 }
 
 export function startCooldown(skill: string, ms: number) {
@@ -104,7 +169,7 @@ function drawCooldowns() {
 
 export function updateMe(me: MeView) {
   $("hud-name").textContent = me.name;
-  $("hud-level").textContent = `Lv ${me.level}`;
+  $("hud-level").textContent = String(me.level);
   $("hud-job").textContent = JOB_NAMES[me.job as Job] ?? me.job;
   const hpPct = (Math.max(0, me.hp) / me.maxHp) * 100;
   $("hp-fill").style.width = `${hpPct}%`;
@@ -116,7 +181,14 @@ export function updateMe(me: MeView) {
   }
   const need = expToNext(me.level);
   $("exp-fill").style.width = me.level >= MAX_LEVEL ? "100%" : `${(me.exp / need) * 100}%`;
-  $("exp-text").textContent = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${me.exp} / ${need} (${((me.exp / need) * 100).toFixed(1)}%)`;
+  $("exp-text").textContent = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${((me.exp / need) * 100).toFixed(1)}%`;
+  document.querySelector<HTMLElement>("#plate .bar.exp")!.title = me.level >= MAX_LEVEL ? "เลเวลสูงสุด" : `EXP ${me.exp} / ${need}`;
+  $("bar-exp-fill").style.width = $("exp-fill").style.width;
+  const buffKey = me.buffs.map((b) => b.icon).join("");
+  if ($("buffs").dataset.key !== buffKey) {
+    $("buffs").dataset.key = buffKey;
+    $("buffs").replaceChildren(...me.buffs.map((b) => Object.assign(document.createElement("div"), { className: "buff", textContent: b.icon, title: b.name })));
+  }
 
   $("job-change").hidden = !(me.job === "wanderer" && me.level >= JOB_CHANGE_LEVEL);
 
@@ -163,7 +235,8 @@ function renderSkills(me: MeView, points: number) {
     key.className = "key";
     key.textContent = def.key;
     const name = document.createElement("div");
-    name.textContent = def.name;
+    name.className = "pic";
+    name.textContent = SKILL_ICON[id] ?? def.name.slice(0, 2);
     const lv = document.createElement("span");
     lv.className = "lv";
     lv.textContent = `${lvl}/${def.maxLevel}`;
