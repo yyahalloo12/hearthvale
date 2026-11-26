@@ -178,3 +178,50 @@ test("the party stays together across maps", async () => {
   await until(() => a.party.members.find((m) => m.name === "TripB")?.online === false, 3000, "offline");
   await a.r.leave();
 });
+
+test("border lands: the first to strike turns red, red names lose everything and cannot shop, guards hunt them", async () => {
+  const a = await inZone("RedA", "thornmarsh" as never, 30);
+  const b = await inZone("RedB", "thornmarsh" as never, 30);
+  const w = a.w;
+  const ca = w.ctl.get(a.r.sessionId)!;
+  const cb = w.ctl.get(b.r.sessionId)!;
+  const pa = w.state.players.get(a.r.sessionId)!;
+  const pb = w.state.players.get(b.r.sessionId)!;
+  for (const [p, c] of [[pa, ca], [pb, cb]] as const) {
+    c.shieldUntil = 0;
+    p.x = 30;
+    p.y = 46;
+  }
+  const targetOf = (w as any).targetOf.bind(w);
+  assert.ok(targetOf(a.r.sessionId, b.r.sessionId), "players are targets in the border lands");
+  // A hits B first: A is red, B is not
+  (w as any).playerHitsPlayer(a.r.sessionId, pa, ca, b.r.sessionId, 1);
+  assert.ok(ca.karma > 0 && pa.outlaw);
+  assert.equal(cb.karma, 0);
+  // B hits back: hitting a red name is free
+  (w as any).playerHitsPlayer(b.r.sessionId, pb, cb, a.r.sessionId, 1);
+  assert.equal(cb.karma, 0);
+  // a red name dies: everything drops
+  ca.inv.bag.push({ uid: "x1", id: "ore_1", qty: 5 });
+  pa.hp = 1;
+  (w as any).playerHitsPlayer(b.r.sessionId, pb, cb, a.r.sessionId, 5);
+  assert.ok(pa.dead);
+  assert.equal(ca.inv.bag.length, 0);
+  await Promise.all([a.r.leave(), b.r.leave()]);
+  // the red name cannot use the smith in the capital
+  const { nearestStation } = await import("../../shared/items");
+  const c = await inZone("RedC", "aldermere" as never, 30);
+  const cc = c.w.ctl.get(c.r.sessionId)!;
+  cc.karma = 100;
+  const pc = c.w.state.players.get(c.r.sessionId)!;
+  const anvil = nearestStation(c.w.map, "smith", 32, 32)!;
+  pc.x = anvil.x + 1;
+  pc.y = anvil.y;
+  const got = (c.w as any).nearStation(c.w.clients[0], "smith");
+  assert.equal(got, null);
+  // guards see red names even in the safe city
+  assert.equal((c.w as any).nearestPlayer(pc.x, pc.y, 5, true), c.r.sessionId);
+  cc.karma = 0;
+  assert.equal((c.w as any).nearestPlayer(pc.x, pc.y, 5, true), null);
+  await c.r.leave();
+});

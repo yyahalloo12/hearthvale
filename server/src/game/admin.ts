@@ -1,3 +1,4 @@
+import { zoneId } from "../../../shared/zones";
 import type { ZoneId } from "../../../shared/map";
 import { ITEMS, QUALITY_NAMES } from "../../../shared/items";
 import { Job, JOB_NAMES, jobId, MAX_LEVEL, MONSTERS } from "../../../shared/stats";
@@ -45,7 +46,7 @@ export const ADMIN_HELP = [
   "/level 20 · /exp 500 · /gold 1000 · /job archer · /smith 100 · /resettree",
   "/give ore_1 50 · /give sword_2 1 3 (เลขท้าย = คุณภาพ 0-3) · /items ค้นรหัสไอเทม",
   "/heal · /god (อมตะ) · /speed 3 · /kill @ชื่อ",
-  "/tp 24 24 · /goto @ชื่อ · /bring @ชื่อ · /village · /forest · /hollow",
+  "/tp 24 24 · /goto @ชื่อ · /bring @ชื่อ · /village · /forest · /hollow · /zone aldermere",
   "/spawn hen 3 · /monsters · /clear 10 (ลบมอนสเตอร์ในรัศมี)",
   "/portal 2 (พอร์ทัลระดับ 0-3 ข้างตัว) · /portal 1 dark (พอร์ทัลดำ)",
   "/event golden · /event swarm · /event boss (เริ่มอีเวนต์หรือปลุกบอสโลก)",
@@ -168,6 +169,11 @@ export function runAdminCommand(host: AdminHost, me: string, text: string): stri
       if (bad) return bad;
       const p = host.posOf(me);
       return [host.teleport(id, Math.round(p.x), Math.round(p.y)) ? `พา ${who} มาแล้ว` : "พามาไม่ได้"];
+    }
+    case "zone": {
+      const z = zoneId(args[0]);
+      if (z !== args[0]) return ["ใช้แบบนี้: /zone aldermere | copperhill | sunreach | thornmarsh | greywater | brindle | mossfen | hollow"];
+      return host.goZone(id, z) ? [] : [`${who} อยู่ที่นั่นแล้ว หรือล้มอยู่`];
     }
     case "hollow":
     case "forest":

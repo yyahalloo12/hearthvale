@@ -118,7 +118,17 @@ export interface TicketOptions {
 }
 
 /** Room name of each map. */
-export const ROOM_OF: Record<ZoneId, string> = { brindle: "world", mossfen: "mossfen", hollow: "hollow", rift: "rift" };
+export const ROOM_OF: Record<ZoneId, string> = {
+  brindle: "world",
+  mossfen: "mossfen",
+  hollow: "hollow",
+  rift: "rift",
+  aldermere: "aldermere",
+  copperhill: "copperhill",
+  sunreach: "sunreach",
+  thornmarsh: "thornmarsh",
+  greywater: "greywater",
+};
 /** Join error text when the character is in another map: this plus the zone id. */
 export const ZONE_ERROR = "ZONE:";
 

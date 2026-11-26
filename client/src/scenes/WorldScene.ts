@@ -1,7 +1,7 @@
 import { getStateCallbacks, Room } from "colyseus.js";
 import Phaser from "phaser";
 import { GLOW_AT } from "../../../shared/hollow";
-import { findStation, ITEMS, STATION_RANGE } from "../../../shared/items";
+import { findStation, ITEMS, nearestStation, STATION_RANGE } from "../../../shared/items";
 import { darkness, isNight, untilChange } from "../../../shared/daylight";
 import { setRegion } from "../../../shared/terrain";
 import { EventKind, EVENTS, WORLD_BOSS } from "../../../shared/events";
@@ -321,6 +321,7 @@ export class WorldScene extends Phaser.Scene {
       if (m) list.unshift({ icon: "👑", kind: "dark", title: `${MONSTERS[boss.kind].name} ตื่นแล้ว!`, text: `ที่${boss.place} (${boss.at.x}, ${boss.at.y}) · เลือด ${Math.ceil((m.hp / m.maxHp) * 100)}%` });
       else if (st.bossAt) list.push({ icon: "👑", kind: "night", title: MONSTERS[boss.kind].name, text: `จะตื่นที่${boss.place}ใน ${this.clock(st.bossAt - Date.now())}` });
     }
+    if (this.map.border) list.unshift({ icon: "⚔", kind: "dark", title: "ชายแดน: ผู้เล่นตีกันได้", text: "คนที่ลงมือก่อนจะชื่อแดง ตายแล้วของในกระเป๋าหล่น 25% (ชื่อแดงหล่นหมด)" });
     if (this.map.rift) {
       const r = this.map.rift;
       list.length = 0;
@@ -348,7 +349,7 @@ export class WorldScene extends Phaser.Scene {
     const m = id ? st.monsters?.get(id) : null;
     if (m) return setTargetInfo({ name: MONSTERS[m.kind]?.name ?? m.kind, sub: `Lv ${m.level}`, hp: m.hp, maxHp: m.maxHp, enemy: true });
     const p = id ? st.players?.get(id) : null;
-    if (p) return setTargetInfo({ name: p.name, sub: `Lv ${p.level}`, hp: p.hp, maxHp: p.maxHp, enemy: this.map.pvp });
+    if (p) return setTargetInfo({ name: p.name, sub: `Lv ${p.level}${p.outlaw ? " · ชื่อแดง" : ""}`, hp: p.hp, maxHp: p.maxHp, enemy: this.map.pvp || !!this.map.border });
     setTargetInfo(null);
   }
 
@@ -406,7 +407,7 @@ export class WorldScene extends Phaser.Scene {
       view.setDead(player.dead);
       view.setGear(player.weapon, player.helm);
       view.setEffects(player.blessed, player.manaShield, player.slowed, player.marked);
-      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
+      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm, player.outlaw);
       this.views.set(id, view);
       view.setFriend(partySessions().has(id));
       if (isMe) {
@@ -425,7 +426,7 @@ export class WorldScene extends Phaser.Scene {
         view.setGuarding(player.guarding);
         view.setGear(player.weapon, player.helm);
         view.setEffects(player.blessed, player.manaShield, player.slowed, player.marked);
-      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm);
+      view.setStatus(player.offline, player.shielded, player.corruption >= GLOW_AT, player.gm, player.outlaw);
         if (this.targetId === id && player.dead) this.setTarget(null);
         if (isMe) {
           if (!player.moving) this.marker.setVisible(false);
@@ -617,12 +618,12 @@ export class WorldScene extends Phaser.Scene {
     setItemLevel(p.level, p.job as Job);
     const mode = marketMode();
     if (mode === "board" || mode === "stall") {
-      const at = mode === "board" ? findStation(this.map, "board") : this.stalls.get(visitedStall() ?? "");
+      const at = mode === "board" ? nearestStation(this.map, "board", p.x, p.y) : this.stalls.get(visitedStall() ?? "");
       if (p.dead || !at || Math.hypot(p.x - at.x, p.y - at.y) > (mode === "board" ? STATION_RANGE : STALL_RANGE)) closeMarket();
     }
     const kind = openStationKind();
     if (kind) {
-      const at = findStation(this.map, kind);
+      const at = nearestStation(this.map, kind, p.x, p.y);
       if (p.dead || !at || Math.hypot(p.x - at.x, p.y - at.y) > STATION_RANGE) closeStation();
     }
     setCharacter(p.name, p.level, p.job);
@@ -644,6 +645,7 @@ export class WorldScene extends Phaser.Scene {
       buffs: [
         p.shielded && { icon: "🔰", name: "เพิ่งมาถึง: ยังไม่โดนโจมตี" },
         p.windy && { icon: "🌬️", name: "ลมจากกังหัน: เดินเร็วขึ้น 20%" },
+        p.outlaw && { icon: "😈", name: "ชื่อแดง: ใช้ร้านและคลังไม่ได้ ทหารเมืองหลวงไล่ตี ตายในชายแดนของตกหมด (หายเองเมื่อออนไลน์ไปสักพัก)" },
         p.frenzy && { icon: "🔥", name: "พลังพิเศษจากสกิล (ตีแรงขึ้น คริติคอล หรือหลบหลีก)" },
         p.guarding && { icon: "🛡️", name: "ตั้งการ์ด" },
         p.blessed && { icon: "✨", name: "พรคุ้มกัน" },
@@ -819,7 +821,7 @@ export class WorldScene extends Phaser.Scene {
   /** Another player under the pointer (only where players can fight). */
   private pickPlayer(wx: number, wy: number): string | null {
     // in peaceful maps only a healer can pick friends, so others can still walk past people
-    if (!this.map.pvp && this.me?.job !== "acolyte") return null;
+    if (!this.map.pvp && !this.map.border && this.me?.job !== "acolyte") return null;
     for (const [id, v] of this.views) {
       if (id === this.room.sessionId || (this.room.state as any).players.get(id)?.dead) continue;
       const c = v.center();
@@ -919,7 +921,7 @@ export class WorldScene extends Phaser.Scene {
       if (monsterId) {
         this.setTarget(monsterId);
         // choosing a friend to heal is not an attack
-        if (this.map.pvp || this.monsters.has(monsterId)) this.room.send(Msg.Attack, { id: monsterId });
+        if (this.map.pvp || this.map.border || this.monsters.has(monsterId)) this.room.send(Msg.Attack, { id: monsterId });
         this.marker.setVisible(false);
         return;
       }

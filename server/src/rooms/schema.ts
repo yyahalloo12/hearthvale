@@ -21,6 +21,8 @@ export class Player extends Schema {
   @type("int32") maxMp = 0;
   /** the windmill's blessing */
   @type("boolean") windy = false;
+  /** a red name: attacked someone in the border lands */
+  @type("boolean") outlaw = false;
   /** standing in a colour spring: everyone sees you */
   @type("boolean") inSpring = false;
   @type("boolean") blessed = false;

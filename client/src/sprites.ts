@@ -57,6 +57,33 @@ export const MONSTER_SHEETS: Record<string, MonsterSheet> = {
   treant: mon(296, 296, 3.7, 1.2, 0.82, 150, 56),
   threadknight: mon(176, 184, 2.95, 0.9, 0.76, 78, 32),
 };
+const like = (base: string, scale: number, tint: number, size = 1): MonsterSheet => ({
+  ...MONSTER_SHEETS[base],
+  scale: MONSTER_SHEETS[base].scale * scale,
+  height: Math.round(MONSTER_SHEETS[base].height * scale * size),
+  r: Math.round(MONSTER_SHEETS[base].r * scale),
+  tex: base,
+  tint,
+});
+Object.assign(MONSTER_SHEETS, {
+  stonebat: like("wisp", 0.9, 0x9a9a9a),
+  golem: like("threadknight", 1.05, 0xd88a4e),
+  dwarfbandit: like("hunter", 0.8, 0xc88a4a),
+  ironforeman: like("threadknight", 1.6, 0x9aa4b2),
+  crab: like("rat", 1.5, 0xff6a4a),
+  gullpirate: like("hen", 1.7, 0xdfe8ff),
+  siren: like("wisp", 1.2, 0x4ae0c8),
+  saltbeard: like("hunter", 1.6, 0x4a7ac8),
+  shadowwolf: like("wolf", 1.1, 0x5a4a78),
+  thornknight: like("threadknight", 1.05, 0x6aaa4a),
+  mtbandit: like("hunter", 1.0, 0xa86a3a),
+  blackrose: like("threadknight", 1.75, 0xc83a4a),
+  giantfrog: like("rat", 1.8, 0x7ac84a),
+  swampwitch: like("shadow", 1.1, 0x7aaa6a),
+  drowned: like("threadknight", 1.05, 0x7a9aaa),
+  rotqueen: like("shadow", 2.2, 0x8aaa3a),
+  guard: like("threadknight", 1.1, 0xffe08a),
+});
 MONSTER_SHEETS.scarecrowking = { ...MONSTER_SHEETS.scarecrow, scale: 1.75, height: 150, r: 48, tex: "scarecrow", tint: 0xffc08a };
 MONSTER_SHEETS.bearking = { ...MONSTER_SHEETS.bear, scale: 1.9, height: 150, r: 62, tex: "bear", tint: 0xffd36a };
 

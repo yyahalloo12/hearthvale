@@ -40,7 +40,7 @@ export enum Prop {
   Treasure = 14,
 }
 
-export type ZoneId = "brindle" | "mossfen" | "hollow" | "rift";
+export type ZoneId = "brindle" | "mossfen" | "hollow" | "rift" | "aldermere" | "copperhill" | "sunreach" | "thornmarsh" | "greywater";
 
 /** A spot that leads to another map when you walk onto it. */
 export interface MapExit {
@@ -78,12 +78,19 @@ export interface GameMap {
   quiet: QuietZone[];
   /** set inside a mist portal */
   rift?: import("./rift").RiftInfo;
+  /** colours and trees to draw with (the map's own id when left out) */
+  look?: "brindle" | "mossfen" | "hollow";
+  /** a border land: players may fight, and the first to strike turns red */
+  border?: boolean;
+  /** where you wake up after falling here (Brindle when left out) */
+  home?: ZoneId;
 }
 
 /** Which map's colours and trees to use. */
 export function lookOf(map: GameMap): "brindle" | "mossfen" | "hollow" {
+  if (map.look) return map.look;
   if (map.rift) return map.rift.dark ? "hollow" : map.rift.origin;
-  return map.id === "rift" ? "brindle" : map.id;
+  return map.id === "mossfen" || map.id === "hollow" ? map.id : "brindle";
 }
 
 export interface QuietZone {
@@ -158,7 +165,10 @@ export function buildBrindleVillage(): GameMap {
     closed: new Set(),
     springs: [],
     quiet: [{ x: 24.5, y: 24.5, r: 24, name: "ชานหมู่บ้าน" }],
-    exits: [{ x: 80, y: 24, to: "mossfen", at: { x: 5, y: 44 }, label: "ป่ามอสเฟน (Lv 10+)" }],
+    exits: [
+      { x: 80, y: 24, to: "mossfen", at: { x: 5, y: 44 }, label: "ป่ามอสเฟน (Lv 10+)" },
+      { x: 24, y: 82, to: "aldermere", at: { x: 32, y: 4 }, label: "เมืองหลวงอัลเดอเมียร์" },
+    ],
   };
   for (let y = 0; y < SIZE; y++)
     for (let x = 0; x < SIZE; x++) {

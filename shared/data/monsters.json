@@ -453,5 +453,697 @@
     "aggroRange": 7,
     "leash": 16,
     "boss": true
+  },
+  "stonebat": {
+    "name": "ค้างคาวหิน",
+    "level": [
+      15,
+      18
+    ],
+    "hp": 300,
+    "atk": 28,
+    "def": 8,
+    "exp": 220,
+    "gold": [
+      30,
+      45
+    ],
+    "drops": [
+      {
+        "item": "ore_2",
+        "chance": 0.4,
+        "qty": [
+          1,
+          2
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.05,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 3.4,
+    "attackMs": 1500,
+    "aggroRange": 5,
+    "leash": 12
+  },
+  "golem": {
+    "name": "โกเลมทองแดง",
+    "level": [
+      16,
+      20
+    ],
+    "hp": 520,
+    "atk": 30,
+    "def": 18,
+    "exp": 300,
+    "gold": [
+      40,
+      60
+    ],
+    "drops": [
+      {
+        "item": "ore_2",
+        "chance": 0.8,
+        "qty": [
+          2,
+          3
+        ]
+      },
+      {
+        "item": "ore_3",
+        "chance": 0.15,
+        "qty": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.06,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 2,
+    "attackMs": 1500,
+    "aggroRange": 3,
+    "leash": 12
+  },
+  "dwarfbandit": {
+    "name": "คนแคระโจร",
+    "level": [
+      18,
+      22
+    ],
+    "hp": 480,
+    "atk": 36,
+    "def": 14,
+    "exp": 330,
+    "gold": [
+      55,
+      80
+    ],
+    "drops": [
+      {
+        "item": "ore_2",
+        "chance": 0.5,
+        "qty": [
+          1,
+          3
+        ]
+      },
+      {
+        "item": "hide_2",
+        "chance": 0.4,
+        "qty": [
+          1,
+          2
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.08,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 3,
+    "attackMs": 1500,
+    "aggroRange": 5,
+    "leash": 12
+  },
+  "ironforeman": {
+    "name": "หัวหน้าคนงานเหล็ก",
+    "level": [
+      26,
+      26
+    ],
+    "hp": 6000,
+    "atk": 60,
+    "def": 24,
+    "exp": 5000,
+    "gold": [
+      700,
+      900
+    ],
+    "drops": [
+      {
+        "item": "ore_3",
+        "chance": 1,
+        "qty": [
+          6,
+          10
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 1,
+        "qty": [
+          3,
+          5
+        ]
+      }
+    ],
+    "speed": 2.2,
+    "attackMs": 1700,
+    "aggroRange": 3,
+    "leash": 10,
+    "boss": true
+  },
+  "crab": {
+    "name": "ปูเกราะ",
+    "level": [
+      20,
+      24
+    ],
+    "hp": 600,
+    "atk": 38,
+    "def": 22,
+    "exp": 420,
+    "gold": [
+      50,
+      70
+    ],
+    "drops": [
+      {
+        "item": "hide_2",
+        "chance": 0.5,
+        "qty": [
+          1,
+          2
+        ],
+        "tool": "knife"
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.06,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 2.4,
+    "attackMs": 1500,
+    "aggroRange": 3,
+    "leash": 12
+  },
+  "gullpirate": {
+    "name": "โจรสลัดนกนางนวล",
+    "level": [
+      22,
+      26
+    ],
+    "hp": 560,
+    "atk": 44,
+    "def": 14,
+    "exp": 470,
+    "gold": [
+      70,
+      100
+    ],
+    "drops": [
+      {
+        "item": "wood_2",
+        "chance": 0.5,
+        "qty": [
+          1,
+          3
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.08,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 3.2,
+    "attackMs": 1500,
+    "aggroRange": 5,
+    "leash": 12
+  },
+  "siren": {
+    "name": "ไซเรนเปลือกหอย",
+    "level": [
+      24,
+      28
+    ],
+    "hp": 620,
+    "atk": 48,
+    "def": 15,
+    "exp": 540,
+    "gold": [
+      80,
+      110
+    ],
+    "drops": [
+      {
+        "item": "herb_2",
+        "chance": 0.6,
+        "qty": [
+          1,
+          3
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.1,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 2.8,
+    "attackMs": 1500,
+    "aggroRange": 5,
+    "leash": 12
+  },
+  "saltbeard": {
+    "name": "กัปตันหนวดเกลือ",
+    "level": [
+      31,
+      31
+    ],
+    "hp": 9000,
+    "atk": 75,
+    "def": 28,
+    "exp": 8000,
+    "gold": [
+      1000,
+      1300
+    ],
+    "drops": [
+      {
+        "item": "wood_2",
+        "chance": 1,
+        "qty": [
+          8,
+          12
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 1,
+        "qty": [
+          4,
+          6
+        ]
+      }
+    ],
+    "speed": 2.8,
+    "attackMs": 1600,
+    "aggroRange": 4,
+    "leash": 10,
+    "boss": true
+  },
+  "shadowwolf": {
+    "name": "หมาป่าเงา",
+    "level": [
+      25,
+      30
+    ],
+    "hp": 650,
+    "atk": 50,
+    "def": 18,
+    "exp": 560,
+    "gold": [
+      70,
+      100
+    ],
+    "drops": [
+      {
+        "item": "hide_2",
+        "chance": 0.7,
+        "qty": [
+          1,
+          3
+        ],
+        "tool": "knife"
+      },
+      {
+        "item": "thread_3",
+        "chance": 0.15,
+        "qty": [
+          1,
+          1
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.08,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 3.3,
+    "attackMs": 1500,
+    "aggroRange": 5,
+    "leash": 12
+  },
+  "thornknight": {
+    "name": "อัศวินหนาม",
+    "level": [
+      27,
+      33
+    ],
+    "hp": 900,
+    "atk": 55,
+    "def": 26,
+    "exp": 700,
+    "gold": [
+      90,
+      130
+    ],
+    "drops": [
+      {
+        "item": "ore_3",
+        "chance": 0.5,
+        "qty": [
+          1,
+          3
+        ]
+      },
+      {
+        "item": "thread_3",
+        "chance": 0.3,
+        "qty": [
+          1,
+          2
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.12,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 2.5,
+    "attackMs": 1500,
+    "aggroRange": 4,
+    "leash": 12
+  },
+  "mtbandit": {
+    "name": "โจรภูเขา",
+    "level": [
+      30,
+      36
+    ],
+    "hp": 850,
+    "atk": 60,
+    "def": 22,
+    "exp": 800,
+    "gold": [
+      120,
+      170
+    ],
+    "drops": [
+      {
+        "item": "ore_3",
+        "chance": 0.4,
+        "qty": [
+          1,
+          2
+        ]
+      },
+      {
+        "item": "wood_3",
+        "chance": 0.4,
+        "qty": [
+          1,
+          2
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.15,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 3,
+    "attackMs": 1500,
+    "aggroRange": 6,
+    "leash": 12
+  },
+  "blackrose": {
+    "name": "ขุนศึกกุหลาบดำ",
+    "level": [
+      40,
+      40
+    ],
+    "hp": 16000,
+    "atk": 100,
+    "def": 36,
+    "exp": 15000,
+    "gold": [
+      2000,
+      2600
+    ],
+    "drops": [
+      {
+        "item": "thread_3",
+        "chance": 1,
+        "qty": [
+          5,
+          8
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 1,
+        "qty": [
+          6,
+          9
+        ]
+      }
+    ],
+    "speed": 2.6,
+    "attackMs": 1600,
+    "aggroRange": 4,
+    "leash": 10,
+    "boss": true
+  },
+  "giantfrog": {
+    "name": "กบยักษ์",
+    "level": [
+      35,
+      40
+    ],
+    "hp": 1100,
+    "atk": 66,
+    "def": 28,
+    "exp": 1000,
+    "gold": [
+      130,
+      180
+    ],
+    "drops": [
+      {
+        "item": "herb_2",
+        "chance": 0.6,
+        "qty": [
+          2,
+          3
+        ]
+      },
+      {
+        "item": "hide_2",
+        "chance": 0.5,
+        "qty": [
+          1,
+          3
+        ],
+        "tool": "knife"
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.15,
+        "qty": [
+          1,
+          1
+        ]
+      }
+    ],
+    "speed": 2.4,
+    "attackMs": 1500,
+    "aggroRange": 4,
+    "leash": 12
+  },
+  "swampwitch": {
+    "name": "แม่มดหนอง",
+    "level": [
+      38,
+      44
+    ],
+    "hp": 950,
+    "atk": 80,
+    "def": 24,
+    "exp": 1200,
+    "gold": [
+      160,
+      220
+    ],
+    "drops": [
+      {
+        "item": "herb_2",
+        "chance": 0.7,
+        "qty": [
+          2,
+          4
+        ]
+      },
+      {
+        "item": "thread_3",
+        "chance": 0.4,
+        "qty": [
+          1,
+          2
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.2,
+        "qty": [
+          1,
+          2
+        ]
+      }
+    ],
+    "speed": 2.6,
+    "attackMs": 1500,
+    "aggroRange": 6,
+    "leash": 12
+  },
+  "drowned": {
+    "name": "ซากทหารจมน้ำ",
+    "level": [
+      42,
+      48
+    ],
+    "hp": 1400,
+    "atk": 85,
+    "def": 34,
+    "exp": 1500,
+    "gold": [
+      180,
+      250
+    ],
+    "drops": [
+      {
+        "item": "ore_3",
+        "chance": 0.6,
+        "qty": [
+          2,
+          3
+        ]
+      },
+      {
+        "item": "thread_3",
+        "chance": 0.5,
+        "qty": [
+          1,
+          2
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 0.2,
+        "qty": [
+          1,
+          2
+        ]
+      }
+    ],
+    "speed": 2.2,
+    "attackMs": 1500,
+    "aggroRange": 4,
+    "leash": 12
+  },
+  "rotqueen": {
+    "name": "ราชินีหนองเน่า",
+    "level": [
+      52,
+      52
+    ],
+    "hp": 26000,
+    "atk": 130,
+    "def": 44,
+    "exp": 30000,
+    "gold": [
+      4000,
+      5000
+    ],
+    "drops": [
+      {
+        "item": "thread_3",
+        "chance": 1,
+        "qty": [
+          8,
+          12
+        ]
+      },
+      {
+        "item": "crystal_1",
+        "chance": 1,
+        "qty": [
+          8,
+          12
+        ]
+      },
+      {
+        "item": "wood_3",
+        "chance": 1,
+        "qty": [
+          6,
+          10
+        ]
+      }
+    ],
+    "speed": 2.2,
+    "attackMs": 1700,
+    "aggroRange": 4,
+    "leash": 10,
+    "boss": true
+  },
+  "guard": {
+    "name": "ทหารเมืองหลวง",
+    "level": [
+      60,
+      60
+    ],
+    "hp": 99999,
+    "atk": 400,
+    "def": 200,
+    "exp": 0,
+    "gold": [
+      0,
+      0
+    ],
+    "drops": [],
+    "speed": 3.6,
+    "attackMs": 1200,
+    "aggroRange": 9,
+    "leash": 18,
+    "guard": true
   }
 }

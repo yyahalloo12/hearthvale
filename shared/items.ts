@@ -450,6 +450,11 @@ export function resourceAt(map: GameMap, x: number, y: number): Resource | null 
   const prop = map.props[y]?.[x];
   if (map.id === "hollow") return prop === Prop.Tree ? PALEWOOD : prop === Prop.Rock ? MIST : null;
   if (map.id === "mossfen") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? IRON : prop === Prop.Bush ? GLOWSHROOM : null;
+  if (map.id === "aldermere") return null;
+  if (map.id === "copperhill") return prop === Prop.Tree ? OAK : prop === Prop.Rock ? (x + y) % 5 === 0 ? MIST : IRON : prop === Prop.Bush ? HERB : null;
+  if (map.id === "sunreach") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? IRON : prop === Prop.Bush ? GLOWSHROOM : null;
+  if (map.id === "thornmarsh") return prop === Prop.Tree ? MOSSWOOD : prop === Prop.Rock ? MIST : prop === Prop.Bush ? GLOWSHROOM : null;
+  if (map.id === "greywater") return prop === Prop.Tree ? PALEWOOD : prop === Prop.Rock ? MIST : prop === Prop.Bush ? GLOWSHROOM : null;
   if (prop === Prop.Tree) return OAK;
   if (prop === Prop.Bush) return HERB;
   if (prop === Prop.Rock) return y >= 30 ? IRON : COPPER;
@@ -460,6 +465,28 @@ export type StationKind = "smith" | "storage" | "portal" | "board" | "windmill" 
 export function stationAt(map: GameMap, x: number, y: number): StationKind | null {
   const prop = map.props[y]?.[x];
   return prop === Prop.Anvil ? "smith" : prop === Prop.Chest ? "storage" : prop === Prop.Portal ? "portal" : prop === Prop.Board ? "board" : prop === Prop.Windmill ? "windmill" : prop === Prop.Lantern ? "lantern" : prop === Prop.Treasure ? "treasure" : null;
+}
+
+/** The closest station of this kind (a city has two smiths). */
+export function nearestStation(map: GameMap, kind: StationKind, x: number, y: number): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  const cache = (map as GameMap & { _stations?: Map<string, { x: number; y: number }[]> })._stations ?? new Map();
+  (map as GameMap & { _stations?: Map<string, { x: number; y: number }[]> })._stations = cache;
+  let list = cache.get(kind);
+  if (!list) {
+    list = [];
+    for (let yy = 0; yy < map.height; yy++) for (let xx = 0; xx < map.width; xx++) if (stationAt(map, xx, yy) === kind) list.push({ x: xx, y: yy });
+    cache.set(kind, list);
+  }
+  for (const s of list) {
+    const d = Math.hypot(s.x - x, s.y - y);
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  return best;
 }
 
 /** Where a station is, so both sides can check the distance. */

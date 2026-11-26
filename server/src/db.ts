@@ -27,6 +27,8 @@ export interface CharacterRow {
   zone: string;
   corruption: number;
   quests: string; // JSON: story step, dailies, quest points
+  /** outlaw points: above 0 the name is red (GDD 3.2) */
+  karma: number;
   /** 1 = game master (from the account; see setAdmin) */
   admin: number;
   x: number;
@@ -168,6 +170,7 @@ async function open(): Promise<DB> {
   if (!have.has("zone")) db.exec("ALTER TABLE characters ADD COLUMN zone TEXT NOT NULL DEFAULT 'brindle'");
   if (!have.has("corruption")) db.exec("ALTER TABLE characters ADD COLUMN corruption REAL NOT NULL DEFAULT 0");
   if (!have.has("quests")) db.exec("ALTER TABLE characters ADD COLUMN quests TEXT NOT NULL DEFAULT '{}'");
+  if (!have.has("karma")) db.exec("ALTER TABLE characters ADD COLUMN karma REAL NOT NULL DEFAULT 0");
   return db;
 }
 
@@ -211,7 +214,7 @@ export async function loadCharacter(accountId: number): Promise<CharacterRow | n
     .get(accountId) as unknown as CharacterRow) ?? null;
 }
 
-export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin" | "quests"> & { quests?: string };
+export type CharacterSave = Omit<CharacterRow, "name" | "color" | "admin" | "quests" | "karma"> & { quests?: string; karma?: number };
 
 export async function saveCharacter(c: CharacterSave) {
   // Written at once when the database is open, so an older save can never land on top of a newer one.
@@ -263,7 +266,7 @@ export async function loadBundles(zone: string, now = Date.now()): Promise<Bundl
 
 export function writeCharacter(d: DB, c: CharacterSave) {
   d.prepare(
-    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, quests = ?, updated_at = datetime('now')
+    `UPDATE characters SET level = ?, exp = ?, job = ?, skills = ?, nodes = ?, gold = ?, inv = ?, zone = ?, corruption = ?, x = ?, y = ?, quests = ?, karma = ?, updated_at = datetime('now')
      WHERE account_id = ?`,
-  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.zone, c.corruption, c.x, c.y, c.quests ?? "{}", c.account_id);
+  ).run(c.level, c.exp, c.job, c.skills, c.nodes, c.gold, c.inv, c.zone, c.corruption, c.x, c.y, c.quests ?? "{}", c.karma ?? 0, c.account_id);
 }

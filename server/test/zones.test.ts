@@ -49,7 +49,7 @@ test("every map: arrivals, exits and monsters are on ground that connects", () =
       for (const back of there.exits) assert.ok(Math.hypot(back.x - e.at.x, back.y - e.at.y) > 2, "no bouncing straight back");
       for (const s of SPAWNS[e.to]) {
         const d = MONSTERS[s.kind];
-        if (d.aggroRange && !d.patrol) assert.ok(Math.hypot(s.x - e.at.x, s.y - e.at.y) > s.radius + d.aggroRange, `${s.kind} next to the arrival in ${e.to}`);
+        if (d.aggroRange && !d.patrol && !d.guard) assert.ok(Math.hypot(s.x - e.at.x, s.y - e.at.y) > s.radius + d.aggroRange, `${s.kind} next to the arrival in ${e.to}`);
       }
     }
     for (const s of SPAWNS[id]) {

@@ -97,7 +97,9 @@ export class PlayerView {
   }
 
   /** Faded name and body: logged out but still standing here. */
-  setStatus(offline: boolean, shielded: boolean, glowing: boolean, gm = false) {
+  setStatus(offline: boolean, shielded: boolean, glowing: boolean, gm = false, outlaw = false) {
+    this.outlaw = outlaw;
+    this.setTargeted(this.targeted);
     this.root.setAlpha(offline ? 0.55 : 1);
     this.label.setText(`${gm ? "★ " : ""}${this.name}${offline ? " (ออฟไลน์)" : ""}`);
     this.figure.setAlpha(this.dead ? 0.7 : shielded ? 0.55 : 1);
@@ -116,11 +118,12 @@ export class PlayerView {
   }
 
   private friend = false;
+  private outlaw = false;
   private targeted = false;
   /** Red name while we are attacking this player. */
   setTargeted(on: boolean) {
     this.targeted = on;
-    this.label.setColor(on ? "#ff6a6a" : this.isMe ? "#fff3a0" : this.friend ? "#8dff7a" : "#ffffff");
+    this.label.setColor(on ? "#ff6a6a" : this.outlaw ? "#ff3030" : this.isMe ? "#fff3a0" : this.friend ? "#8dff7a" : "#ffffff");
   }
 
   /** Green name for party members. */

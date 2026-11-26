@@ -1,4 +1,5 @@
 import { GameMap, isCalm, isWalkable, ZoneId } from "../../../shared/map";
+import { REGION_SPAWNS } from "../../../shared/regions";
 import { findPath, Point } from "../../../shared/pathfinding";
 import { inReach } from "../../../shared/terrain";
 import { ATTACK_RANGE, MonsterDef, MONSTERS, monsterStats } from "../../../shared/stats";
@@ -20,7 +21,7 @@ export interface SpawnDef {
   /** attacks anyone this close, whatever the kind usually does */
   aggro?: number;
 }
-export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, mossfen: mossfenSpawnsJson, hollow: hollowSpawnsJson, rift: [] };
+export const SPAWNS: Record<ZoneId, SpawnDef[]> = { brindle: spawnsJson, mossfen: mossfenSpawnsJson, hollow: hollowSpawnsJson, rift: [], ...REGION_SPAWNS };
 
 type AIState = "idle" | "chase" | "return";
 
@@ -58,7 +59,7 @@ export interface MonsterHost {
   monsters: Map<string, Monster>;
   /** Live, attackable players with positions. */
   playerAt(id: string): { x: number; y: number; dead: boolean } | undefined;
-  nearestPlayer(x: number, y: number, range: number): string | null;
+  nearestPlayer(x: number, y: number, range: number, outlawsOnly?: boolean): string | null;
   monsterHitsPlayer(monsterId: string, playerId: string, atk: number): void;
   now(): number;
 }
@@ -79,7 +80,7 @@ export class MonsterSystem {
     const def = MONSTERS[spawn.kind];
     if (!def) throw new Error(`unknown monster kind ${spawn.kind}`);
     // a game master may call monsters into the village; normal ones stay out
-    const at = this.randomTileNear(spawn, spawn.radius, !Number.isFinite(spawn.respawnMs));
+    const at = this.randomTileNear(spawn, spawn.radius, !Number.isFinite(spawn.respawnMs) || !!def.guard);
     if (!at) return;
     const level = spawn.level ?? def.level[0] + Math.floor(Math.random() * (def.level[1] - def.level[0] + 1));
     const st = monsterStats(def, level);
@@ -259,7 +260,7 @@ export class MonsterSystem {
       if (c.state === "idle") {
         const aggro = c.spawn.aggro ?? c.def.aggroRange;
         if (aggro > 0) {
-          const pid = this.host.nearestPlayer(m.x, m.y, aggro);
+          const pid = this.host.nearestPlayer(m.x, m.y, aggro, !!c.def.guard);
           if (pid) {
             c.state = "chase";
             c.targetId = pid;
@@ -284,7 +285,7 @@ export class MonsterSystem {
 
       if (c.state === "chase") {
         const p = c.targetId ? this.host.playerAt(c.targetId) : undefined;
-        if (!p || p.dead || dist(m, c.home) > c.def.leash || isCalm(this.host.map, p.x, p.y)) {
+        if (!p || p.dead || dist(m, c.home) > c.def.leash || (!c.def.guard && isCalm(this.host.map, p.x, p.y))) {
           this.goHome(c);
         } else {
           const d = dist(m, p);

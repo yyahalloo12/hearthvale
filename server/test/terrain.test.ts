@@ -46,7 +46,7 @@ function flat(n: number): GameMap {
 
 test("maps are three times as big and have real height, all of it reachable by ramps", () => {
   const old: Record<string, number> = { brindle: 48 * 48, mossfen: 64 * 64, hollow: 72 * 72 };
-  for (const id of ZONE_IDS) {
+  for (const id of ["brindle", "mossfen", "hollow"] as const) {
     const m = buildZone(id);
     const area = m.width * m.height;
     assert.ok(area / old[id] > 2.95 && area / old[id] < 3.15, `${id} ${area / old[id]}`);
@@ -292,11 +292,17 @@ test("monsters live away from the village and the quiet gathering places", async
   const { buildZone } = await import("../../shared/zones");
   const { isCalm, isWalkable } = await import("../../shared/map");
   const { reachableFrom } = await import("../../shared/terrain");
-  for (const [z, f] of [["brindle", "spawns"], ["mossfen", "spawns_mossfen"], ["hollow", "spawns_hollow"]] as const) {
-    const m = buildZone(z);
+  const { REGION_SPAWNS, REGION_IDS } = await import("../../shared/regions");
+  const list: [string, unknown[]][] = [];
+  for (const [z, f] of [["brindle", "spawns"], ["mossfen", "spawns_mossfen"], ["hollow", "spawns_hollow"]] as const)
+    list.push([z, JSON.parse(readFileSync(new URL(`../../shared/data/${f}.json`, import.meta.url), "utf8"))]);
+  for (const z of REGION_IDS) list.push([z, REGION_SPAWNS[z]]);
+  for (const [z, spawns] of list) {
+    const m = buildZone(z as never);
     const reach = reachableFrom(m, m.spawn);
     const zones = [...m.quiet, ...(m.safe.r ? [m.safe] : [])];
-    for (const s of JSON.parse(readFileSync(new URL(`../../shared/data/${f}.json`, import.meta.url), "utf8"))) {
+    for (const s of spawns as { kind: string; x: number; y: number; radius: number; count: number }[]) {
+      if (s.kind === "guard") continue; // city guards stand in the city
       for (const q of zones) assert.ok(Math.hypot(s.x - q.x, s.y - q.y) >= q.r + s.radius + 4, `${z} ${s.kind} at ${s.x},${s.y} is too close to a quiet place`);
       let free = 0;
       for (let y = s.y - s.radius; y <= s.y + s.radius; y++)

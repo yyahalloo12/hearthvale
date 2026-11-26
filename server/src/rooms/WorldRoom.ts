@@ -45,6 +45,7 @@ import {
   equipItem,
   equipTotals,
   findStation,
+  nearestStation,
   FlatStats,
   FOG_OPEN_MS,
   GATHER_MS,
@@ -202,6 +203,8 @@ interface PlayerCtl {
   /** monsters already hit once (for the "first strike" keystone) */
   struck: Set<string>;
   quests: QuestState;
+  /** outlaw points (red name above 0) */
+  karma: number;
 }
 
 interface AuthData {
@@ -289,7 +292,7 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       reach: this.reach,
       monsters: this.state.monsters as unknown as Map<string, any>,
       playerAt: (id) => this.state.players.get(id),
-      nearestPlayer: (x, y, r) => this.nearestPlayer(x, y, r),
+      nearestPlayer: (x, y, r, outlaws) => this.nearestPlayer(x, y, r, outlaws),
       monsterHitsPlayer: (mid, pid, atk) => this.monsterHitsPlayer(mid, pid, atk),
       now: () => this.clock.currentTime,
     });
@@ -514,7 +517,9 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       stall: null,
       struck: new Set(),
       quests,
+      karma: Math.max(0, Number(c.karma) || 0),
     });
+    p.outlaw = (Number(c.karma) || 0) > 0;
     p.gm = c.admin === 1;
     p.shielded = this.map.pvp;
     p.corruption = this.hollow ? Math.floor(Math.max(0, Math.min(100, c.corruption))) : 0;
@@ -671,6 +676,21 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     return all.length;
   }
 
+  /** Part of the bag falls out (border lands, not red). Returns how many stacks. */
+  private dropSome(p: Player, c: PlayerCtl, share: number) {
+    const bag = [...c.inv.bag];
+    const n = Math.floor(bag.length * share);
+    if (!n) return 0;
+    const out: ItemStack[] = [];
+    for (let i = 0; i < n; i++) out.push(...bag.splice(Math.floor(Math.random() * bag.length), 1));
+    c.inv.bag = bag;
+    const id = globalThis.crypto.randomUUID();
+    const b: BundleCtl = { items: out, owner: p.name, x: Math.round(p.x), y: Math.round(p.y), expires: Date.now() + BUNDLE_MS };
+    this.addBundle(id, b);
+    saveWithBundle(this.rowOf(p, c), { put: this.bundleRow(id, b) }).catch((e) => console.error("[world] bundle save failed", e));
+    return n;
+  }
+
   private bundleRow(id: string, b: BundleCtl) {
     return { id, zone: this.map.id, x: b.x, y: b.y, owner: b.owner, items: JSON.stringify(b.items), expires: b.expires };
   }
@@ -735,9 +755,10 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       gold: c.gold,
       inv: JSON.stringify(c.inv),
       // the dead wake up in the village; inside a portal we count as standing by it outside
-      zone: p.dead ? "brindle" : this.map.rift ? this.map.rift.origin : this.map.id,
+      zone: p.dead ? (this.map.home ?? "brindle") : this.map.rift ? this.map.rift.origin : this.map.id,
       corruption: p.dead ? 0 : c.corruption,
       quests: JSON.stringify(c.quests),
+      karma: c.karma,
       x: this.map.rift && !p.dead ? this.map.rift.at.x : ok ? tile.x : -1,
       y: this.map.rift && !p.dead ? this.map.rift.at.y : ok ? tile.y : -1,
     };
@@ -1634,6 +1655,10 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       return;
     }
     if (it.station) {
+      if (c.karma > 0 && (it.station === "smith" || it.station === "storage" || it.station === "board")) {
+        c.interact = null;
+        return client.send(Msg.Notice, { text: "ชื่อแดงใช้ร้าน คลัง และตลาดไม่ได้ รอให้ความชั่วหมดก่อน" });
+      }
       client.send(Msg.OpenStation, { kind: it.station } satisfies OpenStationEvent);
       c.interact = null;
       return;
@@ -1709,9 +1734,13 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private nearStation(client: Client, kind: StationKind) {
     const pc = this.get(client);
     if (!pc || pc.p.dead) return null;
-    const at = findStation(this.map, kind);
+    const at = nearestStation(this.map, kind, pc.p.x, pc.p.y);
     if (!at || dist(pc.p, at) > STATION_RANGE) {
       client.send(Msg.Notice, { text: "อยู่ไกลเกินไป เดินเข้าไปใกล้ก่อน" });
+      return null;
+    }
+    if (pc.c.karma > 0 && (kind === "smith" || kind === "storage" || kind === "board")) {
+      client.send(Msg.Notice, { text: "ชื่อแดงใช้ร้าน คลัง และตลาดไม่ได้ รอให้ความชั่วหมดก่อน" });
       return null;
     }
     return pc;
@@ -1817,9 +1846,10 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     const pc = this.get(client);
     if (!pc || !pc.p.dead) return;
     if (this.clock.currentTime - pc.c.deadAt < RESPAWN_DELAY_MS) return;
-    if (this.map.id !== "brindle") {
+    const home = this.map.home ?? "brindle";
+    if (this.map.id !== home) {
       pc.p.hp = pc.p.maxHp;
-      this.travel(client, pc.p, pc.c, "brindle");
+      this.travel(client, pc.p, pc.c, home);
       return;
     }
     const spot = this.findSpawn();
@@ -2359,20 +2389,24 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
   private targetOf(me: string, id: string): { x: number; y: number } | undefined {
     const m = this.state.monsters.get(id);
     if (m) return m;
-    if (!this.map.pvp || id === me) return undefined;
+    if ((!this.map.pvp && !this.map.border) || id === me) return undefined;
     const p = this.state.players.get(id);
     const c = this.ctl.get(id);
     const mine = this.ctl.get(me);
+    const attacker = this.state.players.get(me);
+    if (this.map.border && p && attacker && (isCalm(this.map, p.x, p.y) || isCalm(this.map, attacker.x, attacker.y))) return undefined;
     if (mine && c && party.sameParty(mine.accountId, c.accountId)) return undefined;
     return p && c && !p.dead && !c.leaving && c.shieldUntil <= this.clock.currentTime ? p : undefined;
   }
 
-  private nearestPlayer(x: number, y: number, range: number): string | null {
+  private nearestPlayer(x: number, y: number, range: number, outlawsOnly = false): string | null {
     let best: string | null = null;
     let bestD = range;
     this.state.players.forEach((p, id) => {
       const ct = this.ctl.get(id);
-      if (p.dead || !ct || ct.leaving || ct.shieldUntil > this.clock.currentTime || isCalm(this.map, p.x, p.y)) return;
+      if (p.dead || !ct || ct.leaving || ct.shieldUntil > this.clock.currentTime) return;
+      // city guards only see red names, and see them anywhere; others leave quiet places alone
+      if (outlawsOnly ? ct.karma <= 0 : isCalm(this.map, p.x, p.y)) return;
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= bestD) {
         bestD = d;
@@ -2428,6 +2462,17 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       if (!client) this.logOut(id, p, c).catch((e) => console.error("[world] save failed", e));
       return;
     }
+    if (this.map.border) {
+      // red names lose everything, like the Hollow; others a quarter of the bag
+      if (c.karma > 0) {
+        const n = this.dropEverything(p, c);
+        client?.send(Msg.Notice, { text: `คนชื่อแดงตายแล้วของตกหมด ${n} ช่อง` });
+      } else {
+        const n = this.dropSome(p, c, 0.25);
+        if (n) client?.send(Msg.Notice, { text: `ของในกระเป๋า ${n} ช่องหล่นอยู่ตรงนี้` });
+      }
+      this.sendPrivate(client);
+    }
     const loss = Math.floor(expToNext(p.level) * DEATH_EXP_LOSS);
     p.exp = Math.max(0, p.exp - loss);
     client?.send(Msg.Notice, { text: `คุณหมดสติ เสีย EXP ${loss}` });
@@ -2470,6 +2515,12 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
     faceTowards(p, t);
     c.lastCombatAt = tc.lastCombatAt = now;
     c.shieldUntil = 0; // whoever attacks gives up the arrival shield
+    // in the border lands, hitting someone who is not red makes you red (GDD 3.2)
+    if (this.map.border && tc.karma <= 0) {
+      if (c.karma <= 0) this.clientOf(id)?.send(Msg.Notice, { text: "คุณโจมตีผู้บริสุทธิ์ ชื่อของคุณกลายเป็นสีแดง!" });
+      c.karma = Math.max(c.karma, 0) + 60;
+      p.outlaw = true;
+    }
     if (tc.god || Math.random() * 100 < tc.mods.dodge + (tc.frenzyUntil > now ? tc.frenzyDodge : 0)) {
       this.broadcast(Msg.Hit, { from: id, to: targetId, dmg: 0, miss: true } satisfies HitEvent);
       return;
@@ -2487,6 +2538,10 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       c.targetId = null;
       c.pendingSkill = null;
       c.struck.delete(targetId);
+      if (this.map.border && tc.karma <= 0) {
+        c.karma += 240;
+        this.broadcastSystem(`☠ ${p.name} สังหาร ${t.name} ชื่อแดงยิ่งเข้ม`);
+      }
       this.playerDies(targetId, t, tc, p.name);
     }
   }
@@ -2926,6 +2981,11 @@ export class WorldRoom extends Room<WorldState> implements party.PartyHost {
       }
 
       this.tickEffects(p, c, now, dt);
+      if (c.karma > 0) {
+        c.karma = Math.max(0, c.karma - dt / 3); // about 5 minutes for one attack
+        if (c.karma <= 0) this.clientOf(id)?.send(Msg.Notice, { text: "ความชั่วหมดแล้ว ชื่อของคุณกลับเป็นปกติ" });
+      }
+      if (p.outlaw !== c.karma > 0) p.outlaw = c.karma > 0;
       const speed = WALK_SPEED * (1 + c.mods.moveSpeedPct / 100) * c.speedTimes * (c.windUntil > now ? 1 + WIND_SPEED : 1) * (c.slowUntil > now ? 1 - c.slow : 1);
       const weaponRange = attackRange(ITEMS[c.inv.equip.weapon?.id ?? ""]?.look);
       const reach = c.pendingSkill ? SKILLS[c.pendingSkill].range : weaponRange;

@@ -121,6 +121,8 @@ export interface MonsterDef {
   boss?: boolean;
   /** walks around this far from where it was born (Hollow hunters) */
   patrol?: number;
+  /** a city guard: only goes after outlaws (red names) */
+  guard?: boolean;
 }
 export const MONSTERS = monstersJson as unknown as Record<string, MonsterDef>;
 
